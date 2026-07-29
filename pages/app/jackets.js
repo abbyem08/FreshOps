@@ -105,7 +105,16 @@ export default function JacketsPage() {
 
   const activeJacket = jackets.find(j => j.jacket_id === activeId);
   const totalWeight = jacketLines.reduce((s, jl) => s + Number(jl.line_weight || 0), 0);
-  const totalPallets = jacketLines.reduce((s, jl) => s + Number(jl.estimated_pallets || 0), 0);
+  // group by product before rounding up to pallets — otherwise two lines of the
+  // same product each round up separately and overcount (e.g. 100 + 300 cases
+  // at 40/pallet should be 10 pallets total, not ceil(100/40)+ceil(300/40)=11)
+  const casesByProduct = {};
+  jacketLines.forEach(jl => {
+    const pid = jl.order_lines.product_id;
+    if (!casesByProduct[pid]) casesByProduct[pid] = { cases: 0, perPallet: jl.order_lines.products.cases_per_pallet };
+    casesByProduct[pid].cases += Number(jl.cases_to_load || 0);
+  });
+  const totalPallets = Object.values(casesByProduct).reduce((s, g) => s + (g.perPallet ? Math.ceil(g.cases / g.perPallet) : 0), 0);
 
   return (
     <AppShell title="Jackets">
