@@ -14,11 +14,13 @@ export default function ProductsPage() {
     setRows(data || []);
   }
   async function save() {
-    await supabase.from('products').insert({
+    if (!form.commodity || !form.pack_size) { alert('Commodity and Pack Size are required.'); return; }
+    const { error } = await supabase.from('products').insert({
       ...form,
-      gross_weight_per_case: Number(form.gross_weight_per_case) || null,
-      cases_per_pallet: Number(form.cases_per_pallet) || null
+      gross_weight_per_case: form.gross_weight_per_case ? Number(form.gross_weight_per_case) : null,
+      cases_per_pallet: form.cases_per_pallet ? Number(form.cases_per_pallet) : null
     });
+    if (error) { alert('Save failed: ' + error.message); return; }
     setForm({ commodity: '', pack_size: '', gross_weight_per_case: '', cases_per_pallet: '', default_origin: '' });
     setShowForm(false);
     load();

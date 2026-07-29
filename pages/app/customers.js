@@ -14,7 +14,9 @@ export default function CustomersPage() {
     setRows(data || []);
   }
   async function save() {
-    await supabase.from('customers').insert(form);
+    if (!form.company) { alert('Company name is required.'); return; }
+    const { error } = await supabase.from('customers').insert(form);
+    if (error) { alert('Save failed: ' + error.message); return; }
     setForm({ company: '', buyer_contact: '', phone: '', email: '', delivery_address: '', city: '', state: '', zip: '', payment_terms: '' });
     setShowForm(false);
     load();

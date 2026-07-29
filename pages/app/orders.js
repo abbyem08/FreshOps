@@ -31,26 +31,45 @@ export default function OrdersPage() {
   }
 
   async function saveOrder() {
-    await supabase.from('customer_orders').insert({
-      ...orderForm, customer_id: Number(orderForm.customer_id), status: 'Open', source: 'Internal'
-    });
+    if (!orderForm.acumatica_order_no || !orderForm.customer_id) {
+      alert('Acumatica Order # and Customer are both required.');
+      return;
+    }
+    const payload = {
+      acumatica_order_no: orderForm.acumatica_order_no,
+      customer_id: Number(orderForm.customer_id),
+      customer_po: orderForm.customer_po || null,
+      order_date: orderForm.order_date || null,
+      requested_delivery: orderForm.requested_delivery || null,
+      salesperson: orderForm.salesperson || null,
+      status: 'Open',
+      source: 'Internal'
+    };
+    const { error } = await supabase.from('customer_orders').insert(payload);
+    if (error) { alert('Save failed: ' + error.message); return; }
     setOrderForm({ acumatica_order_no: '', customer_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '' });
     setShowNewOrder(false);
     loadAll();
   }
 
   async function saveLine(orderId) {
-    await supabase.from('order_lines').insert({
+    if (!lineForm.supplier_id || !lineForm.product_id || !lineForm.cases_ordered) {
+      alert('Supplier, Product, and Cases Ordered are required.');
+      return;
+    }
+    const payload = {
       customer_order_id: orderId,
       supplier_id: Number(lineForm.supplier_id),
       product_id: Number(lineForm.product_id),
-      shipper_po: lineForm.shipper_po,
+      shipper_po: lineForm.shipper_po || null,
       cases_ordered: Number(lineForm.cases_ordered),
-      sell_price_per_case: Number(lineForm.sell_price_per_case),
-      fob_cost_per_case: Number(lineForm.fob_cost_per_case),
+      sell_price_per_case: lineForm.sell_price_per_case ? Number(lineForm.sell_price_per_case) : null,
+      fob_cost_per_case: lineForm.fob_cost_per_case ? Number(lineForm.fob_cost_per_case) : null,
       pricing_type: lineForm.pricing_type,
       line_status: 'Open'
-    });
+    };
+    const { error } = await supabase.from('order_lines').insert(payload);
+    if (error) { alert('Save failed: ' + error.message); return; }
     setLineForm({ supplier_id: '', product_id: '', shipper_po: '', cases_ordered: '', sell_price_per_case: '', fob_cost_per_case: '', pricing_type: 'FOB' });
     setAddLineForOrder(null);
     loadAll();
