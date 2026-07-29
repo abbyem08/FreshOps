@@ -75,6 +75,12 @@ export default function OrdersPage() {
     loadAll();
   }
 
+  async function updateLineField(lineId, field, value) {
+    const { error } = await supabase.from('order_lines').update({ [field]: value }).eq('order_line_id', lineId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+
   return (
     <AppShell title="Customer Orders">
       <button onClick={() => setShowNewOrder(!showNewOrder)} style={btn}>+ New Order</button>
@@ -117,8 +123,8 @@ export default function OrdersPage() {
                         <td>{l.products?.commodity} — {l.products?.pack_size}</td>
                         <td>{l.suppliers?.company}</td>
                         <td>{l.cases_ordered}</td>
-                        <td>${l.sell_price_per_case?.toFixed(2)}</td>
-                        <td>${l.fob_cost_per_case?.toFixed(2)}</td>
+                        <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
+                        <td><input type="number" defaultValue={l.fob_cost_per_case} onBlur={e => updateLineField(l.order_line_id, 'fob_cost_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
                         <td style={{ color: margin >= 0 ? '#2F5233' : '#C0562D', fontWeight: 700 }}>${margin.toLocaleString()}</td>
                       </tr>

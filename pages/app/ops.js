@@ -1,5 +1,5 @@
 // pages/app/ops.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -8,6 +8,8 @@ export default function OpsPage() {
   const [claims, setClaims] = useState([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
+  const [resolvingId, setResolvingId] = useState(null);
+  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '' });
 
   useEffect(() => { load(); }, []);
 
@@ -17,7 +19,10 @@ export default function OpsPage() {
       .select('*, jackets(jacket_number), order_lines(products(commodity, pack_size), customer_orders(customers(company)))')
       .order('updated_at', { ascending: false });
     setLines(jl || []);
-    const { data: c } = await supabase.from('claims').select('*, jacket_lines(order_lines(products(commodity, pack_size)))').order('date_opened', { ascending: false });
+    const { data: c } = await supabase
+      .from('claims')
+      .select('*, jacket_lines(order_line_id, order_lines(order_line_id, sell_price_per_case, products(commodity, pack_size)))')
+      .order('date_opened', { ascending: false });
     setClaims(c || []);
   }
 
@@ -47,6 +52,37 @@ export default function OpsPage() {
     if (error) { alert('Save failed: ' + error.message); return; }
     setClaimForm({ jacket_line_id: '', claim_type: 'Quality', description: '' });
     setShowClaimForm(false);
+    load();
+  }
+
+  function openResolve(claim) {
+    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '' });
+    setResolvingId(claim.claim_id);
+  }
+
+  async function saveResolve(claim) {
+    const adjustment = resolveForm.price_adjustment ? Number(resolveForm.price_adjustment) : null;
+
+    const { error } = await supabase.from('claims').update({
+      status: resolveForm.status,
+      resolution: resolveForm.resolution,
+      resolution_price_adjustment: adjustment,
+      resolved_at: resolveForm.status === 'Resolved' ? new Date().toISOString() : null,
+      flag_for_credit_memo: !!adjustment
+    }).eq('claim_id', claim.claim_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+
+    // Apply the price adjustment directly to that order line's sell price —
+    // this is a real financial correction on the order, kept completely
+    // separate from call_log/price history, so trend views never see it.
+    if (adjustment && claim.jacket_lines?.order_lines) {
+      const ol = claim.jacket_lines.order_lines;
+      const newPrice = Number(ol.sell_price_per_case) - adjustment;
+      const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', ol.order_line_id);
+      if (priceError) { alert('Claim saved, but price update failed: ' + priceError.message); }
+    }
+
+    setResolvingId(null);
     load();
   }
 
@@ -121,13 +157,40 @@ export default function OpsPage() {
         )}
         {claims.length > 0 && (
           <table style={{ ...table, marginTop: 16 }}>
-            <thead><tr style={trHead}><th>Type</th><th>Description</th><th>Commodity</th><th>Opened</th><th>Status</th></tr></thead>
+            <thead><tr style={trHead}><th>Type</th><th>Description</th><th>Commodity</th><th>Opened</th><th>Status</th><th>Price Adj.</th><th></th></tr></thead>
             <tbody>{claims.map(c => (
-              <tr key={c.claim_id} style={tr}>
-                <td>{c.claim_type}</td><td>{c.description}</td>
-                <td>{c.jacket_lines?.order_lines?.products?.commodity}</td>
-                <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td><td>{c.status}</td>
-              </tr>
+              <Fragment key={c.claim_id}>
+                <tr key={c.claim_id} style={tr}>
+                  <td>{c.claim_type}</td><td>{c.description}</td>
+                  <td>{c.jacket_lines?.order_lines?.products?.commodity}</td>
+                  <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
+                  <td><span style={statusPill(c.status)}>{c.status}</span></td>
+                  <td>{c.resolution_price_adjustment ? `-$${Number(c.resolution_price_adjustment).toFixed(2)}/cs` : '—'}</td>
+                  <td><button onClick={() => openResolve(c)} style={{ padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button></td>
+                </tr>
+                {resolvingId === c.claim_id && (
+                  <tr key={c.claim_id + '-form'}>
+                    <td colSpan={7} style={{ background: '#F6F4EC', padding: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                        <label style={{ fontSize: 13 }}>Status
+                          <select value={resolveForm.status} onChange={e => setResolveForm({ ...resolveForm, status: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                            <option>Open</option><option>Under Review</option><option>Resolved</option>
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 13 }}>Price Adjustment ($/case decrease)
+                          <input type="number" value={resolveForm.price_adjustment} onChange={e => setResolveForm({ ...resolveForm, price_adjustment: e.target.value })} placeholder="e.g. 2.00" style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
+                        </label>
+                        <label style={{ fontSize: 13, gridColumn: 'span 2' }}>Resolution Notes
+                          <input value={resolveForm.resolution} onChange={e => setResolveForm({ ...resolveForm, resolution: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
+                        </label>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 6 }}>A price adjustment reduces this order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
+                      <button onClick={() => saveResolve(c)} style={{ marginTop: 8, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
+                      <button onClick={() => setResolvingId(null)} style={{ marginTop: 8, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}</tbody>
           </table>
         )}
@@ -142,4 +205,8 @@ const tr = { borderBottom: '1px solid #DCD5C1' };
 function notifyBtn(on) {
   return { padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap',
     background: on ? '#6B8E4E' : '#fff', color: on ? '#fff' : '#333', border: on ? '1px solid #6B8E4E' : '1px solid #DCD5C1' };
+}
+function statusPill(status) {
+  const colors = { Open: '#D9A441', 'Under Review': '#D9A441', Resolved: '#3E7C5A' };
+  return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
 }

@@ -63,30 +63,45 @@ export default function DispatchPage() {
         </div>
 
         <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Pickups</div>
-        <table style={table}>
-          <thead><tr style={trHead}><th>#</th><th>Supplier</th><th>Shipper PO</th><th>Address</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right' }}>Pallets</th></tr></thead>
-          <tbody>{pickups.map(s => (s.stop_lines || []).map(sl => (
-            <tr key={sl.stop_line_id} style={tr}>
-              <td>{s.stop_number}</td><td>{s.suppliers?.company}</td><td>{sl.jacket_lines?.order_lines?.shipper_po}</td>
-              <td>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</td>
-              <td>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
-              <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td><td style={{ textAlign: 'right' }}>{sl.pallets_at_stop}</td>
-            </tr>
-          )))}</tbody>
-        </table>
+        {pickups.map(s => (
+          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5 }}>
+              <strong>#{s.stop_number} — {s.suppliers?.company}</strong>
+              <span style={{ color: '#78716c', marginLeft: 10 }}>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</span>
+            </div>
+            <table style={table}>
+              <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Shipper PO</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
+              <tbody>{(s.stop_lines || []).map(sl => (
+                <tr key={sl.stop_line_id} style={tr}>
+                  <td style={{ paddingLeft: 12 }}>{sl.jacket_lines?.order_lines?.shipper_po}</td>
+                  <td>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
+                  <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
+                  <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ))}
 
         <div style={{ fontWeight: 600, color: '#6B8E4E', margin: '20px 0 8px' }}>Deliveries</div>
-        <table style={table}>
-          <thead><tr style={trHead}><th>#</th><th>Customer</th><th>Address</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right' }}>Pallets</th></tr></thead>
-          <tbody>{deliveries.map(s => (s.stop_lines || []).map(sl => (
-            <tr key={sl.stop_line_id} style={tr}>
-              <td>{s.stop_number}</td><td>{s.customers?.company}</td>
-              <td>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</td>
-              <td>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
-              <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td><td style={{ textAlign: 'right' }}>{sl.pallets_at_stop}</td>
-            </tr>
-          )))}</tbody>
-        </table>
+        {deliveries.map(s => (
+          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5 }}>
+              <strong>#{s.stop_number} — {s.customers?.company}</strong>
+              <span style={{ color: '#78716c', marginLeft: 10 }}>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</span>
+            </div>
+            <table style={table}>
+              <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
+              <tbody>{(s.stop_lines || []).map(sl => (
+                <tr key={sl.stop_line_id} style={tr}>
+                  <td style={{ paddingLeft: 12 }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
+                  <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
+                  <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ))}
 
         <div style={{ fontWeight: 600, color: '#6B8E4E', margin: '20px 0 8px' }}>Total Cases by Supplier</div>
         <table style={{ ...table, maxWidth: 320 }}>
