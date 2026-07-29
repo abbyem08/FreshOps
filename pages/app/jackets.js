@@ -10,6 +10,8 @@ export default function JacketsPage() {
   const [stops, setStops] = useState([]);
   const [eligibleLines, setEligibleLines] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsForm, setDetailsForm] = useState({});
 
   useEffect(() => { loadJackets(); }, []);
   useEffect(() => { if (activeId) loadJacketDetail(activeId); }, [activeId]);
@@ -89,6 +91,31 @@ export default function JacketsPage() {
     return created;
   }
 
+  async function updateJacketDetails() {
+    if (!detailsForm.jacket_number) { alert('Jacket Number is required.'); return; }
+    const { error } = await supabase.from('jackets').update({
+      jacket_number: detailsForm.jacket_number,
+      jacket_date: detailsForm.jacket_date || null,
+      carrier: detailsForm.carrier || null,
+      driver: detailsForm.driver || null,
+      driver_phone: detailsForm.driver_phone || null,
+      truck: detailsForm.truck || null,
+      trailer: detailsForm.trailer || null,
+      route: detailsForm.route || null,
+      jacket_status: detailsForm.jacket_status,
+      weight_capacity: Number(detailsForm.weight_capacity) || null,
+      pallet_capacity: Number(detailsForm.pallet_capacity) || null,
+    }).eq('jacket_id', activeId);
+    if (error) { alert('Update failed: ' + error.message + (error.message.includes('duplicate') ? ' — that jacket number is already in use.' : '')); return; }
+    setEditingDetails(false);
+    await loadJackets();
+    loadJacketDetail(activeId);
+  }
+  function openEditDetails() {
+    setDetailsForm({ ...activeJacket });
+    setEditingDetails(true);
+  }
+
   async function removeLine(jacketLineId) {
     await supabase.from('stop_lines').delete().eq('jacket_line_id', jacketLineId);
     await supabase.from('jacket_lines').delete().eq('jacket_line_id', jacketLineId);
@@ -136,6 +163,32 @@ export default function JacketsPage() {
               <strong style={{ color: '#2F5233' }}>Jacket {activeJacket.jacket_number} — {activeJacket.jacket_status}</strong>
               <span style={{ fontSize: 12, color: '#78716c' }}>{totalWeight.toLocaleString()} lb · {totalPallets} pallets</span>
             </div>
+
+            {editingDetails ? (
+              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {detailField('Jacket Number', 'jacket_number', detailsForm, setDetailsForm)}
+                  {detailField('Jacket Date', 'jacket_date', detailsForm, setDetailsForm, 'date')}
+                  {detailField('Carrier', 'carrier', detailsForm, setDetailsForm)}
+                  {detailField('Driver', 'driver', detailsForm, setDetailsForm)}
+                  {detailField('Driver Phone', 'driver_phone', detailsForm, setDetailsForm)}
+                  {detailField('Truck #', 'truck', detailsForm, setDetailsForm)}
+                  {detailField('Trailer #', 'trailer', detailsForm, setDetailsForm)}
+                  {detailField('Route', 'route', detailsForm, setDetailsForm)}
+                  <label style={{ fontSize: 13 }}>Status
+                    <select value={detailsForm.jacket_status || 'Planning'} onChange={e => setDetailsForm({ ...detailsForm, jacket_status: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                      {['Planning', 'Booked', 'Loading', 'Dispatched', 'In Transit', 'Delivered', 'Closed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  {detailField('Weight Capacity (lb)', 'weight_capacity', detailsForm, setDetailsForm, 'number')}
+                  {detailField('Pallet Capacity', 'pallet_capacity', detailsForm, setDetailsForm, 'number')}
+                </div>
+                <button onClick={updateJacketDetails} style={{ marginTop: 10, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Details</button>
+                <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+              </div>
+            ) : (
+              <button onClick={openEditDetails} style={{ marginBottom: 12, padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
+            )}
             <table style={table}>
               <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
               <tbody>{jacketLines.map(jl => (
@@ -175,6 +228,13 @@ export default function JacketsPage() {
   );
 }
 
+function detailField(label, key, form, setForm, type = 'text') {
+  return (
+    <label style={{ fontSize: 13 }}>{label}
+      <input type={type} value={form[key] ?? ''} onChange={e => setForm({ ...form, [key]: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
+    </label>
+  );
+}
 const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
