@@ -31,7 +31,7 @@ export default function JacketsPage() {
     setStops(stopRows || []);
 
     // eligible order lines: cases_ordered minus what's already assigned across non-cancelled jackets
-    const { data: allLines } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size)');
+    const { data: allLines } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
     const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_status)');
     const eligible = (allLines || []).map(ol => {
       const assigned = (allJacketLines || [])
