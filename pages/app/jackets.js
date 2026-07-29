@@ -43,9 +43,10 @@ export default function JacketsPage() {
   }
 
   async function createNewJacket() {
-    const nums = jackets.map(j => Number(j.jacket_number)).filter(n => !isNaN(n));
-    const next = String((nums.length ? Math.max(...nums) : 200999) + 1);
-    const { data } = await supabase.from('jackets').insert({ jacket_number: next, jacket_status: 'Planning' }).select().single();
+    const number = window.prompt('Jacket Number:');
+    if (!number) return;
+    const { data, error } = await supabase.from('jackets').insert({ jacket_number: number, jacket_status: 'Planning' }).select().single();
+    if (error) { alert('Could not create jacket: ' + error.message); return; }
     await loadJackets();
     setActiveId(data.jacket_id);
   }
