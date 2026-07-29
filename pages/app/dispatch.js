@@ -29,7 +29,13 @@ export default function DispatchPage() {
     setStops(stopRows || []);
   }
 
-  if (!jacket) return <AppShell title="Dispatch Ticket"><p style={{ color: '#a8a29e' }}>No jackets yet — create one on the Jackets page first.</p></AppShell>;
+  async function updateStopNumber(stopId, newNumber) {
+    const { error } = await supabase.from('stops').update({ stop_number: Number(newNumber) }).eq('stop_id', stopId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadDetail(jacketId);
+  }
+
+  if (!jacket) return <AppShell title="Dispatch Sheet"><p style={{ color: '#a8a29e' }}>No jackets yet — create one on the Jackets page first.</p></AppShell>;
 
   const pickups = stops.filter(s => s.stop_type === 'Pickup');
   const deliveries = stops.filter(s => s.stop_type === 'Delivery');
@@ -39,9 +45,14 @@ export default function DispatchPage() {
     const name = s.suppliers?.company || '—';
     bySupplier[name] = (bySupplier[name] || 0) + Number(sl.cases_at_stop || 0);
   }));
+  const byCustomer = {};
+  deliveries.forEach(s => (s.stop_lines || []).forEach(sl => {
+    const name = s.customers?.company || '—';
+    byCustomer[name] = (byCustomer[name] || 0) + Number(sl.cases_at_stop || 0);
+  }));
 
   return (
-    <AppShell title="Dispatch Ticket">
+    <AppShell title="Dispatch Sheet">
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
         <select value={jacketId || ''} onChange={e => setJacketId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6 }}>
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
@@ -65,9 +76,11 @@ export default function DispatchPage() {
         <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Pickups</div>
         {pickups.map(s => (
           <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5 }}>
-              <strong>#{s.stop_number} — {s.suppliers?.company}</strong>
-              <span style={{ color: '#78716c', marginLeft: 10 }}>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</span>
+            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
+              <span className="print-only">#{s.stop_number}</span>
+              <strong>— {s.suppliers?.company}</strong>
+              <span style={{ color: '#78716c' }}>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</span>
             </div>
             <table style={table}>
               <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Shipper PO</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
@@ -86,9 +99,11 @@ export default function DispatchPage() {
         <div style={{ fontWeight: 600, color: '#6B8E4E', margin: '20px 0 8px' }}>Deliveries</div>
         {deliveries.map(s => (
           <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5 }}>
-              <strong>#{s.stop_number} — {s.customers?.company}</strong>
-              <span style={{ color: '#78716c', marginLeft: 10 }}>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</span>
+            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
+              <span className="print-only">#{s.stop_number}</span>
+              <strong>— {s.customers?.company}</strong>
+              <span style={{ color: '#78716c' }}>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</span>
             </div>
             <table style={table}>
               <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
@@ -103,15 +118,34 @@ export default function DispatchPage() {
           </div>
         ))}
 
-        <div style={{ fontWeight: 600, color: '#6B8E4E', margin: '20px 0 8px' }}>Total Cases by Supplier</div>
-        <table style={{ ...table, maxWidth: 320 }}>
-          <thead><tr style={trHead}><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th></tr></thead>
-          <tbody>{Object.entries(bySupplier).map(([name, cases]) => (
-            <tr key={name} style={tr}><td>{name}</td><td style={{ textAlign: 'right' }}>{cases}</td></tr>
-          ))}</tbody>
-        </table>
+        <div style={{ display: 'flex', gap: 32, marginTop: 20 }}>
+          <div>
+            <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Total Cases by Supplier</div>
+            <table style={{ ...table, maxWidth: 320 }}>
+              <thead><tr style={trHead}><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th></tr></thead>
+              <tbody>{Object.entries(bySupplier).map(([name, cases]) => (
+                <tr key={name} style={tr}><td>{name}</td><td style={{ textAlign: 'right' }}>{cases}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Total Cases by Customer — {deliveries.length} delivery stop{deliveries.length === 1 ? '' : 's'}</div>
+            <table style={{ ...table, maxWidth: 320 }}>
+              <thead><tr style={trHead}><th>Customer</th><th style={{ textAlign: 'right' }}>Cases</th></tr></thead>
+              <tbody>{Object.entries(byCustomer).map(([name, cases]) => (
+                <tr key={name} style={tr}><td>{name}</td><td style={{ textAlign: 'right' }}>{cases}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <style jsx>{`@media print { .no-print { display: none; } }`}</style>
+      <style jsx>{`
+        .print-only { display: none; }
+        @media print {
+          .no-print { display: none; }
+          .print-only { display: inline; }
+        }
+      `}</style>
     </AppShell>
   );
 }

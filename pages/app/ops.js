@@ -17,7 +17,8 @@ export default function OpsPage() {
     const { data: jl } = await supabase
       .from('jacket_lines')
       .select('*, jackets(jacket_number), order_lines(products(commodity, pack_size), customer_orders(customers(company)))')
-      .order('updated_at', { ascending: false });
+      .order('jacket_id')
+      .order('jacket_line_id');
     setLines(jl || []);
     const { data: c } = await supabase
       .from('claims')

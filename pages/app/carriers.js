@@ -1,11 +1,11 @@
-// pages/app/customers.js
+// pages/app/carriers.js
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
-const BLANK = { company: '', buyer_contact: '', phone: '', email: '', delivery_address: '', city: '', state: '', zip: '', payment_terms: '' };
+const BLANK = { name: '', mc_number: '', dot_number: '', insurance_expiry: '', contact: '', phone: '' };
 
-export default function CustomersPage() {
+export default function CarriersPage() {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -13,52 +13,61 @@ export default function CustomersPage() {
 
   useEffect(() => { load(); }, []);
   async function load() {
-    const { data } = await supabase.from('customers').select('*').order('company');
+    const { data } = await supabase.from('carriers').select('*').order('name');
     setRows(data || []);
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
-  function openEdit(r) { setForm(r); setEditingId(r.customer_id); setShowForm(true); }
+  function openEdit(r) { setForm(r); setEditingId(r.carrier_id); setShowForm(true); }
   async function save() {
-    if (!form.company) { alert('Company name is required.'); return; }
+    if (!form.name) { alert('Carrier name is required.'); return; }
     if (editingId) {
-      const { error } = await supabase.from('customers').update(form).eq('customer_id', editingId);
+      const { error } = await supabase.from('carriers').update(form).eq('carrier_id', editingId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
-      const { error } = await supabase.from('customers').insert(form);
+      const { error } = await supabase.from('carriers').insert(form);
       if (error) { alert('Save failed: ' + error.message); return; }
     }
     setShowForm(false); setEditingId(null); setForm(BLANK);
     load();
   }
 
+  function daysUntil(dateStr) {
+    if (!dateStr) return Infinity;
+    return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+  }
+
   return (
-    <AppShell title="Customers">
-      <button onClick={openAdd} style={btn}>+ Add Customer</button>
+    <AppShell title="Carriers">
+      <button onClick={openAdd} style={btn}>+ Add Carrier</button>
       {showForm && (
         <div style={card}>
           <div style={grid}>
-            {field('Company', form.company, v => setForm({ ...form, company: v }))}
-            {field('Buyer Contact', form.buyer_contact, v => setForm({ ...form, buyer_contact: v }))}
+            {field('Carrier Name', form.name, v => setForm({ ...form, name: v }))}
+            {field('MC #', form.mc_number, v => setForm({ ...form, mc_number: v }))}
+            {field('DOT #', form.dot_number, v => setForm({ ...form, dot_number: v }))}
+            <label style={{ fontSize: 13 }}>Insurance Expiry
+              <input type="date" value={form.insurance_expiry || ''} onChange={e => setForm({ ...form, insurance_expiry: e.target.value })} style={input} />
+            </label>
+            {field('Contact', form.contact, v => setForm({ ...form, contact: v }))}
             {field('Phone', form.phone, v => setForm({ ...form, phone: v }))}
-            {field('Email', form.email, v => setForm({ ...form, email: v }))}
-            {field('Delivery Address', form.delivery_address, v => setForm({ ...form, delivery_address: v }))}
-            {field('City', form.city, v => setForm({ ...form, city: v }))}
-            {field('State', form.state, v => setForm({ ...form, state: v }))}
-            {field('ZIP', form.zip, v => setForm({ ...form, zip: v }))}
-            {field('Payment Terms', form.payment_terms, v => setForm({ ...form, payment_terms: v }))}
           </div>
-          <button onClick={save} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Customer' : 'Save Customer'}</button>
+          <button onClick={save} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Carrier' : 'Save Carrier'}</button>
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
       <table style={table}>
-        <thead><tr style={trHead}><th>Company</th><th>Contact</th><th>Phone</th><th>City</th><th>State</th><th>Terms</th><th></th></tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.customer_id} style={tr}>
-            <td>{r.company}</td><td>{r.buyer_contact}</td><td>{r.phone}</td><td>{r.city}</td><td>{r.state}</td><td>{r.payment_terms}</td>
-            <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
-          </tr>
-        ))}</tbody>
+        <thead><tr style={trHead}><th>Carrier</th><th>MC #</th><th>DOT #</th><th>Insurance Expiry</th><th>Contact</th><th>Phone</th><th></th></tr></thead>
+        <tbody>{rows.map(r => {
+          const soon = daysUntil(r.insurance_expiry) <= 30;
+          return (
+            <tr key={r.carrier_id} style={tr}>
+              <td>{r.name}</td><td>{r.mc_number}</td><td>{r.dot_number}</td>
+              <td style={{ color: soon ? '#C0562D' : 'inherit' }}>{r.insurance_expiry} {soon && '⚠'}</td>
+              <td>{r.contact}</td><td>{r.phone}</td>
+              <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
+            </tr>
+          );
+        })}</tbody>
       </table>
     </AppShell>
   );
