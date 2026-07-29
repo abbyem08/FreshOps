@@ -14,7 +14,7 @@ export default function OpsPage() {
   async function load() {
     const { data: jl } = await supabase
       .from('jacket_lines')
-      .select('*, jackets(jacket_number), order_lines(products(commodity, pack_size))')
+      .select('*, jackets(jacket_number), order_lines(products(commodity, pack_size), customer_orders(customers(company)))')
       .order('updated_at', { ascending: false });
     setLines(jl || []);
     const { data: c } = await supabase.from('claims').select('*, jacket_lines(order_lines(products(commodity, pack_size)))').order('date_opened', { ascending: false });
@@ -23,6 +23,15 @@ export default function OpsPage() {
 
   async function updateField(id, field, value) {
     const { error } = await supabase.from('jacket_lines').update({ [field]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    load();
+  }
+
+  async function toggleNotify(id, stage, currentlyOn) {
+    const fields = stage === 'pickup'
+      ? { customer_notified_pickup: !currentlyOn, customer_notified_pickup_at: !currentlyOn ? new Date().toISOString() : null }
+      : { customer_notified_delivery: !currentlyOn, customer_notified_delivery_at: !currentlyOn ? new Date().toISOString() : null };
+    const { error } = await supabase.from('jacket_lines').update(fields).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
     load();
   }
@@ -45,23 +54,37 @@ export default function OpsPage() {
 
   return (
     <AppShell title="Operations Log">
+      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Track load progress, document BOLs, and log exactly when you told each customer their order was picked up or delivered.</div>
       {lines.length === 0 ? (
         <p style={{ color: '#a8a29e' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
       ) : (
         <table style={table}>
-          <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Exception / Notes</th></tr></thead>
+          <thead><tr style={trHead}><th>Jacket</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told Customer: Picked Up</th><th>Told Customer: Delivered</th><th>Exception / Notes</th></tr></thead>
           <tbody>{lines.map(jl => (
             <tr key={jl.jacket_line_id} style={tr}>
               <td style={{ fontFamily: 'monospace' }}>{jl.jackets?.jacket_number}</td>
+              <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
               <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
               <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
               <td><input type="number" defaultValue={jl.actual_cases_loaded} onBlur={e => updateField(jl.jacket_line_id, 'actual_cases_loaded', Number(e.target.value))} style={{ width: 64 }} /></td>
               <td><input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateField(jl.jacket_line_id, 'actual_cases_delivered', Number(e.target.value))} style={{ width: 64 }} /></td>
               <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 100 }} placeholder="BOL #" /></td>
               <td>
-                <select defaultValue={jl.load_status} onBlur={e => updateField(jl.jacket_line_id, 'load_status', e.target.value)} onChange={e => updateField(jl.jacket_line_id, 'load_status', e.target.value)}>
+                <select defaultValue={jl.load_status} onChange={e => updateField(jl.jacket_line_id, 'load_status', e.target.value)}>
                   {statusOptions.map(s => <option key={s}>{s}</option>)}
                 </select>
+              </td>
+              <td>
+                <button onClick={() => toggleNotify(jl.jacket_line_id, 'pickup', jl.customer_notified_pickup)}
+                  style={notifyBtn(jl.customer_notified_pickup)}>
+                  {jl.customer_notified_pickup ? `✓ ${new Date(jl.customer_notified_pickup_at).toLocaleDateString()} ${new Date(jl.customer_notified_pickup_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Mark notified'}
+                </button>
+              </td>
+              <td>
+                <button onClick={() => toggleNotify(jl.jacket_line_id, 'delivery', jl.customer_notified_delivery)}
+                  style={notifyBtn(jl.customer_notified_delivery)}>
+                  {jl.customer_notified_delivery ? `✓ ${new Date(jl.customer_notified_delivery_at).toLocaleDateString()} ${new Date(jl.customer_notified_delivery_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Mark notified'}
+                </button>
               </td>
               <td><input type="text" defaultValue={jl.exception_notes || ''} onBlur={e => updateField(jl.jacket_line_id, 'exception_notes', e.target.value)} style={{ width: 180 }} placeholder="Delay / exception notes" /></td>
             </tr>
@@ -116,3 +139,7 @@ export default function OpsPage() {
 const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
 const tr = { borderBottom: '1px solid #DCD5C1' };
+function notifyBtn(on) {
+  return { padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap',
+    background: on ? '#6B8E4E' : '#fff', color: on ? '#fff' : '#333', border: on ? '1px solid #6B8E4E' : '1px solid #DCD5C1' };
+}
