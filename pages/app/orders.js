@@ -42,7 +42,7 @@ export default function OrdersPage() {
       order_date: orderForm.order_date || null,
       requested_delivery: orderForm.requested_delivery || null,
       salesperson: orderForm.salesperson || null,
-      status: 'Open',
+      order_status: 'Open',
       source: 'Internal'
     };
     const { error } = await supabase.from('customer_orders').insert(payload);
@@ -103,7 +103,7 @@ export default function OrdersPage() {
           <div key={o.customer_order_id} style={card}>
             <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ ...btnRow, marginBottom: isOpen ? 12 : 0 }}>
               <span>{isOpen ? '⌄' : '›'} <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> {o.customers?.company} <span style={{ color: '#78716c', fontSize: 12 }}>PO {o.customer_po}</span></span>
-              <span style={pill(o.status)}>{o.status}</span>
+              <span style={pill(o.order_status)}>{o.order_status}</span>
             </button>
             {isOpen && (
               <div>
