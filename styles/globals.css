@@ -9,3 +9,12 @@ body {
   margin: 0;
   font-family: 'Inter', 'Geist', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+@media print {
+  .no-print { display: none !important; }
+  .print-full-width { padding: 0 !important; margin: 0 !important; }
+}
+.print-only { display: none; }
+@media print {
+  .print-only { display: inline; }
+}
