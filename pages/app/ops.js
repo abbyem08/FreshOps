@@ -66,16 +66,20 @@ export default function OpsPage() {
       const pid = l.order_lines?.product_id;
       if (!pid) return;
       const key = l.jacket_id + '-' + pid;
-      if (!groups[key]) groups[key] = { ordered: 0, loaded: 0 };
+      if (!groups[key]) groups[key] = { ordered: 0, loaded: 0, anyStillPlanned: false };
       groups[key].ordered += Number(l.cases_to_load || 0);
       groups[key].loaded += Number(l.actual_cases_loaded || 0);
+      if (l.load_status === 'Planned') groups[key].anyStillPlanned = true;
     });
     const flags = {};
     lines.forEach(l => {
       const pid = l.order_lines?.product_id;
       const key = l.jacket_id + '-' + pid;
       const g = groups[key];
-      const commodityShortage = g && g.loaded > 0 && g.loaded !== g.ordered;
+      // Only flag once loading is considered done for every order sharing this
+      // commodity on this jacket — a partial load still in progress isn't a
+      // discrepancy yet, it's just not finished.
+      const commodityShortage = g && !g.anyStillPlanned && g.loaded !== g.ordered;
       const deliveryMismatch = Number(l.actual_cases_loaded || 0) > 0 && Number(l.actual_cases_delivered || 0) > 0 && Number(l.actual_cases_loaded) !== Number(l.actual_cases_delivered);
       flags[l.jacket_line_id] = { commodityShortage, deliveryMismatch };
     });
@@ -167,7 +171,7 @@ export default function OpsPage() {
   const shortLines = filteredLines.filter(l => Number(l.actual_cases_loaded || 0) > Number(l.actual_cases_delivered || 0));
 
   return (
-    <AppShell title="Operations Log">
+    <AppShell title="Load Tracking">
       <div style={{ color: '#78716c', fontSize: 13, marginBottom: 12 }}>Track load progress, document BOLs, log customer notifications, and catch discrepancies before they become problems.</div>
       <label style={{ fontSize: 13, display: 'block', marginBottom: 16 }}>Viewing
         <select value={jacketFilter} onChange={e => setJacketFilter(e.target.value)} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 220 }}>
@@ -181,8 +185,8 @@ export default function OpsPage() {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 16, fontSize: 12, marginBottom: 8 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity shorted — may need redistribution</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Loaded ≠ delivered</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered (loading complete, still mismatched)</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ loaded</span>
           </div>
           <table style={table}>
             <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told: Picked Up</th><th>Told: Delivered</th><th>Exception / Notes</th></tr></thead>
@@ -300,10 +304,10 @@ export default function OpsPage() {
         <div style={{ fontWeight: 600, color: '#2F5233' }}>Jacket Reconciliation</div>
         <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 12 }}>Product physically on a truck that isn't fully accounted for — loaded but not delivered, or rolled/extra product still needing a home.</div>
 
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Undelivered Cases</div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Remaining on Truck</div>
         {shortLines.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing outstanding.</p> : (
           <table style={{ ...table, marginBottom: 20 }}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Short</th></tr></thead>
+            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
             <tbody>{shortLines.map(l => (
               <tr key={l.jacket_line_id} style={tr}>
                 <td style={{ fontFamily: 'monospace' }}>{l.jackets?.jacket_number}</td>
@@ -312,7 +316,7 @@ export default function OpsPage() {
                 <td>{l.order_lines?.products?.commodity} — {l.order_lines?.products?.pack_size}</td>
                 <td style={{ textAlign: 'right' }}>{l.actual_cases_loaded}</td>
                 <td style={{ textAlign: 'right' }}>{l.actual_cases_delivered}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#C0562D' }}>{l.actual_cases_loaded - l.actual_cases_delivered}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{l.actual_cases_loaded - l.actual_cases_delivered}</td>
               </tr>
             ))}</tbody>
           </table>

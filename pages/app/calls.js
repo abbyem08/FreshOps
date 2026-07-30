@@ -9,32 +9,40 @@ export default function CallsPage() {
   const [calls, setCalls] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [prospects, setProspects] = useState([]);
   const [products, setProducts] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK);
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [cl, s, c, pr, p] = await Promise.all([
-      supabase.from('call_log').select('*, suppliers(company), customers(company), prospects(company), products(commodity, pack_size)').order('call_date', { ascending: false }),
+    const [cl, s, c, p] = await Promise.all([
+      supabase.from('call_log').select('*, suppliers(company), customers(company), products(commodity, pack_size)').order('call_date', { ascending: false }),
       supabase.from('suppliers').select('supplier_id, company').order('company'),
       supabase.from('customers').select('customer_id, company').order('company'),
-      supabase.from('prospects').select('prospect_id, company').order('company'),
       supabase.from('products').select('product_id, commodity, pack_size').order('commodity'),
     ]);
     setCalls(cl.data || []);
     setSuppliers(s.data || []);
     setCustomers(c.data || []);
-    setProspects(pr.data || []);
     setProducts(p.data || []);
   }
 
   function partyLabel(c) {
     if (c.party_type === 'Supplier') return c.suppliers?.company;
-    if (c.party_type === 'Customer') return c.customers?.company;
-    return c.prospects?.company ? `${c.prospects.company} (Prospect)` : '—';
+    return c.customers?.company;
+  }
+
+  function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
+  function openEdit(c) {
+    setForm({
+      call_date: c.call_date || '', party_type: c.party_type, party_id: c.party_type === 'Supplier' ? c.supplier_id : c.customer_id,
+      contact_name: c.contact_name || '', phone: c.phone || '', product_id: c.product_id, price: c.price ?? '', price_type: c.price_type || 'FOB',
+      availability: c.availability || '', notes: c.notes || '', followup_date: c.followup_date || '', status: c.status,
+    });
+    setEditingId(c.call_id);
+    setShowForm(true);
   }
 
   async function saveCall() {
@@ -44,7 +52,6 @@ export default function CallsPage() {
       party_type: form.party_type,
       supplier_id: form.party_type === 'Supplier' ? Number(form.party_id) : null,
       customer_id: form.party_type === 'Customer' ? Number(form.party_id) : null,
-      prospect_id: form.party_type === 'Prospect' ? Number(form.party_id) : null,
       contact_name: form.contact_name || null,
       phone: form.phone || null,
       product_id: Number(form.product_id),
@@ -55,27 +62,31 @@ export default function CallsPage() {
       followup_date: form.followup_date || null,
       status: form.status,
     };
-    const { error } = await supabase.from('call_log').insert(payload);
-    if (error) { alert('Save failed: ' + error.message); return; }
-    setForm(BLANK);
-    setShowForm(false);
+    if (editingId) {
+      const { error } = await supabase.from('call_log').update(payload).eq('call_id', editingId);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('call_log').insert(payload);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    }
+    setForm(BLANK); setEditingId(null); setShowForm(false);
     loadAll();
   }
 
-  const partyList = form.party_type === 'Supplier' ? suppliers : form.party_type === 'Customer' ? customers : prospects;
-  const partyIdKey = form.party_type === 'Supplier' ? 'supplier_id' : form.party_type === 'Customer' ? 'customer_id' : 'prospect_id';
+  const partyList = form.party_type === 'Supplier' ? suppliers : customers;
+  const partyIdKey = form.party_type === 'Supplier' ? 'supplier_id' : 'customer_id';
 
   return (
     <AppShell title="Market Calls">
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Every call to a supplier, customer, or prospect — and any price quoted — lives here. Price Sheets pull straight from these entries.</div>
-      <button onClick={() => setShowForm(!showForm)} style={btn}>+ Log Call</button>
+      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Every call to a supplier or customer — and any price quoted — lives here. Price Sheets pull straight from these entries.</div>
+      <button onClick={openAdd} style={btn}>+ Log Call</button>
       {showForm && (
         <div style={card}>
           <div style={grid}>
             <label style={{ fontSize: 13 }}>Date<input type="date" value={form.call_date} onChange={e => setForm({ ...form, call_date: e.target.value })} style={input} /></label>
             <label style={{ fontSize: 13 }}>Party Type
               <select value={form.party_type} onChange={e => setForm({ ...form, party_type: e.target.value, party_id: '' })} style={input}>
-                <option>Supplier</option><option>Customer</option><option>Prospect</option>
+                <option>Supplier</option><option>Customer</option>
               </select>
             </label>
             <label style={{ fontSize: 13 }}>{form.party_type}
@@ -107,12 +118,12 @@ export default function CallsPage() {
             </label>
             {field('Notes', form.notes, v => setForm({ ...form, notes: v }))}
           </div>
-          <button onClick={saveCall} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>Save Call</button>
-          <button onClick={() => setShowForm(false)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={saveCall} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Call' : 'Save Call'}</button>
+          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
       <table style={table}>
-        <thead><tr style={trHead}><th>Date</th><th>Party</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Price</th><th>Availability</th><th>Follow-up</th><th>Status</th></tr></thead>
+        <thead><tr style={trHead}><th>Date</th><th>Party</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Price</th><th>Availability</th><th>Follow-up</th><th>Status</th><th></th></tr></thead>
         <tbody>{calls.map(c => (
           <tr key={c.call_id} style={tr}>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.call_date}</td>
@@ -122,6 +133,7 @@ export default function CallsPage() {
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.availability}</td>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.followup_date || '—'}</td>
             <td>{c.status}</td>
+            <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button></td>
           </tr>
         ))}</tbody>
       </table>
@@ -137,6 +149,7 @@ function field(label, value, onChange, type = 'text') {
   );
 }
 const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
+const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
 const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 };
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 };
 const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };

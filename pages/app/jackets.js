@@ -117,8 +117,10 @@ export default function JacketsPage() {
   }
 
   async function removeLine(jacketLineId) {
-    await supabase.from('stop_lines').delete().eq('jacket_line_id', jacketLineId);
-    await supabase.from('jacket_lines').delete().eq('jacket_line_id', jacketLineId);
+    const { error: slErr } = await supabase.from('stop_lines').delete().eq('jacket_line_id', jacketLineId);
+    if (slErr) { alert('Could not remove: ' + slErr.message); return; }
+    const { error: jlErr } = await supabase.from('jacket_lines').delete().eq('jacket_line_id', jacketLineId);
+    if (jlErr) { alert('Could not remove: ' + jlErr.message); return; }
     loadJacketDetail(activeId);
   }
 
@@ -146,13 +148,10 @@ export default function JacketsPage() {
 
   return (
     <AppShell title="Jackets">
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {jackets.map(j => (
-          <button key={j.jacket_id} onClick={() => setActiveId(j.jacket_id)}
-            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, fontFamily: 'monospace', cursor: 'pointer', border: '1px solid #DCD5C1', background: activeId === j.jacket_id ? '#2F5233' : '#fff', color: activeId === j.jacket_id ? '#fff' : '#333' }}>
-            {j.jacket_number}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+        <select value={activeId || ''} onChange={e => setActiveId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}>
+          {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
+        </select>
         <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #6B8E4E', background: '#fff', color: '#6B8E4E', fontWeight: 600 }}>+ New Jacket</button>
       </div>
 

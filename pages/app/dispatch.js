@@ -52,6 +52,17 @@ export default function DispatchPage() {
     if (error) { alert('Update failed: ' + error.message); return; }
     loadDetail(jacketId);
   }
+  async function updateAppointment(stopId, value) {
+    const { error } = await supabase.from('stops').update({ appointment: value ? new Date(value).toISOString() : null }).eq('stop_id', stopId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadDetail(jacketId);
+  }
+  function toLocalInputValue(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
 
   function openFreightEdit() {
     setFreightForm(freight || { carrier: jacket?.carrier || '', trip_type: TRIP_TYPES[0], quoted_rate: '', booked_rate: '', extra_fees: '', extra_fees_notes: '', miles: '', status: 'Quoted', carrier_invoice_number: '', invoice_received: false, carrier_paid: false });
@@ -113,14 +124,14 @@ export default function DispatchPage() {
       </div>
 
       {/* ---- Freight panel ---- */}
-      <div className="no-print" style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingFreight ? 12 : 0 }}>
           <strong style={{ color: '#2F5233' }}>Freight</strong>
-          {!editingFreight && <button onClick={openFreightEdit} style={{ padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{freight ? 'Edit' : '+ Add Freight Record'}</button>}
+          {!editingFreight && <button className="no-print" onClick={openFreightEdit} style={{ padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{freight ? 'Edit' : '+ Add Freight Record'}</button>}
         </div>
 
         {editingFreight ? (
-          <div>
+          <div className="no-print">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
               <label style={{ fontSize: 13 }}>Carrier
                 <select value={freightForm.carrier} onChange={e => setFreightForm({ ...freightForm, carrier: e.target.value })} style={input}>
@@ -196,6 +207,8 @@ export default function DispatchPage() {
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.suppliers?.company}</strong>
               <span style={{ color: '#78716c' }}>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</span>
+              <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
+              {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
             <table style={table}>
               <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Shipper PO</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
@@ -219,6 +232,8 @@ export default function DispatchPage() {
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.customers?.company}</strong>
               <span style={{ color: '#78716c' }}>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</span>
+              <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
+              {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
             <table style={table}>
               <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>

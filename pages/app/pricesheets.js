@@ -9,9 +9,10 @@ export default function PriceSheetsPage() {
   const [lines, setLines] = useState([]);
   const [recipients, setRecipients] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [printMode, setPrintMode] = useState(false);
 
-  useEffect(() => { loadSheets(); loadCustomers(); }, []);
+  useEffect(() => { loadSheets(); loadCustomers(); loadSuppliers(); }, []);
   useEffect(() => { if (activeSheetId) loadDetail(activeSheetId); }, [activeSheetId]);
 
   async function loadSheets() {
@@ -23,20 +24,23 @@ export default function PriceSheetsPage() {
     const { data } = await supabase.from('customers').select('customer_id, company').order('company');
     setCustomers(data || []);
   }
+  async function loadSuppliers() {
+    const { data } = await supabase.from('suppliers').select('supplier_id, company, per_case_fee').order('company');
+    setSuppliers(data || []);
+  }
   async function loadDetail(sheetId) {
-    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size)').eq('price_sheet_id', sheetId);
+    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId);
     setLines(l || []);
     const { data: r } = await supabase.from('price_sheet_recipients').select('*').eq('price_sheet_id', sheetId);
     setRecipients(r || []);
   }
 
   async function createFromLatestQuotes() {
-    // one row per product: the most recent supplier/prospect quote for it
     const { data: quotes } = await supabase
       .from('call_log')
       .select('*')
       .not('price', 'is', null)
-      .in('party_type', ['Supplier', 'Prospect'])
+      .eq('party_type', 'Supplier')
       .order('call_date', { ascending: false });
 
     const latestByProduct = {};
@@ -55,8 +59,11 @@ export default function PriceSheetsPage() {
     const newLines = productIds.map(pid => ({
       price_sheet_id: sheet.price_sheet_id,
       product_id: Number(pid),
+      supplier_id: latestByProduct[pid].supplier_id,
       cost_price: latestByProduct[pid].price,
       margin_pct: 20,
+      markup_type: 'percent',
+      markup_dollar: 0,
       source_call_id: latestByProduct[pid].call_id,
     }));
     const { error: linesErr } = await supabase.from('price_sheet_lines').insert(newLines);
@@ -66,8 +73,8 @@ export default function PriceSheetsPage() {
     setActiveSheetId(sheet.price_sheet_id);
   }
 
-  async function updateMargin(lineId, marginPct) {
-    const { error } = await supabase.from('price_sheet_lines').update({ margin_pct: marginPct }).eq('price_sheet_line_id', lineId);
+  async function updateLine(lineId, field, value) {
+    const { error } = await supabase.from('price_sheet_lines').update({ [field]: value }).eq('price_sheet_line_id', lineId);
     if (error) { alert('Update failed: ' + error.message); return; }
     loadDetail(activeSheetId);
   }
@@ -83,7 +90,14 @@ export default function PriceSheetsPage() {
     loadDetail(activeSheetId);
   }
 
-  function sellPrice(l) { return Number(l.cost_price) * (1 + Number(l.margin_pct) / 100); }
+  // supplier's per-case fee (e.g. Happy's Logicold cooler fee) folds into
+  // cost before your markup is applied, so it's covered automatically
+  function effectiveCost(l) { return Number(l.cost_price || 0) + Number(l.suppliers?.per_case_fee || 0); }
+  function sellPrice(l) {
+    const cost = effectiveCost(l);
+    return l.markup_type === 'dollar' ? cost + Number(l.markup_dollar || 0) : cost * (1 + Number(l.margin_pct || 0) / 100);
+  }
+
   const activeSheet = sheets.find(s => s.price_sheet_id === activeSheetId);
 
   if (printMode && activeSheet) {
@@ -122,22 +136,37 @@ export default function PriceSheetsPage() {
         ))}
         <button onClick={createFromLatestQuotes} style={btn}>+ New Sheet from Latest Quotes</button>
       </div>
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>This view shows your cost and margin so you can set pricing. Use "Customer View / Print" for a clean sheet with no cost or margin.</div>
+      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Cost includes any per-case supplier fee automatically (e.g. a cooler fee). Choose a % markup or a flat $/case markup per line. Use "Customer View / Print" for a clean sheet with no cost or margin.</div>
 
       {activeSheet ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr', gap: 16 }}>
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <strong style={{ color: '#2F5233' }}>Sheet — valid through {activeSheet.valid_through}</strong>
               <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer View / Print</button>
             </div>
             <table style={table}>
-              <thead><tr style={trHead}><th>Commodity</th><th style={{ textAlign: 'right' }}>Cost $/cs</th><th style={{ textAlign: 'right' }}>Margin %</th><th style={{ textAlign: 'right' }}>Sell $/cs</th></tr></thead>
+              <thead><tr style={trHead}><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Quoted Cost</th><th style={{ textAlign: 'right' }}>Fee</th><th style={{ textAlign: 'right' }}>Eff. Cost</th><th>Markup</th><th style={{ textAlign: 'right' }}>Sell $/cs</th></tr></thead>
               <tbody>{lines.map(l => (
                 <tr key={l.price_sheet_line_id} style={tr}>
                   <td>{l.products?.commodity} — {l.products?.pack_size}</td>
-                  <td style={{ textAlign: 'right', color: '#78716c' }}>${Number(l.cost_price).toFixed(2)}</td>
-                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={l.margin_pct} onBlur={e => updateMargin(l.price_sheet_line_id, Number(e.target.value))} style={{ width: 64, textAlign: 'right' }} /></td>
+                  <td style={{ fontSize: 12 }}>{l.suppliers?.company || '—'}</td>
+                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={l.cost_price} onBlur={e => updateLine(l.price_sheet_line_id, 'cost_price', Number(e.target.value))} style={{ width: 68, textAlign: 'right' }} /></td>
+                  <td style={{ textAlign: 'right', color: '#78716c' }}>{l.suppliers?.per_case_fee ? `$${Number(l.suppliers.per_case_fee).toFixed(2)}` : '—'}</td>
+                  <td style={{ textAlign: 'right', color: '#78716c' }}>${effectiveCost(l).toFixed(2)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <select value={l.markup_type} onChange={e => updateLine(l.price_sheet_line_id, 'markup_type', e.target.value)} style={{ fontSize: 12 }}>
+                        <option value="percent">%</option>
+                        <option value="dollar">$</option>
+                      </select>
+                      {l.markup_type === 'dollar' ? (
+                        <input type="number" defaultValue={l.markup_dollar} onBlur={e => updateLine(l.price_sheet_line_id, 'markup_dollar', Number(e.target.value))} style={{ width: 60 }} />
+                      ) : (
+                        <input type="number" defaultValue={l.margin_pct} onBlur={e => updateLine(l.price_sheet_line_id, 'margin_pct', Number(e.target.value))} style={{ width: 60 }} />
+                      )}
+                    </div>
+                  </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${sellPrice(l).toFixed(2)}</td>
                 </tr>
               ))}</tbody>

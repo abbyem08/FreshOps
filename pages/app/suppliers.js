@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
-const BLANK = { company: '', contact: '', phone: '', email: '', pickup_address: '', city: '', state: '', zip: '', payment_terms: '', paca_license: '' };
+const BLANK = { company: '', contact: '', phone: '', email: '', pickup_address: '', city: '', state: '', zip: '', payment_terms: '', paca_license: '', per_case_fee: '', per_case_fee_notes: '' };
 
 export default function SuppliersPage() {
   const [rows, setRows] = useState([]);
@@ -20,11 +20,12 @@ export default function SuppliersPage() {
   function openEdit(r) { setForm(r); setEditingId(r.supplier_id); setShowForm(true); }
   async function save() {
     if (!form.company) { alert('Company name is required.'); return; }
+    const payload = { ...form, per_case_fee: form.per_case_fee === '' ? 0 : Number(form.per_case_fee) };
     if (editingId) {
-      const { error } = await supabase.from('suppliers').update(form).eq('supplier_id', editingId);
+      const { error } = await supabase.from('suppliers').update(payload).eq('supplier_id', editingId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
-      const { error } = await supabase.from('suppliers').insert(form);
+      const { error } = await supabase.from('suppliers').insert(payload);
       if (error) { alert('Save failed: ' + error.message); return; }
     }
     setShowForm(false); setEditingId(null); setForm(BLANK);
@@ -47,16 +48,19 @@ export default function SuppliersPage() {
             {field('ZIP', form.zip, v => setForm({ ...form, zip: v }))}
             {field('Payment Terms', form.payment_terms, v => setForm({ ...form, payment_terms: v }))}
             {field('PACA License', form.paca_license, v => setForm({ ...form, paca_license: v }))}
+            {field('Per-Case Fee ($) — cooler fee, etc.', form.per_case_fee, v => setForm({ ...form, per_case_fee: v }))}
+            {field('Per-Case Fee Notes', form.per_case_fee_notes, v => setForm({ ...form, per_case_fee_notes: v }))}
           </div>
           <button onClick={save} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Supplier' : 'Save Supplier'}</button>
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
       <table style={table}>
-        <thead><tr style={trHead}><th>Company</th><th>Contact</th><th>Phone</th><th>City</th><th>State</th><th>Terms</th><th>PACA</th><th></th></tr></thead>
+        <thead><tr style={trHead}><th>Company</th><th>Contact</th><th>Phone</th><th>City</th><th>State</th><th>Terms</th><th>PACA</th><th style={{ textAlign: 'right' }}>Per-Case Fee</th><th></th></tr></thead>
         <tbody>{rows.map(r => (
           <tr key={r.supplier_id} style={tr}>
             <td>{r.company}</td><td>{r.contact}</td><td>{r.phone}</td><td>{r.city}</td><td>{r.state}</td><td>{r.payment_terms}</td><td>{r.paca_license}</td>
+            <td style={{ textAlign: 'right' }} title={r.per_case_fee_notes || ''}>{r.per_case_fee ? `$${Number(r.per_case_fee).toFixed(2)}` : '—'}</td>
             <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
           </tr>
         ))}</tbody>
