@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
+import Logo from '../../components/Logo';
 
 export default function PortalLogin() {
   const [email, setEmail] = useState('');
@@ -26,8 +27,10 @@ export default function PortalLogin() {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <h1 style={styles.title}>FreshOps</h1>
-        <p style={styles.sub}>Customer Ordering</p>
+        <div style={{ textAlign: 'center' }}>
+          <Logo height={70} />
+          <p style={{ ...styles.sub, marginTop: 12 }}>Customer Ordering</p>
+        </div>
         <form onSubmit={handleLogin} style={{ marginTop: 24 }}>
           <label style={styles.label}>Email
             <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} required />
