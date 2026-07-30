@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
+import Logo from './Logo';
 
 const NAV = [
   { href: '/app/orders', label: 'Customer Orders' },
@@ -37,9 +38,10 @@ export default function AppShell({ title, children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif', background: '#F6F4EC' }}>
       <div style={{ width: 200, flexShrink: 0, background: '#2F5233', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>FreshOps</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>Staff</div>
+        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
+          <div style={{ background: '#F6F4EC', display: 'inline-block', padding: '6px 8px', borderRadius: 8 }}>
+            <Logo variant="icon" height={26} />
+          </div>
         </div>
         <nav style={{ flex: 1, padding: '8px 0' }}>
           {NAV.map(n => (
