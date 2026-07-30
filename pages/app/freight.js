@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
-const BLANK = { jacket_id: '', carrier: '', trip_type: 'One Pick/One Drop', quoted_rate: '', booked_rate: '', miles: '', status: 'Quoted', carrier_invoice_number: '', invoice_received: false, carrier_paid: false };
+const BLANK = { jacket_id: '', carrier: '', trip_type: 'One Pick/One Drop', quoted_rate: '', booked_rate: '', extra_fees: '', extra_fees_notes: '', miles: '', status: 'Quoted', carrier_invoice_number: '', invoice_received: false, carrier_paid: false };
 const TRIP_TYPES = ['One Pick/One Drop', 'Multi Pick/One Drop', 'One Pick/Multi Drop', 'Multi Pick/Multi Drop'];
 
 export default function FreightPage() {
@@ -34,7 +34,7 @@ export default function FreightPage() {
 
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) {
-    setForm({ jacket_id: r.jacket_id, carrier: r.carrier || '', trip_type: r.trip_type || TRIP_TYPES[0], quoted_rate: r.quoted_rate ?? '', booked_rate: r.booked_rate ?? '', miles: r.miles ?? '', status: r.status || 'Quoted', carrier_invoice_number: r.carrier_invoice_number || '', invoice_received: !!r.invoice_received, carrier_paid: !!r.carrier_paid });
+    setForm({ jacket_id: r.jacket_id, carrier: r.carrier || '', trip_type: r.trip_type || TRIP_TYPES[0], quoted_rate: r.quoted_rate ?? '', booked_rate: r.booked_rate ?? '', extra_fees: r.extra_fees ?? '', extra_fees_notes: r.extra_fees_notes || '', miles: r.miles ?? '', status: r.status || 'Quoted', carrier_invoice_number: r.carrier_invoice_number || '', invoice_received: !!r.invoice_received, carrier_paid: !!r.carrier_paid });
     setEditingId(r.freight_id);
     setShowForm(true);
   }
@@ -46,6 +46,8 @@ export default function FreightPage() {
       trip_type: form.trip_type,
       quoted_rate: form.quoted_rate ? Number(form.quoted_rate) : null,
       booked_rate: form.booked_rate ? Number(form.booked_rate) : null,
+      extra_fees: form.extra_fees ? Number(form.extra_fees) : 0,
+      extra_fees_notes: form.extra_fees_notes || null,
       miles: form.miles ? Number(form.miles) : null,
       status: form.status,
       carrier_invoice_number: form.carrier_invoice_number || null,
@@ -89,6 +91,8 @@ export default function FreightPage() {
             </label>
             {field('Quoted Rate ($)', form.quoted_rate, v => setForm({ ...form, quoted_rate: v }), 'number')}
             {field('Booked Rate ($)', form.booked_rate, v => setForm({ ...form, booked_rate: v }), 'number')}
+            {field('Extra Fees ($) — lumper, extra drop, etc.', form.extra_fees, v => setForm({ ...form, extra_fees: v }), 'number')}
+            {field('Extra Fees Notes', form.extra_fees_notes, v => setForm({ ...form, extra_fees_notes: v }))}
             {field('Miles', form.miles, v => setForm({ ...form, miles: v }), 'number')}
             <label style={{ fontSize: 13 }}>Status
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={input}>
@@ -108,17 +112,20 @@ export default function FreightPage() {
         </div>
       )}
       <table style={table}>
-        <thead><tr style={trHead}><th>Jacket</th><th>Carrier</th><th>Trip Type</th><th style={{ textAlign: 'right' }}>Miles</th><th style={{ textAlign: 'right' }}>Booked Rate</th><th style={{ textAlign: 'right' }}>$/Mile</th><th style={{ textAlign: 'right' }}>Loaded Cases</th><th style={{ textAlign: 'right' }}>$/Case</th><th>Status</th><th></th></tr></thead>
+        <thead><tr style={trHead}><th>Jacket</th><th>Carrier</th><th>Trip Type</th><th style={{ textAlign: 'right' }}>Miles</th><th style={{ textAlign: 'right' }}>Booked Rate</th><th style={{ textAlign: 'right' }}>Extra Fees</th><th style={{ textAlign: 'right' }}>Total Cost</th><th style={{ textAlign: 'right' }}>$/Mile</th><th style={{ textAlign: 'right' }}>Loaded Cases</th><th style={{ textAlign: 'right' }}>$/Case</th><th>Status</th><th></th></tr></thead>
         <tbody>{rows.map(r => {
           const loaded = loadedByJacket[r.jacket_id] || 0;
+          const totalCost = Number(r.booked_rate || 0) + Number(r.extra_fees || 0);
           const perMile = r.miles ? (r.booked_rate / r.miles).toFixed(2) : '—';
-          const perCase = loaded > 0 && r.booked_rate ? (r.booked_rate / loaded).toFixed(2) : '—';
+          const perCase = loaded > 0 && totalCost ? (totalCost / loaded).toFixed(2) : '—';
           return (
             <tr key={r.freight_id} style={tr}>
               <td style={{ fontFamily: 'monospace' }}>{r.jackets?.jacket_number}</td>
               <td>{r.carrier}</td><td>{r.trip_type}</td>
               <td style={{ textAlign: 'right' }}>{r.miles}</td>
               <td style={{ textAlign: 'right' }}>${r.booked_rate?.toLocaleString()}</td>
+              <td style={{ textAlign: 'right' }} title={r.extra_fees_notes || ''}>{r.extra_fees ? `$${Number(r.extra_fees).toLocaleString()}` : '—'}</td>
+              <td style={{ textAlign: 'right', fontWeight: 600 }}>${totalCost.toLocaleString()}</td>
               <td style={{ textAlign: 'right' }}>${perMile}</td>
               <td style={{ textAlign: 'right' }}>{loaded}</td>
               <td style={{ textAlign: 'right' }}>${perCase}</td>

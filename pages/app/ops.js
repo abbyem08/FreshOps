@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabaseClient';
 export default function OpsPage() {
   const [lines, setLines] = useState([]);
   const [claims, setClaims] = useState([]);
+  const [jackets, setJackets] = useState([]);
+  const [jacketFilter, setJacketFilter] = useState('all');
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
   const [resolvingId, setResolvingId] = useState(null);
@@ -14,15 +16,17 @@ export default function OpsPage() {
   useEffect(() => { load(); }, []);
 
   async function load() {
+    const { data: j } = await supabase.from('jackets').select('jacket_id, jacket_number').order('jacket_number');
+    setJackets(j || []);
     const { data: jl } = await supabase
       .from('jacket_lines')
-      .select('*, jackets(jacket_number), order_lines(products(commodity, pack_size), customer_orders(customers(company)))')
+      .select('*, jackets(jacket_id, jacket_number), order_lines(products(commodity, pack_size), customer_orders(acumatica_order_no, customers(company)))')
       .order('jacket_id')
       .order('jacket_line_id');
     setLines(jl || []);
     const { data: c } = await supabase
       .from('claims')
-      .select('*, jacket_lines(order_line_id, order_lines(order_line_id, sell_price_per_case, products(commodity, pack_size)))')
+      .select('*, jacket_lines(jacket_id, jackets(jacket_number), order_line_id, order_lines(order_line_id, sell_price_per_case, products(commodity, pack_size), customer_orders(acumatica_order_no, customers(company))))')
       .order('date_opened', { ascending: false });
     setClaims(c || []);
   }
@@ -91,15 +95,24 @@ export default function OpsPage() {
 
   return (
     <AppShell title="Operations Log">
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Track load progress, document BOLs, and log exactly when you told each customer their order was picked up or delivered.</div>
-      {lines.length === 0 ? (
+      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 12 }}>Track load progress, document BOLs, and log exactly when you told each customer their order was picked up or delivered.</div>
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 16 }}>Viewing
+        <select value={jacketFilter} onChange={e => setJacketFilter(e.target.value)} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 220 }}>
+          <option value="all">All Jackets</option>
+          {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
+        </select>
+      </label>
+      {(() => {
+        const filteredLines = jacketFilter === 'all' ? lines : lines.filter(l => l.jackets?.jacket_id === Number(jacketFilter));
+        return filteredLines.length === 0 ? (
         <p style={{ color: '#a8a29e' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
       ) : (
         <table style={table}>
-          <thead><tr style={trHead}><th>Jacket</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told Customer: Picked Up</th><th>Told Customer: Delivered</th><th>Exception / Notes</th></tr></thead>
-          <tbody>{lines.map(jl => (
+          <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told Customer: Picked Up</th><th>Told Customer: Delivered</th><th>Exception / Notes</th></tr></thead>
+          <tbody>{filteredLines.map(jl => (
             <tr key={jl.jacket_line_id} style={tr}>
               <td style={{ fontFamily: 'monospace' }}>{jl.jackets?.jacket_number}</td>
+              <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
               <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
               <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
               <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
@@ -127,7 +140,8 @@ export default function OpsPage() {
             </tr>
           ))}</tbody>
         </table>
-      )}
+      );
+      })()}
 
       <div style={{ marginTop: 24, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -156,12 +170,17 @@ export default function OpsPage() {
             <button onClick={saveClaim} style={{ padding: '8px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', gridColumn: 'span 1' }}>Save Claim</button>
           </div>
         )}
-        {claims.length > 0 && (
+        {(() => {
+          const filteredClaims = jacketFilter === 'all' ? claims : claims.filter(c => c.jacket_lines?.jacket_id === Number(jacketFilter));
+          return filteredClaims.length > 0 && (
           <table style={{ ...table, marginTop: 16 }}>
-            <thead><tr style={trHead}><th>Type</th><th>Description</th><th>Commodity</th><th>Opened</th><th>Status</th><th>Price Adj.</th><th></th></tr></thead>
-            <tbody>{claims.map(c => (
+            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Type</th><th>Description</th><th>Commodity</th><th>Opened</th><th>Status</th><th>Price Adj.</th><th></th></tr></thead>
+            <tbody>{filteredClaims.map(c => (
               <Fragment key={c.claim_id}>
                 <tr key={c.claim_id} style={tr}>
+                  <td style={{ fontFamily: 'monospace' }}>{c.jacket_lines?.jackets?.jacket_number}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{c.jacket_lines?.order_lines?.customer_orders?.acumatica_order_no}</td>
+                  <td>{c.jacket_lines?.order_lines?.customer_orders?.customers?.company}</td>
                   <td>{c.claim_type}</td><td>{c.description}</td>
                   <td>{c.jacket_lines?.order_lines?.products?.commodity}</td>
                   <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
@@ -171,7 +190,7 @@ export default function OpsPage() {
                 </tr>
                 {resolvingId === c.claim_id && (
                   <tr key={c.claim_id + '-form'}>
-                    <td colSpan={7} style={{ background: '#F6F4EC', padding: 12 }}>
+                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                         <label style={{ fontSize: 13 }}>Status
                           <select value={resolveForm.status} onChange={e => setResolveForm({ ...resolveForm, status: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
@@ -194,7 +213,8 @@ export default function OpsPage() {
               </Fragment>
             ))}</tbody>
           </table>
-        )}
+        );
+        })()}
       </div>
     </AppShell>
   );
