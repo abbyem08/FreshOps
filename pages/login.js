@@ -34,8 +34,8 @@ export default function StaffLogin() {
     <div style={styles.wrap}>
       <div style={styles.card}>
         <div style={{ textAlign: 'center' }}>
-          <Logo height={70} />
-          <p style={{ ...styles.sub, marginTop: 12 }}>Staff Sign In</p>
+          <Logo variant="stacked" size={90} />
+          <p style={{ ...styles.sub, marginTop: 14 }}>Staff Sign In</p>
         </div>
         <form onSubmit={handleLogin} style={{ marginTop: 24 }}>
           <label style={styles.label}>Email
