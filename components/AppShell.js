@@ -7,10 +7,8 @@ import { supabase } from '../lib/supabaseClient';
 const NAV = [
   { href: '/app/orders', label: 'Customer Orders' },
   { href: '/app/jackets', label: 'Jackets' },
-  { href: '/app/dispatch', label: 'Dispatch Sheet' },
+  { href: '/app/dispatch', label: 'Dispatch & Freight' },
   { href: '/app/ops', label: 'Operations Log' },
-  { href: '/app/freight', label: 'Freight' },
-  { href: '/app/reconciliation', label: 'Jacket Reconciliation' },
   { href: '/app/calls', label: 'Market Calls' },
   { href: '/app/pricesheets', label: 'Price Sheets' },
   { href: '/app/prospects', label: 'Prospects' },
