@@ -7,6 +7,7 @@ const STATUS_OPTIONS = ['Planned', 'Loading', 'Loaded', 'In Transit', 'Delivered
 
 export default function OpsPage() {
   const [lines, setLines] = useState([]);
+  const [commodityLoads, setCommodityLoads] = useState([]);
   const [claims, setClaims] = useState([]);
   const [jackets, setJackets] = useState([]);
   const [jacketFilter, setJacketFilter] = useState('all');
@@ -17,9 +18,11 @@ export default function OpsPage() {
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
   const [resolvingId, setResolvingId] = useState(null);
-  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '' });
+  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '', jacket_line_id: '' });
   const [addToOrderId, setAddToOrderId] = useState(null);
   const [addToOrderForm, setAddToOrderForm] = useState({ order_id: '', supplier_id: '' });
+  const [amendingLineId, setAmendingLineId] = useState(null);
+  const [amendValue, setAmendValue] = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -29,10 +32,13 @@ export default function OpsPage() {
 
     const { data: jl } = await supabase
       .from('jacket_lines')
-      .select('*, jackets(jacket_id, jacket_number), order_lines(product_id, products(commodity, pack_size), suppliers(company), customer_orders(acumatica_order_no, customers(company)))')
+      .select('*, jackets(jacket_id, jacket_number), order_lines(product_id, cases_ordered, original_cases_ordered, products(commodity, pack_size), suppliers(company), customer_orders(acumatica_order_no, customers(company)))')
       .order('jacket_id')
       .order('jacket_line_id');
     setLines(jl || []);
+
+    const { data: cl } = await supabase.from('jacket_commodity_loads').select('*, jackets(jacket_number), products(commodity, pack_size)').order('jacket_id');
+    setCommodityLoads(cl || []);
 
     const { data: c } = await supabase
       .from('claims')
@@ -53,42 +59,32 @@ export default function OpsPage() {
     setSuppliers(s || []);
   }
 
-  // ---- discrepancy detection ----
-  // Commodity-level: if a jacket's total loaded for a product doesn't match
-  // total ordered, EVERY line of that product on that jacket is flagged —
-  // because a shortage means cases get manually redistributed across
-  // whichever customers ordered that same commodity, not just one order.
-  // Delivery-level: flags a single line where what was loaded doesn't match
-  // what was actually delivered (a real transit/receiving discrepancy).
-  function computeFlags() {
-    const groups = {};
-    lines.forEach(l => {
-      const pid = l.order_lines?.product_id;
-      if (!pid) return;
-      const key = l.jacket_id + '-' + pid;
-      if (!groups[key]) groups[key] = { ordered: 0, loaded: 0, anyStillPlanned: false };
-      groups[key].ordered += Number(l.cases_to_load || 0);
-      groups[key].loaded += Number(l.actual_cases_loaded || 0);
-      if (l.load_status === 'Planned') groups[key].anyStillPlanned = true;
-    });
-    const flags = {};
-    lines.forEach(l => {
-      const pid = l.order_lines?.product_id;
-      const key = l.jacket_id + '-' + pid;
-      const g = groups[key];
-      // Only flag once loading is considered done for every order sharing this
-      // commodity on this jacket — a partial load still in progress isn't a
-      // discrepancy yet, it's just not finished.
-      const commodityShortage = g && !g.anyStillPlanned && g.loaded !== g.ordered;
-      const deliveryMismatch = Number(l.actual_cases_loaded || 0) > 0 && Number(l.actual_cases_delivered || 0) > 0 && Number(l.actual_cases_loaded) !== Number(l.actual_cases_delivered);
-      flags[l.jacket_line_id] = { commodityShortage, deliveryMismatch };
-    });
-    return flags;
+  // ---- jacket-level actual loaded, by commodity ----
+  async function updateCommodityLoad(jacketId, productId, value) {
+    const existing = commodityLoads.find(c => c.jacket_id === jacketId && c.product_id === productId);
+    let error;
+    if (existing) {
+      ({ error } = await supabase.from('jacket_commodity_loads').update({ actual_cases_loaded: value }).eq('id', existing.id));
+    } else {
+      ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, actual_cases_loaded: value }));
+    }
+    if (error) { alert('Update failed: ' + error.message); return; }
+    load();
   }
 
-  async function updateField(id, field, value) {
-    const { error } = await supabase.from('jacket_lines').update({ [field]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
+  // ---- order-level fields (ordered amend, delivered) ----
+  async function updateField(id, fieldName, value) {
+    const { error } = await supabase.from('jacket_lines').update({ [fieldName]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
+    load();
+  }
+  function openAmend(line) { setAmendingLineId(line.jacket_line_id); setAmendValue(line.order_lines?.cases_ordered ?? ''); }
+  async function saveAmend(line) {
+    const { error } = await supabase.from('order_lines').update({
+      cases_ordered: Number(amendValue), amended_at: new Date().toISOString()
+    }).eq('order_line_id', line.order_line_id);
+    if (error) { alert('Amend failed: ' + error.message); return; }
+    setAmendingLineId(null);
     load();
   }
 
@@ -101,13 +97,19 @@ export default function OpsPage() {
     load();
   }
 
+  // ---- claims ----
   async function saveClaim() {
     if (!claimForm.jacket_line_id || !claimForm.description) { alert('Pick a jacket line and describe the issue.'); return; }
+    const line = lines.find(l => l.jacket_line_id === Number(claimForm.jacket_line_id));
     const { error } = await supabase.from('claims').insert({
       jacket_line_id: Number(claimForm.jacket_line_id),
       claim_type: claimForm.claim_type,
       description: claimForm.description,
-      status: 'Open'
+      status: 'Open',
+      snapshot_jacket_number: line?.jackets?.jacket_number || null,
+      snapshot_order_no: line?.order_lines?.customer_orders?.acumatica_order_no || null,
+      snapshot_customer: line?.order_lines?.customer_orders?.customers?.company || null,
+      snapshot_commodity: line?.order_lines?.products?.commodity || null,
     });
     if (error) { alert('Save failed: ' + error.message); return; }
     setClaimForm({ jacket_line_id: '', claim_type: 'Quality', description: '' });
@@ -116,45 +118,61 @@ export default function OpsPage() {
   }
 
   function openResolve(claim) {
-    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '' });
+    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', jacket_line_id: claim.jacket_line_id || '' });
     setResolvingId(claim.claim_id);
   }
-
   async function saveResolve(claim) {
     const adjustment = resolveForm.price_adjustment ? Number(resolveForm.price_adjustment) : null;
+    const newJacketLineId = resolveForm.jacket_line_id ? Number(resolveForm.jacket_line_id) : null;
+    const reassigned = newJacketLineId !== (claim.jacket_line_id || null);
+    let snapshotUpdate = {};
+    if (reassigned && newJacketLineId) {
+      const line = lines.find(l => l.jacket_line_id === newJacketLineId);
+      snapshotUpdate = {
+        snapshot_jacket_number: line?.jackets?.jacket_number || null,
+        snapshot_order_no: line?.order_lines?.customer_orders?.acumatica_order_no || null,
+        snapshot_customer: line?.order_lines?.customer_orders?.customers?.company || null,
+        snapshot_commodity: line?.order_lines?.products?.commodity || null,
+      };
+    }
     const { error } = await supabase.from('claims').update({
       status: resolveForm.status,
       resolution: resolveForm.resolution,
       resolution_price_adjustment: adjustment,
       resolved_at: resolveForm.status === 'Resolved' ? new Date().toISOString() : null,
-      flag_for_credit_memo: !!adjustment
+      flag_for_credit_memo: !!adjustment,
+      jacket_line_id: newJacketLineId,
+      ...snapshotUpdate,
     }).eq('claim_id', claim.claim_id);
     if (error) { alert('Save failed: ' + error.message); return; }
 
-    if (adjustment && claim.jacket_lines?.order_lines) {
-      const ol = claim.jacket_lines.order_lines;
-      const newPrice = Number(ol.sell_price_per_case) - adjustment;
-      const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', ol.order_line_id);
-      if (priceError) { alert('Claim saved, but price update failed: ' + priceError.message); }
+    if (adjustment) {
+      const lineId = newJacketLineId || claim.jacket_line_id;
+      const line = lines.find(l => l.jacket_line_id === lineId);
+      const ol = line?.order_lines || claim.jacket_lines?.order_lines;
+      if (ol) {
+        const newPrice = Number(ol.sell_price_per_case) - adjustment;
+        const orderLineId = ol.order_line_id || claim.jacket_lines?.order_lines?.order_line_id;
+        if (orderLineId) {
+          const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
+          if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
+        }
+      }
     }
     setResolvingId(null);
     load();
   }
 
-  async function updateExtra(id, field, value) {
-    const { error } = await supabase.from('jacket_extras').update({ [field]: value }).eq('extra_id', id);
+  async function updateExtra(id, fieldName, value) {
+    const { error } = await supabase.from('jacket_extras').update({ [fieldName]: value }).eq('extra_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
     load();
   }
-
   async function addToOrder(extra) {
     if (!addToOrderForm.order_id || !addToOrderForm.supplier_id) { alert('Pick both an order and a supplier.'); return; }
     const { error } = await supabase.from('order_lines').insert({
-      customer_order_id: Number(addToOrderForm.order_id),
-      supplier_id: Number(addToOrderForm.supplier_id),
-      product_id: extra.product_id,
-      cases_ordered: extra.cases,
-      line_status: 'Open',
+      customer_order_id: Number(addToOrderForm.order_id), supplier_id: Number(addToOrderForm.supplier_id),
+      product_id: extra.product_id, cases_ordered: extra.cases, original_cases_ordered: extra.cases, line_status: 'Open',
     });
     if (error) { alert('Failed to add to order: ' + error.message); return; }
     const orderLabel = openOrders.find(o => o.customer_order_id === Number(addToOrderForm.order_id))?.acumatica_order_no;
@@ -164,11 +182,46 @@ export default function OpsPage() {
     load();
   }
 
-  const flags = computeFlags();
   const filteredLines = jacketFilter === 'all' ? lines : lines.filter(l => l.jacket_id === Number(jacketFilter));
-  const filteredClaims = jacketFilter === 'all' ? claims : claims.filter(c => c.jacket_lines?.jacket_id === Number(jacketFilter));
+  const filteredClaims = jacketFilter === 'all' ? claims : claims.filter(c => (c.jacket_lines?.jacket_id || null) === Number(jacketFilter));
   const filteredExtras = jacketFilter === 'all' ? extras : extras.filter(x => x.jacket_id === Number(jacketFilter));
-  const shortLines = filteredLines.filter(l => Number(l.actual_cases_loaded || 0) > Number(l.actual_cases_delivered || 0));
+  const filteredCommodityLoads = jacketFilter === 'all' ? commodityLoads : commodityLoads.filter(c => c.jacket_id === Number(jacketFilter));
+
+  // group commodity totals: ordered = sum of cases_to_load for that jacket+product, loaded = jacket_commodity_loads row
+  const commodityGroups = {};
+  filteredLines.forEach(l => {
+    const pid = l.order_lines?.product_id;
+    if (!pid) return;
+    const key = l.jacket_id + '-' + pid;
+    if (!commodityGroups[key]) {
+      commodityGroups[key] = { jacketId: l.jacket_id, jacketNumber: l.jackets?.jacket_number, productId: pid, commodity: l.order_lines?.products?.commodity, packSize: l.order_lines?.products?.pack_size, ordered: 0, delivered: 0 };
+    }
+    commodityGroups[key].ordered += Number(l.cases_to_load || 0);
+    commodityGroups[key].delivered += Number(l.actual_cases_delivered || 0);
+  });
+  Object.values(commodityGroups).forEach(g => {
+    const loadRow = commodityLoads.find(c => c.jacket_id === g.jacketId && c.product_id === g.productId);
+    g.loaded = loadRow ? Number(loadRow.actual_cases_loaded || 0) : 0;
+    g.remaining = g.loaded - g.delivered;
+  });
+  const groupList = Object.values(commodityGroups);
+
+  // flags for row highlighting
+  const flags = {};
+  groupList.forEach(g => {
+    const anyPlanned = filteredLines.some(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.load_status === 'Planned');
+    const shortage = !anyPlanned && g.loaded > 0 && g.loaded !== g.ordered;
+    filteredLines.filter(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId).forEach(l => {
+      flags[l.jacket_line_id] = { commodityShortage: shortage };
+    });
+  });
+  filteredLines.forEach(l => {
+    const f = flags[l.jacket_line_id] || {};
+    f.deliveryMismatch = Number(l.cases_to_load || 0) > 0 && Number(l.actual_cases_delivered || 0) > 0 && Number(l.cases_to_load) !== Number(l.actual_cases_delivered);
+    flags[l.jacket_line_id] = f;
+  });
+
+  const remainingOnTruck = groupList.filter(g => g.remaining > 0);
 
   return (
     <AppShell title="Load Tracking">
@@ -180,19 +233,43 @@ export default function OpsPage() {
         </select>
       </label>
 
+      {/* ---- Jacket-level: Actual Loaded by Commodity ---- */}
+      {groupList.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Actual Loaded by Commodity (whole truck)</div>
+          <table style={table}>
+            <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Total Ordered</th><th style={{ textAlign: 'right' }}>Actual Loaded</th><th style={{ textAlign: 'right' }}>Variance</th></tr></thead>
+            <tbody>{groupList.map(g => {
+              const variance = g.loaded - g.ordered;
+              return (
+                <tr key={g.jacketId + '-' + g.productId} style={variance !== 0 && g.loaded > 0 ? { ...tr, background: '#FCE9C9' } : tr}>
+                  <td style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</td>
+                  <td>{g.commodity} — {g.packSize}</td>
+                  <td style={{ textAlign: 'right' }}>{g.ordered}</td>
+                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={g.loaded} onBlur={e => updateCommodityLoad(g.jacketId, g.productId, Number(e.target.value))} style={{ width: 70 }} /></td>
+                  <td style={{ textAlign: 'right', fontWeight: variance !== 0 ? 700 : 400 }}>{variance > 0 ? '+' : ''}{variance}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      )}
+
       {filteredLines.length === 0 ? (
         <p style={{ color: '#a8a29e' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
       ) : (
         <>
+          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Per-Order Detail</div>
           <div style={{ display: 'flex', gap: 16, fontSize: 12, marginBottom: 8 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered (loading complete, still mismatched)</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ loaded</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ assigned to this jacket</span>
           </div>
           <table style={table}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Loaded</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told: Picked Up</th><th>Told: Delivered</th><th>Exception / Notes</th></tr></thead>
+            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told: Picked Up</th><th>Told: Delivered</th><th>Exception / Notes</th></tr></thead>
             <tbody>{filteredLines.map(jl => {
               const f = flags[jl.jacket_line_id] || {};
               const rowStyle = f.deliveryMismatch ? { ...tr, background: '#F8D7D2' } : f.commodityShortage ? { ...tr, background: '#FCE9C9' } : tr;
+              const amended = jl.order_lines?.original_cases_ordered != null && Number(jl.order_lines.original_cases_ordered) !== Number(jl.order_lines?.cases_ordered);
               return (
                 <tr key={jl.jacket_line_id} style={rowStyle}>
                   <td style={{ fontFamily: 'monospace' }}>{jl.jackets?.jacket_number}</td>
@@ -200,8 +277,21 @@ export default function OpsPage() {
                   <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
                   <td>{jl.order_lines?.suppliers?.company}</td>
                   <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
-                  <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
-                  <td><input type="number" defaultValue={jl.actual_cases_loaded} onBlur={e => updateField(jl.jacket_line_id, 'actual_cases_loaded', Number(e.target.value))} style={{ width: 64 }} /></td>
+                  <td style={{ textAlign: 'right' }}>
+                    {amendingLineId === jl.jacket_line_id ? (
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        <input type="number" value={amendValue} onChange={e => setAmendValue(e.target.value)} style={{ width: 60 }} />
+                        <button onClick={() => saveAmend(jl)} style={miniBtn}>Save</button>
+                        <button onClick={() => setAmendingLineId(null)} style={miniBtn}>X</button>
+                      </div>
+                    ) : (
+                      <>
+                        {jl.order_lines?.cases_ordered}
+                        {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {jl.order_lines.original_cases_ordered}</div>}
+                        <div><button onClick={() => openAmend(jl)} style={{ ...miniBtn, marginTop: 2 }}>Amend</button></div>
+                      </>
+                    )}
+                  </td>
                   <td><input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateField(jl.jacket_line_id, 'actual_cases_delivered', Number(e.target.value))} style={{ width: 64 }} /></td>
                   <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 90 }} placeholder="BOL #" /></td>
                   <td>
@@ -261,11 +351,11 @@ export default function OpsPage() {
             <tbody>{filteredClaims.map(c => (
               <Fragment key={c.claim_id}>
                 <tr style={tr}>
-                  <td style={{ fontFamily: 'monospace' }}>{c.jacket_lines?.jackets?.jacket_number}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{c.jacket_lines?.order_lines?.customer_orders?.acumatica_order_no}</td>
-                  <td>{c.jacket_lines?.order_lines?.customer_orders?.customers?.company}</td>
+                  <td style={{ fontFamily: 'monospace' }}>{c.jacket_lines?.jackets?.jacket_number || c.snapshot_jacket_number || '—'}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{c.jacket_lines?.order_lines?.customer_orders?.acumatica_order_no || c.snapshot_order_no || '—'}</td>
+                  <td>{c.jacket_lines?.order_lines?.customer_orders?.customers?.company || c.snapshot_customer || '—'}</td>
                   <td>{c.claim_type}</td><td>{c.description}</td>
-                  <td>{c.jacket_lines?.order_lines?.products?.commodity}</td>
+                  <td>{c.jacket_lines?.order_lines?.products?.commodity || c.snapshot_commodity || '—'}</td>
                   <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
                   <td><span style={statusPill(c.status)}>{c.status}</span></td>
                   <td>{c.resolution_price_adjustment ? `-$${Number(c.resolution_price_adjustment).toFixed(2)}/cs` : '—'}</td>
@@ -280,14 +370,20 @@ export default function OpsPage() {
                             <option>Open</option><option>Under Review</option><option>Resolved</option>
                           </select>
                         </label>
+                        <label style={{ fontSize: 13 }}>Jacket Line (reassign if wrong/blank)
+                          <select value={resolveForm.jacket_line_id} onChange={e => setResolveForm({ ...resolveForm, jacket_line_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                            <option value="">— none —</option>
+                            {lines.map(jl => <option key={jl.jacket_line_id} value={jl.jacket_line_id}>{jl.jackets?.jacket_number} — {jl.order_lines?.products?.commodity} — {jl.order_lines?.customer_orders?.customers?.company}</option>)}
+                          </select>
+                        </label>
                         <label style={{ fontSize: 13 }}>Price Adjustment ($/case decrease)
                           <input type="number" value={resolveForm.price_adjustment} onChange={e => setResolveForm({ ...resolveForm, price_adjustment: e.target.value })} placeholder="e.g. 2.00" style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
                         </label>
-                        <label style={{ fontSize: 13, gridColumn: 'span 2' }}>Resolution Notes
+                        <label style={{ fontSize: 13 }}>Resolution Notes
                           <input value={resolveForm.resolution} onChange={e => setResolveForm({ ...resolveForm, resolution: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
                         </label>
                       </div>
-                      <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 6 }}>A price adjustment reduces this order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
+                      <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 6 }}>A price adjustment reduces that order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
                       <button onClick={() => saveResolve(c)} style={{ marginTop: 8, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
                       <button onClick={() => setResolvingId(null)} style={{ marginTop: 8, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                     </td>
@@ -299,24 +395,22 @@ export default function OpsPage() {
         )}
       </div>
 
-      {/* ---- Jacket Reconciliation (folded in) ---- */}
+      {/* ---- Jacket Reconciliation ---- */}
       <div style={{ marginTop: 24, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 }}>
         <div style={{ fontWeight: 600, color: '#2F5233' }}>Jacket Reconciliation</div>
-        <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 12 }}>Product physically on a truck that isn't fully accounted for — loaded but not delivered, or rolled/extra product still needing a home.</div>
+        <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 12 }}>Product physically on a truck that isn't fully accounted for — loaded but not yet delivered, or rolled/extra product still needing a home.</div>
 
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Remaining on Truck</div>
-        {shortLines.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing outstanding.</p> : (
+        {remainingOnTruck.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing outstanding.</p> : (
           <table style={{ ...table, marginBottom: 20 }}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
-            <tbody>{shortLines.map(l => (
-              <tr key={l.jacket_line_id} style={tr}>
-                <td style={{ fontFamily: 'monospace' }}>{l.jackets?.jacket_number}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{l.order_lines?.customer_orders?.acumatica_order_no}</td>
-                <td>{l.order_lines?.customer_orders?.customers?.company}</td>
-                <td>{l.order_lines?.products?.commodity} — {l.order_lines?.products?.pack_size}</td>
-                <td style={{ textAlign: 'right' }}>{l.actual_cases_loaded}</td>
-                <td style={{ textAlign: 'right' }}>{l.actual_cases_delivered}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700 }}>{l.actual_cases_loaded - l.actual_cases_delivered}</td>
+            <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
+            <tbody>{remainingOnTruck.map(g => (
+              <tr key={g.jacketId + '-' + g.productId} style={tr}>
+                <td style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</td>
+                <td>{g.commodity} — {g.packSize}</td>
+                <td style={{ textAlign: 'right' }}>{g.loaded}</td>
+                <td style={{ textAlign: 'right' }}>{g.delivered}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{g.remaining}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -379,6 +473,7 @@ function statusPill(status) {
   return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
 }
 const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
+const miniBtn = { padding: '2px 6px', fontSize: 10, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 4, cursor: 'pointer' };
 const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
 const tr = { borderBottom: '1px solid #DCD5C1' };

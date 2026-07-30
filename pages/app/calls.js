@@ -72,6 +72,12 @@ export default function CallsPage() {
     setForm(BLANK); setEditingId(null); setShowForm(false);
     loadAll();
   }
+  async function deleteCall(id) {
+    if (!confirm('Delete this quote/call? This cannot be undone.')) return;
+    const { error } = await supabase.from('call_log').delete().eq('call_id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadAll();
+  }
 
   const partyList = form.party_type === 'Supplier' ? suppliers : customers;
   const partyIdKey = form.party_type === 'Supplier' ? 'supplier_id' : 'customer_id';
@@ -133,7 +139,7 @@ export default function CallsPage() {
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.availability}</td>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.followup_date || '—'}</td>
             <td>{c.status}</td>
-            <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button></td>
+            <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button> <button onClick={() => deleteCall(c.call_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
           </tr>
         ))}</tbody>
       </table>

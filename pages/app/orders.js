@@ -3,42 +3,64 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
-const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
-const BLANK_LINE = { supplier_id: '', product_id: '', shipper_po: '', cases_ordered: '', sell_price_per_case: '', fob_cost_per_case: '', pricing_type: 'FOB' };
+const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_location_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
+const BLANK_LINE = { supplier_id: '', supplier_location_id: '', product_id: '', shipper_po: '', cases_ordered: '', sell_price_per_case: '', fob_cost_per_case: '', pricing_type: 'FOB' };
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [custLocations, setCustLocations] = useState([]);
+  const [supLocations, setSupLocations] = useState([]);
+  const [jacketByOrder, setJacketByOrder] = useState({});
   const [openOrderId, setOpenOrderId] = useState(null);
 
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderForm, setOrderForm] = useState(BLANK_ORDER);
 
-  const [lineTarget, setLineTarget] = useState(null); // { orderId, lineId|null }
+  const [lineTarget, setLineTarget] = useState(null);
   const [lineForm, setLineForm] = useState(BLANK_LINE);
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [o, c, s, p] = await Promise.all([
+    const [o, c, s, p, cl, sl, jl] = await Promise.all([
       supabase.from('customer_orders').select('*, customers(company), order_lines(*, suppliers(company), products(commodity, pack_size))').order('order_date', { ascending: false }),
       supabase.from('customers').select('customer_id, company').order('company'),
       supabase.from('suppliers').select('supplier_id, company').order('company'),
       supabase.from('products').select('product_id, commodity, pack_size').order('commodity'),
+      supabase.from('customer_locations').select('*').order('label'),
+      supabase.from('supplier_locations').select('*').order('label'),
+      supabase.from('jacket_lines').select('order_line_id, jackets(jacket_number)'),
     ]);
     setOrders(o.data || []);
     setCustomers(c.data || []);
     setSuppliers(s.data || []);
     setProducts(p.data || []);
+    setCustLocations(cl.data || []);
+    setSupLocations(sl.data || []);
+
+    // map order_line_id -> jacket number(s), then roll up to order-level
+    const jacketsByLine = {};
+    (jl.data || []).forEach(row => {
+      if (!row.jackets) return;
+      jacketsByLine[row.order_line_id] = jacketsByLine[row.order_line_id] || [];
+      jacketsByLine[row.order_line_id].push(row.jackets.jacket_number);
+    });
+    const byOrder = {};
+    (o.data || []).forEach(ord => {
+      const nums = new Set();
+      (ord.order_lines || []).forEach(l => (jacketsByLine[l.order_line_id] || []).forEach(n => nums.add(n)));
+      byOrder[ord.customer_order_id] = [...nums];
+    });
+    setJacketByOrder(byOrder);
   }
 
-  // ---- order header: create + edit ----
   function openNewOrder() { setOrderForm(BLANK_ORDER); setEditingOrderId(null); setShowNewOrder(true); }
   function openEditOrder(o) {
-    setOrderForm({ acumatica_order_no: o.acumatica_order_no, customer_id: o.customer_id, customer_po: o.customer_po || '', order_date: o.order_date || '', requested_delivery: o.requested_delivery || '', salesperson: o.salesperson || '', order_status: o.order_status });
+    setOrderForm({ acumatica_order_no: o.acumatica_order_no, customer_id: o.customer_id, customer_location_id: o.customer_location_id || '', customer_po: o.customer_po || '', order_date: o.order_date || '', requested_delivery: o.requested_delivery || '', salesperson: o.salesperson || '', order_status: o.order_status });
     setEditingOrderId(o.customer_order_id);
     setShowNewOrder(true);
   }
@@ -47,6 +69,7 @@ export default function OrdersPage() {
     const payload = {
       acumatica_order_no: orderForm.acumatica_order_no,
       customer_id: Number(orderForm.customer_id),
+      customer_location_id: orderForm.customer_location_id ? Number(orderForm.customer_location_id) : null,
       customer_po: orderForm.customer_po || null,
       order_date: orderForm.order_date || null,
       requested_delivery: orderForm.requested_delivery || null,
@@ -64,16 +87,16 @@ export default function OrdersPage() {
     loadAll();
   }
 
-  // ---- order line: create + edit ----
   function openAddLine(orderId) { setLineForm(BLANK_LINE); setLineTarget({ orderId, lineId: null }); }
   function openEditLine(orderId, l) {
-    setLineForm({ supplier_id: l.supplier_id, product_id: l.product_id, shipper_po: l.shipper_po || '', cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, fob_cost_per_case: l.fob_cost_per_case, pricing_type: l.pricing_type || 'FOB' });
+    setLineForm({ supplier_id: l.supplier_id, supplier_location_id: l.supplier_location_id || '', product_id: l.product_id, shipper_po: l.shipper_po || '', cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, fob_cost_per_case: l.fob_cost_per_case, pricing_type: l.pricing_type || 'FOB' });
     setLineTarget({ orderId, lineId: l.order_line_id });
   }
   async function saveLine() {
     if (!lineForm.supplier_id || !lineForm.product_id || !lineForm.cases_ordered) { alert('Supplier, Product, and Cases Ordered are required.'); return; }
     const payload = {
       supplier_id: Number(lineForm.supplier_id),
+      supplier_location_id: lineForm.supplier_location_id ? Number(lineForm.supplier_location_id) : null,
       product_id: Number(lineForm.product_id),
       shipper_po: lineForm.shipper_po || null,
       cases_ordered: Number(lineForm.cases_ordered),
@@ -85,15 +108,16 @@ export default function OrdersPage() {
       const { error } = await supabase.from('order_lines').update(payload).eq('order_line_id', lineTarget.lineId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
-      const { error } = await supabase.from('order_lines').insert({ ...payload, customer_order_id: lineTarget.orderId, line_status: 'Open' });
+      const original = { original_cases_ordered: payload.cases_ordered, original_sell_price_per_case: payload.sell_price_per_case, original_fob_cost_per_case: payload.fob_cost_per_case };
+      const { error } = await supabase.from('order_lines').insert({ ...payload, ...original, customer_order_id: lineTarget.orderId, line_status: 'Open' });
       if (error) { alert('Save failed: ' + error.message); return; }
     }
     setLineTarget(null); setLineForm(BLANK_LINE);
     loadAll();
   }
 
-  async function updateLineField(lineId, field, value) {
-    const { error } = await supabase.from('order_lines').update({ [field]: value }).eq('order_line_id', lineId);
+  async function updateLineField(lineId, fieldName, value) {
+    const { error } = await supabase.from('order_lines').update({ [fieldName]: value }).eq('order_line_id', lineId);
     if (error) { alert('Update failed: ' + error.message); return; }
     loadAll();
   }
@@ -106,9 +130,15 @@ export default function OrdersPage() {
           <div style={grid}>
             {field('Acumatica Order #', orderForm.acumatica_order_no, v => setOrderForm({ ...orderForm, acumatica_order_no: v }))}
             <label style={{ fontSize: 13 }}>Customer
-              <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value })} style={input}>
+              <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value, customer_location_id: '' })} style={input}>
                 <option value="">— select —</option>
                 {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 13 }}>Delivery Location
+              <select value={orderForm.customer_location_id} onChange={e => setOrderForm({ ...orderForm, customer_location_id: e.target.value })} style={input}>
+                <option value="">Main profile address</option>
+                {custLocations.filter(l => l.customer_id === Number(orderForm.customer_id)).map(l => <option key={l.location_id} value={l.location_id}>{l.label}</option>)}
               </select>
             </label>
             {field('Customer PO', orderForm.customer_po, v => setOrderForm({ ...orderForm, customer_po: v }))}
@@ -128,13 +158,15 @@ export default function OrdersPage() {
 
       {orders.map(o => {
         const isOpen = openOrderId === o.customer_order_id;
+        const jackets = jacketByOrder[o.customer_order_id] || [];
         return (
           <div key={o.customer_order_id} style={card}>
             <div style={btnRow}>
               <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, flex: 1, textAlign: 'left' }}>
                 <span>{isOpen ? '⌄' : '›'} <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> {o.customers?.company} <span style={{ color: '#78716c', fontSize: 12 }}>PO {o.customer_po}</span></span>
               </button>
-              <span style={pill(o.order_status)}>{o.order_status}</span>
+              <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
+              <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
               <button onClick={() => openEditOrder(o)} style={{ ...editBtn, marginLeft: 8 }}>Edit Order</button>
             </div>
             {isOpen && (
@@ -144,12 +176,16 @@ export default function OrdersPage() {
                   <tbody>{(o.order_lines || []).map(l => {
                     const revenue = l.cases_ordered * l.sell_price_per_case;
                     const margin = revenue - (l.cases_ordered * l.fob_cost_per_case);
+                    const amended = l.original_cases_ordered != null && Number(l.original_cases_ordered) !== Number(l.cases_ordered);
                     return (
                       <tr key={l.order_line_id} style={tr}>
                         <td>{l.products?.commodity} — {l.products?.pack_size}</td>
                         <td>{l.suppliers?.company}</td>
                         <td>{l.shipper_po}</td>
-                        <td style={{ textAlign: 'right' }}>{l.cases_ordered}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {l.cases_ordered}
+                          {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {l.original_cases_ordered}</div>}
+                        </td>
                         <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td><input type="number" defaultValue={l.fob_cost_per_case} onBlur={e => updateLineField(l.order_line_id, 'fob_cost_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
@@ -159,14 +195,21 @@ export default function OrdersPage() {
                     );
                   })}</tbody>
                 </table>
+                <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 4 }}>To amend an already-loaded order's quantity or price, use Load Tracking instead — that keeps the original number on file.</div>
 
                 {lineTarget && lineTarget.orderId === o.customer_order_id ? (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
                     <div style={grid}>
                       <label style={{ fontSize: 13 }}>Supplier
-                        <select value={lineForm.supplier_id} onChange={e => setLineForm({ ...lineForm, supplier_id: e.target.value })} style={input}>
+                        <select value={lineForm.supplier_id} onChange={e => setLineForm({ ...lineForm, supplier_id: e.target.value, supplier_location_id: '' })} style={input}>
                           <option value="">— select —</option>
                           {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 13 }}>Pickup Location
+                        <select value={lineForm.supplier_location_id} onChange={e => setLineForm({ ...lineForm, supplier_location_id: e.target.value })} style={input}>
+                          <option value="">Main profile address</option>
+                          {supLocations.filter(l => l.supplier_id === Number(lineForm.supplier_id)).map(l => <option key={l.location_id} value={l.location_id}>{l.label}</option>)}
                         </select>
                       </label>
                       <label style={{ fontSize: 13 }}>Product
@@ -211,6 +254,8 @@ function pill(status) {
   const colors = { Open: '#6B8E4E', Closed: '#6B7280', Cancelled: '#B0403A' };
   return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
 }
+const jacketPill = { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: '#4B6B8A', fontFamily: 'monospace' };
+const unassignedPill = { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#78716c', background: '#EFEAD9' };
 const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
 const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
 const btnRow = { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };

@@ -9,10 +9,10 @@ export default function PriceSheetsPage() {
   const [lines, setLines] = useState([]);
   const [recipients, setRecipients] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
+  const [allQuotes, setAllQuotes] = useState([]);
   const [printMode, setPrintMode] = useState(false);
 
-  useEffect(() => { loadSheets(); loadCustomers(); loadSuppliers(); }, []);
+  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); }, []);
   useEffect(() => { if (activeSheetId) loadDetail(activeSheetId); }, [activeSheetId]);
 
   async function loadSheets() {
@@ -21,12 +21,18 @@ export default function PriceSheetsPage() {
     if (data && data.length && !activeSheetId) setActiveSheetId(data[0].price_sheet_id);
   }
   async function loadCustomers() {
-    const { data } = await supabase.from('customers').select('customer_id, company').order('company');
+    const { data } = await supabase.from('customers').select('customer_id, company, email, phone').order('company');
     setCustomers(data || []);
   }
-  async function loadSuppliers() {
-    const { data } = await supabase.from('suppliers').select('supplier_id, company, per_case_fee').order('company');
-    setSuppliers(data || []);
+  async function loadQuotes() {
+    // every supplier quote, not merged — used to build "all options" per commodity
+    const { data } = await supabase
+      .from('call_log')
+      .select('*, suppliers(company, per_case_fee), products(commodity, pack_size)')
+      .not('price', 'is', null)
+      .eq('party_type', 'Supplier')
+      .order('call_date', { ascending: false });
+    setAllQuotes(data || []);
   }
   async function loadDetail(sheetId) {
     const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId);
@@ -36,35 +42,30 @@ export default function PriceSheetsPage() {
   }
 
   async function createFromLatestQuotes() {
-    const { data: quotes } = await supabase
-      .from('call_log')
-      .select('*')
-      .not('price', 'is', null)
-      .eq('party_type', 'Supplier')
-      .order('call_date', { ascending: false });
-
-    const latestByProduct = {};
-    (quotes || []).forEach(q => { if (!latestByProduct[q.product_id]) latestByProduct[q.product_id] = q; });
-    const productIds = Object.keys(latestByProduct);
+    // auto-pull a starting price per commodity (lowest current quote) — every
+    // other quote for that commodity stays available to switch to manually
+    const byProduct = {};
+    allQuotes.forEach(q => { if (!byProduct[q.product_id] || q.price < byProduct[q.product_id].price) byProduct[q.product_id] = q; });
+    const productIds = Object.keys(byProduct);
     if (productIds.length === 0) { alert('No supplier price quotes logged yet — add some in Market Calls first.'); return; }
 
     const validThrough = new Date(); validThrough.setDate(validThrough.getDate() + 4);
     const { data: sheet, error: sheetErr } = await supabase.from('price_sheets').insert({
       sheet_date: new Date().toISOString().slice(0, 10),
       valid_through: validThrough.toISOString().slice(0, 10),
-      notes: 'Auto-built from latest supplier quotes'
+      notes: 'Auto-built from latest supplier quotes — swap any line to a different quote as needed'
     }).select().single();
     if (sheetErr) { alert('Could not create sheet: ' + sheetErr.message); return; }
 
     const newLines = productIds.map(pid => ({
       price_sheet_id: sheet.price_sheet_id,
       product_id: Number(pid),
-      supplier_id: latestByProduct[pid].supplier_id,
-      cost_price: latestByProduct[pid].price,
+      supplier_id: byProduct[pid].supplier_id,
+      cost_price: byProduct[pid].price,
       margin_pct: 20,
       markup_type: 'percent',
       markup_dollar: 0,
-      source_call_id: latestByProduct[pid].call_id,
+      source_call_id: byProduct[pid].call_id,
     }));
     const { error: linesErr } = await supabase.from('price_sheet_lines').insert(newLines);
     if (linesErr) { alert('Sheet created, but lines failed: ' + linesErr.message); }
@@ -78,20 +79,35 @@ export default function PriceSheetsPage() {
     if (error) { alert('Update failed: ' + error.message); return; }
     loadDetail(activeSheetId);
   }
+  async function switchQuote(line, callId) {
+    const quote = allQuotes.find(q => q.call_id === Number(callId));
+    if (!quote) return;
+    const { error } = await supabase.from('price_sheet_lines').update({
+      supplier_id: quote.supplier_id, cost_price: quote.price, source_call_id: quote.call_id
+    }).eq('price_sheet_line_id', line.price_sheet_line_id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadDetail(activeSheetId);
+  }
 
-  async function toggleRecipient(customerId) {
-    const existing = recipients.find(r => r.customer_id === customerId);
+  async function toggleRecipient(customer) {
+    const existing = recipients.find(r => r.customer_id === customer.customer_id);
     if (existing) {
       await supabase.from('price_sheet_recipients').delete().eq('price_sheet_recipient_id', existing.price_sheet_recipient_id);
     } else {
-      const { error } = await supabase.from('price_sheet_recipients').insert({ price_sheet_id: activeSheetId, customer_id: customerId });
+      const { error } = await supabase.from('price_sheet_recipients').insert({
+        price_sheet_id: activeSheetId, customer_id: customer.customer_id,
+        contact_email: customer.email || null, contact_phone: customer.phone || null
+      });
       if (error) { alert('Failed: ' + error.message); return; }
     }
     loadDetail(activeSheetId);
   }
+  async function updateRecipientContact(id, field, value) {
+    const { error } = await supabase.from('price_sheet_recipients').update({ [field]: value }).eq('price_sheet_recipient_id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadDetail(activeSheetId);
+  }
 
-  // supplier's per-case fee (e.g. Happy's Logicold cooler fee) folds into
-  // cost before your markup is applied, so it's covered automatically
   function effectiveCost(l) { return Number(l.cost_price || 0) + Number(l.suppliers?.per_case_fee || 0); }
   function sellPrice(l) {
     const cost = effectiveCost(l);
@@ -120,7 +136,6 @@ export default function PriceSheetsPage() {
             ))}</tbody>
           </table>
         </div>
-        <style jsx>{`@media print { .no-print { display: none; } }`}</style>
       </AppShell>
     );
   }
@@ -136,40 +151,50 @@ export default function PriceSheetsPage() {
         ))}
         <button onClick={createFromLatestQuotes} style={btn}>+ New Sheet from Latest Quotes</button>
       </div>
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Cost includes any per-case supplier fee automatically (e.g. a cooler fee). Choose a % markup or a flat $/case markup per line. Use "Customer View / Print" for a clean sheet with no cost or margin.</div>
+      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Cost includes any per-case supplier fee automatically. Use "Change Quote" on any line to switch to a different supplier's price for that commodity — every quote you've logged stays available, none are merged away.</div>
 
       {activeSheet ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.6fr 1fr', gap: 16 }}>
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <strong style={{ color: '#2F5233' }}>Sheet — valid through {activeSheet.valid_through}</strong>
               <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer View / Print</button>
             </div>
             <table style={table}>
-              <thead><tr style={trHead}><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Quoted Cost</th><th style={{ textAlign: 'right' }}>Fee</th><th style={{ textAlign: 'right' }}>Eff. Cost</th><th>Markup</th><th style={{ textAlign: 'right' }}>Sell $/cs</th></tr></thead>
-              <tbody>{lines.map(l => (
-                <tr key={l.price_sheet_line_id} style={tr}>
-                  <td>{l.products?.commodity} — {l.products?.pack_size}</td>
-                  <td style={{ fontSize: 12 }}>{l.suppliers?.company || '—'}</td>
-                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={l.cost_price} onBlur={e => updateLine(l.price_sheet_line_id, 'cost_price', Number(e.target.value))} style={{ width: 68, textAlign: 'right' }} /></td>
-                  <td style={{ textAlign: 'right', color: '#78716c' }}>{l.suppliers?.per_case_fee ? `$${Number(l.suppliers.per_case_fee).toFixed(2)}` : '—'}</td>
-                  <td style={{ textAlign: 'right', color: '#78716c' }}>${effectiveCost(l).toFixed(2)}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <select value={l.markup_type} onChange={e => updateLine(l.price_sheet_line_id, 'markup_type', e.target.value)} style={{ fontSize: 12 }}>
-                        <option value="percent">%</option>
-                        <option value="dollar">$</option>
-                      </select>
-                      {l.markup_type === 'dollar' ? (
-                        <input type="number" defaultValue={l.markup_dollar} onBlur={e => updateLine(l.price_sheet_line_id, 'markup_dollar', Number(e.target.value))} style={{ width: 60 }} />
-                      ) : (
-                        <input type="number" defaultValue={l.margin_pct} onBlur={e => updateLine(l.price_sheet_line_id, 'margin_pct', Number(e.target.value))} style={{ width: 60 }} />
+              <thead><tr style={trHead}><th>Commodity</th><th>Supplier (quote used)</th><th style={{ textAlign: 'right' }}>Quoted Cost</th><th style={{ textAlign: 'right' }}>Fee</th><th style={{ textAlign: 'right' }}>Eff. Cost</th><th>Markup</th><th style={{ textAlign: 'right' }}>Sell $/cs</th></tr></thead>
+              <tbody>{lines.map(l => {
+                const options = allQuotes.filter(q => q.product_id === l.product_id);
+                return (
+                  <tr key={l.price_sheet_line_id} style={tr}>
+                    <td>{l.products?.commodity} — {l.products?.pack_size}</td>
+                    <td style={{ fontSize: 12 }}>
+                      <div>{l.suppliers?.company || '—'}</div>
+                      {options.length > 1 && (
+                        <select value={l.source_call_id || ''} onChange={e => switchQuote(l, e.target.value)} style={{ fontSize: 11, marginTop: 2 }}>
+                          {options.map(q => <option key={q.call_id} value={q.call_id}>{q.call_date} — {q.suppliers?.company} — ${Number(q.price).toFixed(2)}</option>)}
+                        </select>
                       )}
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${sellPrice(l).toFixed(2)}</td>
-                </tr>
-              ))}</tbody>
+                    </td>
+                    <td style={{ textAlign: 'right' }}><input type="number" defaultValue={l.cost_price} onBlur={e => updateLine(l.price_sheet_line_id, 'cost_price', Number(e.target.value))} style={{ width: 68, textAlign: 'right' }} /></td>
+                    <td style={{ textAlign: 'right', color: '#78716c' }}>{l.suppliers?.per_case_fee ? `$${Number(l.suppliers.per_case_fee).toFixed(2)}` : '—'}</td>
+                    <td style={{ textAlign: 'right', color: '#78716c' }}>${effectiveCost(l).toFixed(2)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <select value={l.markup_type} onChange={e => updateLine(l.price_sheet_line_id, 'markup_type', e.target.value)} style={{ fontSize: 12 }}>
+                          <option value="percent">%</option>
+                          <option value="dollar">$</option>
+                        </select>
+                        {l.markup_type === 'dollar' ? (
+                          <input type="number" defaultValue={l.markup_dollar} onBlur={e => updateLine(l.price_sheet_line_id, 'markup_dollar', Number(e.target.value))} style={{ width: 60 }} />
+                        ) : (
+                          <input type="number" defaultValue={l.margin_pct} onBlur={e => updateLine(l.price_sheet_line_id, 'margin_pct', Number(e.target.value))} style={{ width: 60 }} />
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${sellPrice(l).toFixed(2)}</td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           </div>
           <div style={card}>
@@ -178,10 +203,18 @@ export default function PriceSheetsPage() {
               {customers.map(c => {
                 const sent = recipients.find(r => r.customer_id === c.customer_id);
                 return (
-                  <label key={c.customer_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 6 }}>
-                    <input type="checkbox" checked={!!sent} onChange={() => toggleRecipient(c.customer_id)} />
-                    {c.company}
-                  </label>
+                  <div key={c.customer_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #DCD5C1' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <input type="checkbox" checked={!!sent} onChange={() => toggleRecipient(c)} />
+                      {c.company}
+                    </label>
+                    {sent && (
+                      <div style={{ marginLeft: 24, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input type="text" defaultValue={sent.contact_email || ''} placeholder="Email sent to" onBlur={e => updateRecipientContact(sent.price_sheet_recipient_id, 'contact_email', e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }} />
+                        <input type="text" defaultValue={sent.contact_phone || ''} placeholder="Phone / text sent to" onBlur={e => updateRecipientContact(sent.price_sheet_recipient_id, 'contact_phone', e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }} />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

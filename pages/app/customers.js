@@ -4,17 +4,24 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const BLANK = { company: '', buyer_contact: '', phone: '', email: '', delivery_address: '', city: '', state: '', zip: '', payment_terms: '' };
+const BLANK_LOC = { label: '', address: '', city: '', state: '', zip: '', contact: '', phone: '', notes: '' };
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK);
+  const [locOpenFor, setLocOpenFor] = useState(null);
+  const [locForm, setLocForm] = useState(BLANK_LOC);
+  const [editingLocId, setEditingLocId] = useState(null);
 
   useEffect(() => { load(); }, []);
   async function load() {
     const { data } = await supabase.from('customers').select('*').order('company');
     setRows(data || []);
+    const { data: locs } = await supabase.from('customer_locations').select('*').order('label');
+    setLocations(locs || []);
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.customer_id); setShowForm(true); }
@@ -28,6 +35,28 @@ export default function CustomersPage() {
       if (error) { alert('Save failed: ' + error.message); return; }
     }
     setShowForm(false); setEditingId(null); setForm(BLANK);
+    load();
+  }
+
+  function openAddLoc(customerId) { setLocForm(BLANK_LOC); setEditingLocId(null); setLocOpenFor(customerId); }
+  function openEditLoc(loc) { setLocForm(loc); setEditingLocId(loc.location_id); setLocOpenFor(loc.customer_id); }
+  async function saveLoc(customerId) {
+    if (!locForm.label) { alert('Give this location a label (e.g. "Main Warehouse").'); return; }
+    const payload = { ...locForm, customer_id: customerId };
+    if (editingLocId) {
+      const { error } = await supabase.from('customer_locations').update(payload).eq('location_id', editingLocId);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('customer_locations').insert(payload);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    }
+    setLocOpenFor(null); setEditingLocId(null); setLocForm(BLANK_LOC);
+    load();
+  }
+  async function deleteLoc(id) {
+    if (!confirm('Delete this location?')) return;
+    const { error } = await supabase.from('customer_locations').delete().eq('location_id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
     load();
   }
 
@@ -51,15 +80,51 @@ export default function CustomersPage() {
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
-      <table style={table}>
-        <thead><tr style={trHead}><th>Company</th><th>Contact</th><th>Phone</th><th>City</th><th>State</th><th>Terms</th><th></th></tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.customer_id} style={tr}>
-            <td>{r.company}</td><td>{r.buyer_contact}</td><td>{r.phone}</td><td>{r.city}</td><td>{r.state}</td><td>{r.payment_terms}</td>
-            <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
-          </tr>
-        ))}</tbody>
-      </table>
+      {rows.map(r => {
+        const custLocs = locations.filter(l => l.customer_id === r.customer_id);
+        return (
+          <div key={r.customer_id} style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong>{r.company}</strong>
+                <div style={{ fontSize: 12.5, color: '#78716c' }}>{r.buyer_contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state}</div>
+              </div>
+              <div>
+                <button onClick={() => openEdit(r)} style={editBtn}>Edit</button>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Locations</div>
+              {custLocs.length === 0 && <div style={{ fontSize: 12.5, color: '#a8a29e', marginBottom: 6 }}>No extra locations yet — main profile address is used by default.</div>}
+              {custLocs.map(l => (
+                <div key={l.location_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+                  <span><strong>{l.label}</strong> — {l.address}, {l.city} {l.state}</span>
+                  <span>
+                    <button onClick={() => openEditLoc(l)} style={{ ...editBtn, padding: '2px 8px', fontSize: 11 }}>Edit</button>{' '}
+                    <button onClick={() => deleteLoc(l.location_id)} style={{ ...editBtn, padding: '2px 8px', fontSize: 11, color: '#C0562D' }}>Delete</button>
+                  </span>
+                </div>
+              ))}
+              <button onClick={() => openAddLoc(r.customer_id)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', marginTop: 6, padding: 0 }}>+ Add Location</button>
+              {locOpenFor === r.customer_id && (
+                <div style={{ marginTop: 8, ...grid }}>
+                  {field('Label (e.g. Main Warehouse)', locForm.label, v => setLocForm({ ...locForm, label: v }))}
+                  {field('Address', locForm.address, v => setLocForm({ ...locForm, address: v }))}
+                  {field('City', locForm.city, v => setLocForm({ ...locForm, city: v }))}
+                  {field('State', locForm.state, v => setLocForm({ ...locForm, state: v }))}
+                  {field('ZIP', locForm.zip, v => setLocForm({ ...locForm, zip: v }))}
+                  {field('Contact', locForm.contact, v => setLocForm({ ...locForm, contact: v }))}
+                  {field('Phone', locForm.phone, v => setLocForm({ ...locForm, phone: v }))}
+                  <div style={{ gridColumn: 'span 3' }}>
+                    <button onClick={() => saveLoc(r.customer_id)} style={{ ...btn, background: '#6B8E4E', marginTop: 4 }}>Save Location</button>
+                    <button onClick={() => setLocOpenFor(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 4, marginLeft: 8 }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </AppShell>
   );
 }
@@ -73,9 +138,6 @@ function field(label, value, onChange) {
 }
 const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
 const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 };
+const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 12 };
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 };
 const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };

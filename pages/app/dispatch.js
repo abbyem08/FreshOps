@@ -35,13 +35,13 @@ export default function DispatchPage() {
     setJacket(j);
     const { data: stopRows } = await supabase
       .from('stops')
-      .select('*, suppliers(company, pickup_address, city, state, phone), customers(company, delivery_address, city, state, phone), stop_lines(*, jacket_lines(*, order_lines(shipper_po, products(commodity, pack_size))))')
+      .select('*, suppliers(company, pickup_address, city, state, phone), customers(company, delivery_address, city, state, phone), supplier_locations(label, address, city, state, phone, contact), customer_locations(label, address, city, state, phone, contact), stop_lines(*, jacket_lines(*, order_lines(shipper_po, products(commodity, pack_size))))')
       .eq('jacket_id', id)
       .order('stop_number');
     setStops(stopRows || []);
 
-    const { data: jl } = await supabase.from('jacket_lines').select('actual_cases_loaded').eq('jacket_id', id);
-    setLoadedCases((jl || []).reduce((s, l) => s + Number(l.actual_cases_loaded || 0), 0));
+    const { data: jcl } = await supabase.from('jacket_commodity_loads').select('actual_cases_loaded').eq('jacket_id', id);
+    setLoadedCases((jcl || []).reduce((s, l) => s + Number(l.actual_cases_loaded || 0), 0));
 
     const { data: f } = await supabase.from('freight_records').select('*').eq('jacket_id', id).order('quote_date', { ascending: false }).limit(1).maybeSingle();
     setFreight(f || null);
@@ -206,7 +206,7 @@ export default function DispatchPage() {
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.suppliers?.company}</strong>
-              <span style={{ color: '#78716c' }}>{s.suppliers?.pickup_address}, {s.suppliers?.city} {s.suppliers?.state}</span>
+              <span style={{ color: '#78716c' }}>{s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address}, ${s.suppliers?.city} ${s.suppliers?.state}`}</span>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
               {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
@@ -231,7 +231,7 @@ export default function DispatchPage() {
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.customers?.company}</strong>
-              <span style={{ color: '#78716c' }}>{s.customers?.delivery_address}, {s.customers?.city} {s.customers?.state}</span>
+              <span style={{ color: '#78716c' }}>{s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address}, ${s.customers?.city} ${s.customers?.state}`}</span>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
               {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
@@ -269,13 +269,6 @@ export default function DispatchPage() {
           </div>
         </div>
       </div>
-      <style jsx>{`
-        .print-only { display: none; }
-        @media print {
-          .no-print { display: none; }
-          .print-only { display: inline; }
-        }
-      `}</style>
     </AppShell>
   );
 }

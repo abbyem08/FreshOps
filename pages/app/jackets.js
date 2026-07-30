@@ -29,11 +29,11 @@ export default function JacketsPage() {
       .eq('jacket_id', jacketId);
     setJacketLines(lines || []);
 
-    const { data: stopRows } = await supabase.from('stops').select('*, suppliers(company), customers(company), stop_lines(*, jacket_lines(*, order_lines(products(commodity, pack_size))))').eq('jacket_id', jacketId).order('stop_number');
+    const { data: stopRows } = await supabase.from('stops').select('*, suppliers(company), customers(company), supplier_locations(label, address, city, state), customer_locations(label, address, city, state), stop_lines(*, jacket_lines(*, order_lines(products(commodity, pack_size))))').eq('jacket_id', jacketId).order('stop_number');
     setStops(stopRows || []);
 
     // eligible order lines: cases_ordered minus what's already assigned across non-cancelled jackets
-    const { data: allLines } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
+    const { data: allLines } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
     const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_status)');
     const eligible = (allLines || []).map(ol => {
       const assigned = (allJacketLines || [])
@@ -66,9 +66,11 @@ export default function JacketsPage() {
 
     // find-or-create pickup + delivery stops
     const supplierId = orderLine.supplier_id;
+    const supplierLocId = orderLine.supplier_location_id || null;
     const customerId = orderLine.customer_orders.customer_id;
-    const pickupStop = await findOrCreateStop(activeId, 'Pickup', supplierId, null);
-    const deliveryStop = await findOrCreateStop(activeId, 'Delivery', null, customerId);
+    const customerLocId = orderLine.customer_orders.customer_location_id || null;
+    const pickupStop = await findOrCreateStop(activeId, 'Pickup', supplierId, supplierLocId, null, null);
+    const deliveryStop = await findOrCreateStop(activeId, 'Delivery', null, null, customerId, customerLocId);
 
     await supabase.from('stop_lines').insert([
       { stop_id: pickupStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
@@ -79,14 +81,22 @@ export default function JacketsPage() {
     loadJacketDetail(activeId);
   }
 
-  async function findOrCreateStop(jacketId, type, supplierId, customerId) {
-    const { data: existing } = await supabase.from('stops').select('*').eq('jacket_id', jacketId).eq('stop_type', type)
-      .eq(type === 'Pickup' ? 'supplier_id' : 'customer_id', type === 'Pickup' ? supplierId : customerId).maybeSingle();
+  async function findOrCreateStop(jacketId, type, supplierId, supplierLocId, customerId, customerLocId) {
+    let query = supabase.from('stops').select('*').eq('jacket_id', jacketId).eq('stop_type', type);
+    if (type === 'Pickup') {
+      query = query.eq('supplier_id', supplierId);
+      query = supplierLocId ? query.eq('supplier_location_id', supplierLocId) : query.is('supplier_location_id', null);
+    } else {
+      query = query.eq('customer_id', customerId);
+      query = customerLocId ? query.eq('customer_location_id', customerLocId) : query.is('customer_location_id', null);
+    }
+    const { data: existing } = await query.maybeSingle();
     if (existing) return existing;
     const { data: existingStops } = await supabase.from('stops').select('stop_id').eq('jacket_id', jacketId);
     const nextNum = (existingStops?.length || 0) + 1;
     const { data: created } = await supabase.from('stops').insert({
-      jacket_id: jacketId, stop_number: nextNum, stop_type: type, supplier_id: supplierId, customer_id: customerId, status: 'Planned'
+      jacket_id: jacketId, stop_number: nextNum, stop_type: type, supplier_id: supplierId, supplier_location_id: supplierLocId,
+      customer_id: customerId, customer_location_id: customerLocId, status: 'Planned'
     }).select().single();
     return created;
   }
@@ -214,12 +224,17 @@ export default function JacketsPage() {
           <div style={card}>
             <strong>Stops</strong>
             <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 8 }}>Auto-derived from assigned order lines.</div>
-            {stops.map(s => (
-              <div key={s.stop_id} style={{ fontSize: 13, borderBottom: '1px solid #DCD5C1', paddingBottom: 8, marginBottom: 8 }}>
-                <div><strong>#{s.stop_number} {s.stop_type}</strong></div>
-                <div style={{ color: '#78716c' }}>{s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company}</div>
-              </div>
-            ))}
+            {stops.map(s => {
+              const loc = s.stop_type === 'Pickup' ? s.supplier_locations : s.customer_locations;
+              const partyName = s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company;
+              return (
+                <div key={s.stop_id} style={{ fontSize: 13, borderBottom: '1px solid #DCD5C1', paddingBottom: 8, marginBottom: 8 }}>
+                  <div><strong>#{s.stop_number} {s.stop_type}</strong></div>
+                  <div style={{ color: '#78716c' }}>{partyName}{loc ? ` — ${loc.label}` : ''}</div>
+                  {loc && <div style={{ color: '#a8a29e', fontSize: 11 }}>{loc.address}, {loc.city} {loc.state}</div>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
