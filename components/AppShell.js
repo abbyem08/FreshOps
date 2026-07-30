@@ -39,9 +39,8 @@ export default function AppShell({ title, children }) {
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif', background: '#F6F4EC' }}>
       <div style={{ width: 200, flexShrink: 0, background: '#2F5233', color: '#fff', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
-          <div style={{ background: '#F6F4EC', display: 'inline-block', padding: '6px 8px', borderRadius: 8 }}>
-            <Logo variant="icon" height={26} />
-          </div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>FreshOps</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>Staff</div>
         </div>
         <nav style={{ flex: 1, padding: '8px 0' }}>
           {NAV.map(n => (
@@ -58,6 +57,9 @@ export default function AppShell({ title, children }) {
         </button>
       </div>
       <div style={{ flex: 1, padding: 28, overflow: 'auto' }}>
+        <div style={{ marginBottom: 20 }}>
+          <Logo variant="horizontal" size={30} />
+        </div>
         <h1 style={{ color: '#2F5233', fontSize: 20, marginTop: 0 }}>{title}</h1>
         {children}
       </div>

@@ -1,19 +1,56 @@
 // components/Logo.js
-// Uses the actual logo you designed in Canva (exported PNG, background
-// made transparent). Two image assets live in /public/brand:
-//   - freshops-full.png  → the full lockup (wreath + FreshOps + tagline)
-//   - freshops-icon.png  → just the circular leaf wreath, for tight spaces
+// The leaf-wreath icon is your real designed image (public/brand/freshops-icon.png).
+// "FreshOps" is real text, not part of the image — it inherits whatever font
+// the rest of the app is already using wherever it's placed, so it always
+// matches, and stays crisp at any size.
 //
 // Usage:
-//   <Logo />                    — full lockup, height defaults to 56px
-//   <Logo variant="icon" />     — icon only (e.g. small sidebar mark)
-//   <Logo height={80} />        — resize, width scales automatically
+//   <Logo variant="stacked" size={64} />     — icon on top, wordmark + tagline
+//                                               centered below, for login pages
+//   <Logo variant="horizontal" size={32} />  — icon left, wordmark + tagline
+//                                               right, for inside the app
+//   <Logo variant="icon" size={32} />        — icon only, no text
 
-export default function Logo({ height = 56, variant = 'full' }) {
-  const src = variant === 'icon' ? '/brand/freshops-icon.png' : '/brand/freshops-full.png';
-  const alt = variant === 'icon' ? 'FreshOps' : 'FreshOps — Business Intelligence';
+const FRESH_COLOR = '#214B34';
+const OPS_COLOR = '#6DAA45';
+
+function Icon({ size }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} style={{ height, width: 'auto', display: 'inline-block' }} />
+    <img src="/brand/freshops-icon.png" alt="FreshOps" style={{ height: size, width: size, display: 'block', objectFit: 'contain' }} />
+  );
+}
+
+function Wordmark({ size, showTagline }) {
+  return (
+    <div style={{ lineHeight: 1.1 }}>
+      <div style={{ fontWeight: 700, fontSize: size * 0.85, letterSpacing: '0.01em' }}>
+        <span style={{ color: FRESH_COLOR }}>Fresh</span><span style={{ color: OPS_COLOR }}>Ops</span>
+      </div>
+      {showTagline && (
+        <div style={{ fontSize: size * 0.28, letterSpacing: '0.12em', color: '#78716c', marginTop: 2 }}>BUSINESS INTELLIGENCE</div>
+      )}
+    </div>
+  );
+}
+
+export default function Logo({ variant = 'horizontal', size = 32, showTagline = true }) {
+  if (variant === 'icon') return <Icon size={size} />;
+
+  if (variant === 'stacked') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: size * 0.22 }}>
+        <Icon size={size} />
+        <Wordmark size={size * 0.42} showTagline={showTagline} />
+      </div>
+    );
+  }
+
+  // horizontal (default) — for inside the app
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.35 }}>
+      <Icon size={size} />
+      <Wordmark size={size * 0.5} showTagline={showTagline} />
+    </div>
   );
 }
