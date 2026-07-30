@@ -28,8 +28,8 @@ export default function PortalLogin() {
     <div style={styles.wrap}>
       <div style={styles.card}>
         <div style={{ textAlign: 'center' }}>
-          <Logo height={70} />
-          <p style={{ ...styles.sub, marginTop: 12 }}>Customer Ordering</p>
+          <Logo variant="stacked" size={90} />
+          <p style={{ ...styles.sub, marginTop: 14 }}>Customer Ordering</p>
         </div>
         <form onSubmit={handleLogin} style={{ marginTop: 24 }}>
           <label style={styles.label}>Email
