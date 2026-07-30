@@ -1,0 +1,11 @@
+/* styles/globals.css */
+:root {
+  --fo-fresh: #214B34;   /* dark forest green — "Fresh" */
+  --fo-ops: #6DAA45;     /* lighter fresh green — "Ops" */
+  --fo-ink: #1A1A1A;     /* monochrome logo color */
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Geist', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
