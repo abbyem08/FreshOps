@@ -12,6 +12,7 @@ const NAV = [
   { href: '/app/ops', label: 'Load Tracking' },
   { href: '/app/calls', label: 'Market Calls' },
   { href: '/app/pricesheets', label: 'Price Sheets' },
+  { href: '/app/ordering-needs', label: 'Ordering Needs' },
   { href: '/app/reports', label: 'Reports' },
   { href: '/app/customers', label: 'Customers' },
   { href: '/app/suppliers', label: 'Suppliers' },
@@ -37,10 +38,13 @@ export default function AppShell({ title, children }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif', background: '#F6F4EC' }}>
-      <div style={{ width: 200, flexShrink: 0, background: '#2F5233', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>FreshOps</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>Staff</div>
+      <div className="no-print" style={{ width: 200, flexShrink: 0, background: '#2F5233', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo variant="icon" size={26} />
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>FreshOps</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>Staff</div>
+          </div>
         </div>
         <nav style={{ flex: 1, padding: '8px 0' }}>
           {NAV.map(n => (
