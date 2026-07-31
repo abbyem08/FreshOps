@@ -63,7 +63,7 @@ export default function AppShell({ title, children }) {
       </div>
       <div style={{ flex: 1, padding: 28, overflow: 'auto' }}>
         <div style={{ marginBottom: 20 }}>
-          <Logo variant="horizontal" size={30} />
+          <Logo variant="horizontal" size={44} />
         </div>
         <h1 style={{ color: '#2F5233', fontSize: 20, marginTop: 0 }}>{title}</h1>
         {children}
