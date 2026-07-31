@@ -32,12 +32,12 @@ export default function OpsPage() {
 
     const { data: jl } = await supabase
       .from('jacket_lines')
-      .select('*, jackets(jacket_id, jacket_number), order_lines(product_id, cases_ordered, original_cases_ordered, products(commodity, pack_size), suppliers(company), customer_orders(acumatica_order_no, customers(company)))')
+      .select('*, jackets(jacket_id, jacket_number), order_lines(product_id, supplier_id, cases_ordered, original_cases_ordered, products(commodity, pack_size), suppliers(company), customer_orders(acumatica_order_no, customers(company)))')
       .order('jacket_id')
       .order('jacket_line_id');
     setLines(jl || []);
 
-    const { data: cl } = await supabase.from('jacket_commodity_loads').select('*, jackets(jacket_number), products(commodity, pack_size)').order('jacket_id');
+    const { data: cl } = await supabase.from('jacket_commodity_loads').select('*, jackets(jacket_number), products(commodity, pack_size), suppliers(company)').order('jacket_id');
     setCommodityLoads(cl || []);
 
     const { data: c } = await supabase
@@ -60,13 +60,13 @@ export default function OpsPage() {
   }
 
   // ---- jacket-level actual loaded, by commodity ----
-  async function updateCommodityLoad(jacketId, productId, value) {
-    const existing = commodityLoads.find(c => c.jacket_id === jacketId && c.product_id === productId);
+  async function updateCommodityLoad(jacketId, productId, supplierId, value) {
+    const existing = commodityLoads.find(c => c.jacket_id === jacketId && c.product_id === productId && c.supplier_id === supplierId);
     let error;
     if (existing) {
       ({ error } = await supabase.from('jacket_commodity_loads').update({ actual_cases_loaded: value }).eq('id', existing.id));
     } else {
-      ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, actual_cases_loaded: value }));
+      ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, supplier_id: supplierId, actual_cases_loaded: value }));
     }
     if (error) { alert('Update failed: ' + error.message); return; }
     load();
@@ -187,20 +187,22 @@ export default function OpsPage() {
   const filteredExtras = jacketFilter === 'all' ? extras : extras.filter(x => x.jacket_id === Number(jacketFilter));
   const filteredCommodityLoads = jacketFilter === 'all' ? commodityLoads : commodityLoads.filter(c => c.jacket_id === Number(jacketFilter));
 
-  // group commodity totals: ordered = sum of cases_to_load for that jacket+product, loaded = jacket_commodity_loads row
+  // group commodity totals PER SHIPPER: ordered = sum of cases_to_load for
+  // that jacket+product+supplier, loaded = jacket_commodity_loads row
   const commodityGroups = {};
   filteredLines.forEach(l => {
     const pid = l.order_lines?.product_id;
+    const sid = l.order_lines?.supplier_id;
     if (!pid) return;
-    const key = l.jacket_id + '-' + pid;
+    const key = l.jacket_id + '-' + pid + '-' + sid;
     if (!commodityGroups[key]) {
-      commodityGroups[key] = { jacketId: l.jacket_id, jacketNumber: l.jackets?.jacket_number, productId: pid, commodity: l.order_lines?.products?.commodity, packSize: l.order_lines?.products?.pack_size, ordered: 0, delivered: 0 };
+      commodityGroups[key] = { jacketId: l.jacket_id, jacketNumber: l.jackets?.jacket_number, productId: pid, supplierId: sid, supplierName: l.order_lines?.suppliers?.company, commodity: l.order_lines?.products?.commodity, packSize: l.order_lines?.products?.pack_size, ordered: 0, delivered: 0 };
     }
     commodityGroups[key].ordered += Number(l.cases_to_load || 0);
     commodityGroups[key].delivered += Number(l.actual_cases_delivered || 0);
   });
   Object.values(commodityGroups).forEach(g => {
-    const loadRow = commodityLoads.find(c => c.jacket_id === g.jacketId && c.product_id === g.productId);
+    const loadRow = commodityLoads.find(c => c.jacket_id === g.jacketId && c.product_id === g.productId && c.supplier_id === g.supplierId);
     g.loaded = loadRow ? Number(loadRow.actual_cases_loaded || 0) : 0;
     g.remaining = g.loaded - g.delivered;
   });
@@ -209,9 +211,9 @@ export default function OpsPage() {
   // flags for row highlighting
   const flags = {};
   groupList.forEach(g => {
-    const anyPlanned = filteredLines.some(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.load_status === 'Planned');
+    const anyPlanned = filteredLines.some(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.order_lines?.supplier_id === g.supplierId && l.load_status === 'Planned');
     const shortage = !anyPlanned && g.loaded > 0 && g.loaded !== g.ordered;
-    filteredLines.filter(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId).forEach(l => {
+    filteredLines.filter(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.order_lines?.supplier_id === g.supplierId).forEach(l => {
       flags[l.jacket_line_id] = { commodityShortage: shortage };
     });
   });
@@ -233,20 +235,21 @@ export default function OpsPage() {
         </select>
       </label>
 
-      {/* ---- Jacket-level: Actual Loaded by Commodity ---- */}
+      {/* ---- Jacket-level: Actual Loaded by Commodity, per Shipper ---- */}
       {groupList.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Actual Loaded by Commodity (whole truck)</div>
+          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Actual Loaded by Commodity, per Shipper (whole truck)</div>
           <table style={table}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Total Ordered</th><th style={{ textAlign: 'right' }}>Actual Loaded</th><th style={{ textAlign: 'right' }}>Variance</th></tr></thead>
+            <thead><tr style={trHead}><th>Jacket</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Total Ordered</th><th style={{ textAlign: 'right' }}>Actual Loaded</th><th style={{ textAlign: 'right' }}>Variance</th></tr></thead>
             <tbody>{groupList.map(g => {
               const variance = g.loaded - g.ordered;
               return (
-                <tr key={g.jacketId + '-' + g.productId} style={variance !== 0 && g.loaded > 0 ? { ...tr, background: '#FCE9C9' } : tr}>
+                <tr key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={variance !== 0 && g.loaded > 0 ? { ...tr, background: '#FCE9C9' } : tr}>
                   <td style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</td>
+                  <td>{g.supplierName || '—'}</td>
                   <td>{g.commodity} — {g.packSize}</td>
                   <td style={{ textAlign: 'right' }}>{g.ordered}</td>
-                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={g.loaded} onBlur={e => updateCommodityLoad(g.jacketId, g.productId, Number(e.target.value))} style={{ width: 70 }} /></td>
+                  <td style={{ textAlign: 'right' }}><input type="number" defaultValue={g.loaded} onBlur={e => updateCommodityLoad(g.jacketId, g.productId, g.supplierId, Number(e.target.value))} style={{ width: 70 }} /></td>
                   <td style={{ textAlign: 'right', fontWeight: variance !== 0 ? 700 : 400 }}>{variance > 0 ? '+' : ''}{variance}</td>
                 </tr>
               );
@@ -403,10 +406,11 @@ export default function OpsPage() {
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Remaining on Truck</div>
         {remainingOnTruck.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing outstanding.</p> : (
           <table style={{ ...table, marginBottom: 20 }}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
+            <thead><tr style={trHead}><th>Jacket</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
             <tbody>{remainingOnTruck.map(g => (
-              <tr key={g.jacketId + '-' + g.productId} style={tr}>
+              <tr key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={tr}>
                 <td style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</td>
+                <td>{g.supplierName || '—'}</td>
                 <td>{g.commodity} — {g.packSize}</td>
                 <td style={{ textAlign: 'right' }}>{g.loaded}</td>
                 <td style={{ textAlign: 'right' }}>{g.delivered}</td>

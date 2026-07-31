@@ -9,10 +9,14 @@ export default function PriceSheetsPage() {
   const [lines, setLines] = useState([]);
   const [recipients, setRecipients] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [allQuotes, setAllQuotes] = useState([]);
   const [printMode, setPrintMode] = useState(false);
+  const [showAddLine, setShowAddLine] = useState(false);
+  const [newLineForm, setNewLineForm] = useState({ product_id: '', supplier_id: '', cost_price: '', margin_pct: 20, markup_type: 'percent', markup_dollar: 0 });
 
-  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); }, []);
+  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); loadProducts(); loadSuppliers(); }, []);
   useEffect(() => { if (activeSheetId) loadDetail(activeSheetId); }, [activeSheetId]);
 
   async function loadSheets() {
@@ -23,6 +27,14 @@ export default function PriceSheetsPage() {
   async function loadCustomers() {
     const { data } = await supabase.from('customers').select('customer_id, company, email, phone').order('company');
     setCustomers(data || []);
+  }
+  async function loadProducts() {
+    const { data } = await supabase.from('products').select('product_id, commodity, pack_size').order('commodity');
+    setProducts(data || []);
+  }
+  async function loadSuppliers() {
+    const { data } = await supabase.from('suppliers').select('supplier_id, company, per_case_fee').order('company');
+    setSuppliers(data || []);
   }
   async function loadQuotes() {
     // every supplier quote, not merged — used to build "all options" per commodity
@@ -87,6 +99,45 @@ export default function PriceSheetsPage() {
     }).eq('price_sheet_line_id', line.price_sheet_line_id);
     if (error) { alert('Update failed: ' + error.message); return; }
     loadDetail(activeSheetId);
+  }
+
+  function openAddLine() { setNewLineForm({ product_id: '', supplier_id: '', cost_price: '', margin_pct: 20, markup_type: 'percent', markup_dollar: 0 }); setShowAddLine(true); }
+  function pickProductForNewLine(productId) {
+    // autofill cost from the latest quote for this product, if one exists
+    const quote = allQuotes.find(q => q.product_id === Number(productId));
+    setNewLineForm({ ...newLineForm, product_id: productId, supplier_id: quote?.supplier_id || '', cost_price: quote?.price ?? '' });
+  }
+  async function saveNewLine() {
+    if (!newLineForm.product_id) { alert('Pick a product.'); return; }
+    const payload = {
+      price_sheet_id: activeSheetId,
+      product_id: Number(newLineForm.product_id),
+      supplier_id: newLineForm.supplier_id ? Number(newLineForm.supplier_id) : null,
+      cost_price: newLineForm.cost_price ? Number(newLineForm.cost_price) : 0,
+      margin_pct: Number(newLineForm.margin_pct || 0),
+      markup_type: newLineForm.markup_type,
+      markup_dollar: Number(newLineForm.markup_dollar || 0),
+    };
+    const { error } = await supabase.from('price_sheet_lines').insert(payload);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    setShowAddLine(false);
+    loadDetail(activeSheetId);
+  }
+  async function deleteLine(lineId) {
+    if (!confirm('Remove this item from the sheet?')) return;
+    const { error } = await supabase.from('price_sheet_lines').delete().eq('price_sheet_line_id', lineId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadDetail(activeSheetId);
+  }
+  async function deleteSheet(sheetId) {
+    if (!confirm('Delete this entire price sheet? This removes all its lines and recipient records too — cannot be undone.')) return;
+    await supabase.from('price_sheet_lines').delete().eq('price_sheet_id', sheetId);
+    await supabase.from('price_sheet_recipients').delete().eq('price_sheet_id', sheetId);
+    const { error } = await supabase.from('price_sheets').delete().eq('price_sheet_id', sheetId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false });
+    setSheets(data || []);
+    setActiveSheetId(data && data.length ? data[0].price_sheet_id : null);
   }
 
   async function toggleRecipient(customer) {
@@ -158,10 +209,13 @@ export default function PriceSheetsPage() {
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <strong style={{ color: '#2F5233' }}>Sheet — valid through {activeSheet.valid_through}</strong>
-              <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer View / Print</button>
+              <div>
+                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer View / Print</button>
+                <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#C0562D', border: '1px solid #DCD5C1' }}>Delete Sheet</button>
+              </div>
             </div>
             <table style={table}>
-              <thead><tr style={trHead}><th>Commodity</th><th>Supplier (quote used)</th><th style={{ textAlign: 'right' }}>Quoted Cost</th><th style={{ textAlign: 'right' }}>Fee</th><th style={{ textAlign: 'right' }}>Eff. Cost</th><th>Markup</th><th style={{ textAlign: 'right' }}>Sell $/cs</th></tr></thead>
+              <thead><tr style={trHead}><th>Commodity</th><th>Supplier (quote used)</th><th style={{ textAlign: 'right' }}>Quoted Cost</th><th style={{ textAlign: 'right' }}>Fee</th><th style={{ textAlign: 'right' }}>Eff. Cost</th><th>Markup</th><th style={{ textAlign: 'right' }}>Sell $/cs</th><th></th></tr></thead>
               <tbody>{lines.map(l => {
                 const options = allQuotes.filter(q => q.product_id === l.product_id);
                 return (
@@ -192,10 +246,46 @@ export default function PriceSheetsPage() {
                       </div>
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${sellPrice(l).toFixed(2)}</td>
+                    <td><button onClick={() => deleteLine(l.price_sheet_line_id)} style={{ ...editBtn, color: '#C0562D' }}>Remove</button></td>
                   </tr>
                 );
               })}</tbody>
             </table>
+
+            <button onClick={openAddLine} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 10, padding: '4px 0' }}>+ Add Line</button>
+            {showAddLine && (
+              <div style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid #DCD5C1', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                <label style={{ fontSize: 13 }}>Product
+                  <select value={newLineForm.product_id} onChange={e => pickProductForNewLine(e.target.value)} style={selectStyle}>
+                    <option value="">— select —</option>
+                    {products.map(p => <option key={p.product_id} value={p.product_id}>{p.commodity} — {p.pack_size}</option>)}
+                  </select>
+                </label>
+                <label style={{ fontSize: 13 }}>Supplier
+                  <select value={newLineForm.supplier_id} onChange={e => setNewLineForm({ ...newLineForm, supplier_id: e.target.value })} style={selectStyle}>
+                    <option value="">— none —</option>
+                    {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
+                  </select>
+                </label>
+                <label style={{ fontSize: 13 }}>Cost Price ($/cs) — autofilled if a quote exists
+                  <input type="number" value={newLineForm.cost_price} onChange={e => setNewLineForm({ ...newLineForm, cost_price: e.target.value })} style={selectStyle} />
+                </label>
+                <label style={{ fontSize: 13 }}>Markup Type
+                  <select value={newLineForm.markup_type} onChange={e => setNewLineForm({ ...newLineForm, markup_type: e.target.value })} style={selectStyle}>
+                    <option value="percent">%</option><option value="dollar">$</option>
+                  </select>
+                </label>
+                {newLineForm.markup_type === 'dollar' ? (
+                  <label style={{ fontSize: 13 }}>Markup ($/cs)<input type="number" value={newLineForm.markup_dollar} onChange={e => setNewLineForm({ ...newLineForm, markup_dollar: e.target.value })} style={selectStyle} /></label>
+                ) : (
+                  <label style={{ fontSize: 13 }}>Margin (%)<input type="number" value={newLineForm.margin_pct} onChange={e => setNewLineForm({ ...newLineForm, margin_pct: e.target.value })} style={selectStyle} /></label>
+                )}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                  <button onClick={saveNewLine} style={{ ...btn, marginBottom: 0, background: '#6B8E4E' }}>Save Line</button>
+                  <button onClick={() => setShowAddLine(false)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={card}>
             <strong style={{ color: '#2F5233' }}>Sent To</strong>
@@ -228,6 +318,8 @@ export default function PriceSheetsPage() {
 }
 
 const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' };
+const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
+const selectStyle = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
 const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
