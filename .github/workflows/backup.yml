@@ -1,0 +1,42 @@
+name: Nightly FreshOps Database Backup
+
+# Runs automatically every night, and can also be run manually anytime from
+# the "Actions" tab in GitHub (click "Run workflow").
+"on":
+  schedule:
+    - cron: '0 9 * * *'   # 9:00 AM UTC ≈ 2–3 AM Arizona time, every night
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # needed so this workflow can save the backup file into the repo
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Postgres client tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Dump the database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir -p backups
+          filename="backups/backup-$(date +'%Y-%m-%d').sql"
+          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges > "$filename"
+          echo "Saved $filename"
+
+      - name: Remove backups older than 30 days
+        run: |
+          find backups -name "backup-*.sql" -mtime +30 -delete
+
+      - name: Commit the backup file
+        run: |
+          git config user.name "FreshOps Backup Bot"
+          git config user.email "actions@github.com"
+          git add backups/
+          git diff --cached --quiet || git commit -m "Nightly backup $(date +'%Y-%m-%d')"
+          git push
