@@ -156,8 +156,32 @@ export default function JacketsPage() {
   });
   const totalPallets = Object.values(casesByProduct).reduce((s, g) => s + (g.perPallet ? Math.ceil(g.cases / g.perPallet) : 0), 0);
 
+  const neededByCommodity = {};
+  eligibleLines.forEach(ol => {
+    const key = ol.products.commodity + ' — ' + ol.products.pack_size;
+    neededByCommodity[key] = (neededByCommodity[key] || 0) + ol.remaining;
+  });
+  const neededList = Object.entries(neededByCommodity).sort((a, b) => b[1] - a[1]);
+  const [showNeeded, setShowNeeded] = useState(true);
+
   return (
     <AppShell title="Jackets">
+      <div style={{ ...card, marginBottom: 16 }}>
+        <button onClick={() => setShowNeeded(!showNeeded)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <strong style={{ color: '#2F5233' }}>Cases Still Needed (across all open orders)</strong>
+          <span style={{ color: '#78716c', fontSize: 12 }}>{showNeeded ? '▲ hide' : '▼ show'}</span>
+        </button>
+        {showNeeded && (
+          neededList.length === 0 ? <div style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>Everything open is already assigned to a jacket.</div> : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', marginTop: 10 }}>
+              {neededList.map(([name, cases]) => (
+                <div key={name} style={{ fontSize: 13 }}><strong style={{ color: '#2F5233' }}>{cases}</strong> <span style={{ color: '#78716c' }}>{name}</span></div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
         <select value={activeId || ''} onChange={e => setActiveId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}>
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
