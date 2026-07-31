@@ -8,6 +8,8 @@ const BLANK_LINE = { supplier_id: '', supplier_location_id: '', product_id: '', 
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('Open');
+  const [searchText, setSearchText] = useState('');
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -156,7 +158,25 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {orders.map(o => {
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '16px 0', flexWrap: 'wrap' }}>
+        {['Open', 'Closed', 'Cancelled', 'All'].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #DCD5C1', background: statusFilter === s ? '#2F5233' : '#fff', color: statusFilter === s ? '#fff' : '#333' }}>
+            {s}
+          </button>
+        ))}
+        <input type="text" placeholder="Search order #, PO, or customer…" value={searchText} onChange={e => setSearchText(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6, fontSize: 13, flex: 1, minWidth: 220 }} />
+      </div>
+
+      {orders
+        .filter(o => statusFilter === 'All' || o.order_status === statusFilter)
+        .filter(o => {
+          if (!searchText) return true;
+          const q = searchText.toLowerCase();
+          return o.acumatica_order_no?.toLowerCase().includes(q) || o.customer_po?.toLowerCase().includes(q) || o.customers?.company?.toLowerCase().includes(q);
+        })
+        .map(o => {
         const isOpen = openOrderId === o.customer_order_id;
         const jackets = jacketByOrder[o.customer_order_id] || [];
         return (
