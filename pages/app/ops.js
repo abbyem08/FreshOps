@@ -121,6 +121,12 @@ export default function OpsPage() {
     setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', jacket_line_id: claim.jacket_line_id || '' });
     setResolvingId(claim.claim_id);
   }
+  async function deleteClaim(claimId) {
+    if (!confirm('Delete this claim? This cannot be undone.')) return;
+    const { error } = await supabase.from('claims').delete().eq('claim_id', claimId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    load();
+  }
   async function saveResolve(claim) {
     const adjustment = resolveForm.price_adjustment ? Number(resolveForm.price_adjustment) : null;
     const newJacketLineId = resolveForm.jacket_line_id ? Number(resolveForm.jacket_line_id) : null;
@@ -362,7 +368,7 @@ export default function OpsPage() {
                   <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
                   <td><span style={statusPill(c.status)}>{c.status}</span></td>
                   <td>{c.resolution_price_adjustment ? `-$${Number(c.resolution_price_adjustment).toFixed(2)}/cs` : '—'}</td>
-                  <td><button onClick={() => openResolve(c)} style={editBtn}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button></td>
+                  <td><button onClick={() => openResolve(c)} style={editBtn}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button> <button onClick={() => deleteClaim(c.claim_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
                 </tr>
                 {resolvingId === c.claim_id && (
                   <tr>
