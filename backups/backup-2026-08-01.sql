@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict UvcdgnwP7aNXA60yOVHlIfaL3jkDIJMJoUhkMs7c2CemYSfexHrZXvFB6DjdgOd
+\restrict oIoQw88s7Ym5i52oKcyXL26Ujsa4dZH3uR7ADrlajSrxcge3Z7HsDAMG53aKKxW
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.10 (Ubuntu 17.10-1.pgdg24.04+1)
@@ -4639,6 +4639,7 @@ COPY auth.identities (provider_id, user_id, identity_data, provider, last_sign_i
 0c3c1159-e441-433d-9e57-48d45d170d4a	0c3c1159-e441-433d-9e57-48d45d170d4a	{"sub": "0c3c1159-e441-433d-9e57-48d45d170d4a", "email": "abbyem08@gmail.com", "email_verified": false, "phone_verified": false}	email	2026-07-29 02:36:30.423831+00	2026-07-29 02:36:30.423889+00	2026-07-29 02:36:30.423889+00	1c6cbbf0-ecba-4ad7-a46c-1604fc3be8db
 1f231474-dd97-48ce-9b37-525dec938e45	1f231474-dd97-48ce-9b37-525dec938e45	{"sub": "1f231474-dd97-48ce-9b37-525dec938e45", "email": "jmartinez@profreshsourcing.com", "email_verified": true, "phone_verified": false}	email	2026-07-29 19:58:05.426973+00	2026-07-29 19:58:05.427033+00	2026-07-29 19:58:05.427033+00	4d8cf169-282d-4a09-b9a3-6f52b69cfe85
 21696e81-0819-4c3d-b780-bc21f42da75f	21696e81-0819-4c3d-b780-bc21f42da75f	{"sub": "21696e81-0819-4c3d-b780-bc21f42da75f", "email": "marcy.martinez@ymail.com", "email_verified": false, "phone_verified": false}	email	2026-08-01 01:18:23.550564+00	2026-08-01 01:18:23.551213+00	2026-08-01 01:18:23.551213+00	48a9f385-79ba-4aaa-8b26-dd060fe3573a
+268f11dc-5e0e-4f42-98e3-70a5fe2f3171	268f11dc-5e0e-4f42-98e3-70a5fe2f3171	{"sub": "268f11dc-5e0e-4f42-98e3-70a5fe2f3171", "email": "mytyme2fly@gmail.com", "email_verified": false, "phone_verified": false}	email	2026-08-01 02:05:51.901645+00	2026-08-01 02:05:51.901711+00	2026-08-01 02:05:51.901711+00	796db0d4-9712-4c4b-836e-f2f2c5afd835
 \.
 
 
@@ -4669,6 +4670,19 @@ f8d919e6-7589-46e0-841f-fce267cd08b5	2026-07-31 03:18:47.909224+00	2026-07-31 03
 c7d7ee64-c81c-42f6-8076-adc2dd900564	2026-07-31 05:02:40.806036+00	2026-07-31 05:02:40.806036+00	password	e1f5f42b-5118-4242-af05-fb7ac5c1a81e
 be36f726-3bb0-413c-8ba2-d38e0cb2a984	2026-07-31 17:06:22.067273+00	2026-07-31 17:06:22.067273+00	password	7b4666e0-e562-4932-b103-571693246e8f
 6ef017d8-0961-4f54-8447-d2d3a2d136a5	2026-08-01 01:21:05.013907+00	2026-08-01 01:21:05.013907+00	password	e08f6c40-46ec-44f5-96c7-edc79d8682e8
+8e2ef080-a538-4d73-b169-dbf21250959b	2026-08-01 01:39:55.274412+00	2026-08-01 01:39:55.274412+00	password	8e746fbd-fda2-44d2-ac01-896306452dbc
+e99e1182-5483-48b9-a65d-6152ea54b2d3	2026-08-01 01:48:34.055123+00	2026-08-01 01:48:34.055123+00	password	a66bd378-6319-4755-a02d-dbaecb6a90d2
+ab8c6387-d514-464a-8f8b-fd209604a919	2026-08-01 02:00:09.566465+00	2026-08-01 02:00:09.566465+00	password	1c721a15-214e-4cdb-8204-e9375df0c11b
+8a8afca5-7c37-4509-956d-b3e33c8d001a	2026-08-01 02:32:52.550901+00	2026-08-01 02:32:52.550901+00	password	7306f214-b27a-41e2-8d76-7006f9270116
+c79ff307-f2b5-4ffd-a32f-293ff2e70c0a	2026-08-01 04:21:35.999706+00	2026-08-01 04:21:35.999706+00	password	9678c197-3cba-4293-a830-ef9a35396b46
+cc6578b2-d611-42bb-91cb-18a714ad3034	2026-08-01 04:27:20.25443+00	2026-08-01 04:27:20.25443+00	password	76cea09a-8cfa-481e-9f70-69a29b111450
+4a7ab39c-2e9f-45c0-aadf-b3f1a4acfd65	2026-08-01 04:38:52.154671+00	2026-08-01 04:38:52.154671+00	password	be6b8115-5a72-427e-8be4-ee198fbcff43
+7bb57633-f832-41a6-9505-eb4bf1f46787	2026-08-01 04:42:04.728313+00	2026-08-01 04:42:04.728313+00	password	13e3427b-6f06-42bf-8b48-b18e4b54b683
+9e888a15-ea70-4c58-b6ab-9596ff2845f5	2026-08-01 04:42:44.747784+00	2026-08-01 04:42:44.747784+00	password	c05c78de-bcda-4c01-90be-ea7bb1233f33
+908ebff7-5973-433d-ac24-c747a2865cc1	2026-08-01 04:55:15.972578+00	2026-08-01 04:55:15.972578+00	password	d91bc063-5ea9-4b91-b914-916557e46874
+5c7234b2-a55e-4a3b-bc7a-74da1a87676a	2026-08-01 04:57:04.769765+00	2026-08-01 04:57:04.769765+00	password	c2673631-0077-416d-b1db-fc0553c0e73c
+3c1456d9-ad96-4be4-9c44-11d3996b4052	2026-08-01 05:02:10.169861+00	2026-08-01 05:02:10.169861+00	password	8408d66e-b782-4b5e-b5ac-bc6e60f387fb
+18081560-f359-41f7-bdf1-18198e25e98d	2026-08-01 05:08:37.741261+00	2026-08-01 05:08:37.741261+00	password	9061f554-df56-42f3-9b68-f36610d845e9
 \.
 
 
@@ -4737,6 +4751,23 @@ COPY auth.refresh_tokens (instance_id, id, token, user_id, revoked, created_at, 
 00000000-0000-0000-0000-000000000000	2	rul2llqnvpwp	71811925-e13f-49ea-aa1f-af54e011a7ea	f	2026-07-29 02:12:29.313531+00	2026-07-29 02:12:29.313531+00	\N	51e317d1-2a2c-48d0-8180-d47ea73d906c
 00000000-0000-0000-0000-000000000000	60	wkovkhhrv2kx	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 01:19:38.400258+00	2026-08-01 01:19:38.400258+00	ogtqfdvsxpmn	be36f726-3bb0-413c-8ba2-d38e0cb2a984
 00000000-0000-0000-0000-000000000000	62	n6kdvmm6izev	21696e81-0819-4c3d-b780-bc21f42da75f	f	2026-08-01 01:21:05.011186+00	2026-08-01 01:21:05.011186+00	\N	6ef017d8-0961-4f54-8447-d2d3a2d136a5
+00000000-0000-0000-0000-000000000000	63	le2cn63eaike	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 01:39:55.25771+00	2026-08-01 01:39:55.25771+00	\N	8e2ef080-a538-4d73-b169-dbf21250959b
+00000000-0000-0000-0000-000000000000	54	doofog7ql2nz	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-07-31 03:22:28.33411+00	2026-08-01 01:45:41.542315+00	\N	21f52511-e91a-4076-8589-2be44f2dda05
+00000000-0000-0000-0000-000000000000	65	vn6cip4nzaoc	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 01:48:34.052007+00	2026-08-01 01:48:34.052007+00	\N	e99e1182-5483-48b9-a65d-6152ea54b2d3
+00000000-0000-0000-0000-000000000000	67	3hp272glq4wi	268f11dc-5e0e-4f42-98e3-70a5fe2f3171	f	2026-08-01 02:32:52.532438+00	2026-08-01 02:32:52.532438+00	\N	8a8afca5-7c37-4509-956d-b3e33c8d001a
+00000000-0000-0000-0000-000000000000	66	3ez6qmhue7on	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-08-01 02:00:09.560794+00	2026-08-01 04:17:21.437459+00	\N	ab8c6387-d514-464a-8f8b-fd209604a919
+00000000-0000-0000-0000-000000000000	68	t6hlyopd6t72	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 04:17:21.446547+00	2026-08-01 04:17:21.446547+00	3ez6qmhue7on	ab8c6387-d514-464a-8f8b-fd209604a919
+00000000-0000-0000-0000-000000000000	69	km5u3b6wktoe	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 04:21:35.988127+00	2026-08-01 04:21:35.988127+00	\N	c79ff307-f2b5-4ffd-a32f-293ff2e70c0a
+00000000-0000-0000-0000-000000000000	70	zmtdj2cva4i7	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 04:27:20.242921+00	2026-08-01 04:27:20.242921+00	\N	cc6578b2-d611-42bb-91cb-18a714ad3034
+00000000-0000-0000-0000-000000000000	71	euwe4mqelldl	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 04:38:52.146584+00	2026-08-01 04:38:52.146584+00	\N	4a7ab39c-2e9f-45c0-aadf-b3f1a4acfd65
+00000000-0000-0000-0000-000000000000	72	thvbbxws6ngp	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-08-01 04:42:04.717351+00	2026-08-01 04:42:04.717351+00	\N	7bb57633-f832-41a6-9505-eb4bf1f46787
+00000000-0000-0000-0000-000000000000	73	foojsaibjezy	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-08-01 04:42:44.740515+00	2026-08-01 04:42:44.740515+00	\N	9e888a15-ea70-4c58-b6ab-9596ff2845f5
+00000000-0000-0000-0000-000000000000	74	axcrqpiimavq	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 04:55:15.95442+00	2026-08-01 04:55:15.95442+00	\N	908ebff7-5973-433d-ac24-c747a2865cc1
+00000000-0000-0000-0000-000000000000	75	qigrymy7g4gl	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-08-01 04:57:04.767018+00	2026-08-01 04:57:04.767018+00	\N	5c7234b2-a55e-4a3b-bc7a-74da1a87676a
+00000000-0000-0000-0000-000000000000	76	2j7pkvqjllvu	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-08-01 05:02:10.16232+00	2026-08-01 05:02:10.16232+00	\N	3c1456d9-ad96-4be4-9c44-11d3996b4052
+00000000-0000-0000-0000-000000000000	64	i7iyi6fr6arb	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-08-01 01:45:41.556606+00	2026-08-01 05:08:17.899631+00	doofog7ql2nz	21f52511-e91a-4076-8589-2be44f2dda05
+00000000-0000-0000-0000-000000000000	77	reg44vtmwnd4	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 05:08:17.910462+00	2026-08-01 05:08:17.910462+00	i7iyi6fr6arb	21f52511-e91a-4076-8589-2be44f2dda05
+00000000-0000-0000-0000-000000000000	78	keeeaa6egxvx	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-08-01 05:08:37.739405+00	2026-08-01 05:08:37.739405+00	\N	18081560-f359-41f7-bdf1-18198e25e98d
 00000000-0000-0000-0000-000000000000	22	px3jc4j7pl2f	71811925-e13f-49ea-aa1f-af54e011a7ea	f	2026-07-29 19:57:13.238345+00	2026-07-29 19:57:13.238345+00	\N	e64b2eea-99f2-4e18-aa14-1232acdf3708
 00000000-0000-0000-0000-000000000000	23	vsv4gbk6clwj	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-07-29 20:07:30.150021+00	2026-07-29 20:07:30.150021+00	\N	c468ae98-b8d5-46fd-8184-a3f10c82ba1e
 00000000-0000-0000-0000-000000000000	28	m4cl5oasee7q	71811925-e13f-49ea-aa1f-af54e011a7ea	f	2026-07-30 01:56:00.996693+00	2026-07-30 01:56:00.996693+00	\N	031a0534-11b3-4dd9-adef-5ca37083f24f
@@ -4751,7 +4782,6 @@ COPY auth.refresh_tokens (instance_id, id, token, user_id, revoked, created_at, 
 00000000-0000-0000-0000-000000000000	51	vdkpmlwnopo4	1f231474-dd97-48ce-9b37-525dec938e45	f	2026-07-30 22:22:34.436165+00	2026-07-30 22:22:34.436165+00	aodwtiu5eduw	7117aabc-a7c6-41b1-9fe2-6c534d56416e
 00000000-0000-0000-0000-000000000000	50	bts2lpmf7w5x	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-07-30 22:04:42.662244+00	2026-07-30 23:03:06.373478+00	\N	2885d3a4-e2c9-40a8-a3cf-5781df94d39f
 00000000-0000-0000-0000-000000000000	53	kxzdony77yhk	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-07-31 03:18:47.878443+00	2026-07-31 03:18:47.878443+00	\N	f8d919e6-7589-46e0-841f-fce267cd08b5
-00000000-0000-0000-0000-000000000000	54	doofog7ql2nz	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-07-31 03:22:28.33411+00	2026-07-31 03:22:28.33411+00	\N	21f52511-e91a-4076-8589-2be44f2dda05
 00000000-0000-0000-0000-000000000000	52	3dhvl522e3bp	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-07-30 23:03:06.389648+00	2026-07-31 04:57:47.007505+00	bts2lpmf7w5x	2885d3a4-e2c9-40a8-a3cf-5781df94d39f
 00000000-0000-0000-0000-000000000000	55	4wuq6r3n4hgb	0c3c1159-e441-433d-9e57-48d45d170d4a	f	2026-07-31 04:57:47.027849+00	2026-07-31 04:57:47.027849+00	3dhvl522e3bp	2885d3a4-e2c9-40a8-a3cf-5781df94d39f
 00000000-0000-0000-0000-000000000000	56	yqp47snfy24p	0c3c1159-e441-433d-9e57-48d45d170d4a	t	2026-07-31 05:02:40.791997+00	2026-07-31 17:06:07.43042+00	\N	c7d7ee64-c81c-42f6-8076-adc2dd900564
@@ -4867,19 +4897,32 @@ COPY auth.schema_migrations (version) FROM stdin;
 
 COPY auth.sessions (id, user_id, created_at, updated_at, factor_id, aal, not_after, refreshed_at, user_agent, ip, tag, oauth_client_id, refresh_token_hmac_key, refresh_token_counter, scopes) FROM stdin;
 51e317d1-2a2c-48d0-8180-d47ea73d906c	71811925-e13f-49ea-aa1f-af54e011a7ea	2026-07-29 02:12:29.311251+00	2026-07-29 02:12:29.311251+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.140.32	\N	\N	\N	\N	\N
-21f52511-e91a-4076-8589-2be44f2dda05	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-31 03:22:28.320631+00	2026-07-31 03:22:28.320631+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	12.75.41.71	\N	\N	\N	\N	\N
 2885d3a4-e2c9-40a8-a3cf-5781df94d39f	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-30 22:04:42.641061+00	2026-07-31 04:57:47.053215+00	\N	aal1	\N	2026-07-31 04:57:47.053109	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 d8b94bd9-99ec-4723-8583-9d5c3464f730	71811925-e13f-49ea-aa1f-af54e011a7ea	2026-07-30 14:42:15.318405+00	2026-07-30 14:42:15.318405+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 e64b2eea-99f2-4e18-aa14-1232acdf3708	71811925-e13f-49ea-aa1f-af54e011a7ea	2026-07-29 19:57:13.236834+00	2026-07-29 19:57:13.236834+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.140.32	\N	\N	\N	\N	\N
 c468ae98-b8d5-46fd-8184-a3f10c82ba1e	1f231474-dd97-48ce-9b37-525dec938e45	2026-07-29 20:07:30.146557+00	2026-07-29 20:07:30.146557+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	166.205.97.9	\N	\N	\N	\N	\N
 031a0534-11b3-4dd9-adef-5ca37083f24f	71811925-e13f-49ea-aa1f-af54e011a7ea	2026-07-30 01:56:00.982244+00	2026-07-30 01:56:00.982244+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.140.32	\N	\N	\N	\N	\N
 c7d7ee64-c81c-42f6-8076-adc2dd900564	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-31 05:02:40.772707+00	2026-07-31 17:06:07.475547+00	\N	aal1	\N	2026-07-31 17:06:07.475352	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+3c1456d9-ad96-4be4-9c44-11d3996b4052	1f231474-dd97-48ce-9b37-525dec938e45	2026-08-01 05:02:10.145437+00	2026-08-01 05:02:10.145437+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 be36f726-3bb0-413c-8ba2-d38e0cb2a984	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-31 17:06:22.051506+00	2026-08-01 01:19:38.421095+00	\N	aal1	\N	2026-08-01 01:19:38.42096	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 f77c61ba-0127-4b36-ba26-5e9d224f89b1	1f231474-dd97-48ce-9b37-525dec938e45	2026-07-30 14:21:45.738014+00	2026-07-30 18:57:45.702774+00	\N	aal1	\N	2026-07-30 18:57:45.702655	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 19038daa-c8cb-4c81-890b-9cc94b649b47	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-30 21:15:02.251731+00	2026-07-30 21:15:02.251731+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
 7117aabc-a7c6-41b1-9fe2-6c534d56416e	1f231474-dd97-48ce-9b37-525dec938e45	2026-07-29 20:09:12.811721+00	2026-07-30 22:22:34.461068+00	\N	aal1	\N	2026-07-30 22:22:34.460944	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
+21f52511-e91a-4076-8589-2be44f2dda05	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-31 03:22:28.320631+00	2026-08-01 05:08:17.930584+00	\N	aal1	\N	2026-08-01 05:08:17.930478	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
 f8d919e6-7589-46e0-841f-fce267cd08b5	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-07-31 03:18:47.835977+00	2026-07-31 03:18:47.835977+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	12.75.41.71	\N	\N	\N	\N	\N
 6ef017d8-0961-4f54-8447-d2d3a2d136a5	21696e81-0819-4c3d-b780-bc21f42da75f	2026-08-01 01:21:04.994706+00	2026-08-01 01:21:04.994706+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	73.166.80.230	\N	\N	\N	\N	\N
+8e2ef080-a538-4d73-b169-dbf21250959b	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 01:39:55.235617+00	2026-08-01 01:39:55.235617+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+e99e1182-5483-48b9-a65d-6152ea54b2d3	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 01:48:34.041695+00	2026-08-01 01:48:34.041695+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+8a8afca5-7c37-4509-956d-b3e33c8d001a	268f11dc-5e0e-4f42-98e3-70a5fe2f3171	2026-08-01 02:32:52.502485+00	2026-08-01 02:32:52.502485+00	\N	aal1	\N	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36	47.209.206.55	\N	\N	\N	\N	\N
+ab8c6387-d514-464a-8f8b-fd209604a919	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 02:00:09.543706+00	2026-08-01 04:17:21.475427+00	\N	aal1	\N	2026-08-01 04:17:21.47529	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+c79ff307-f2b5-4ffd-a32f-293ff2e70c0a	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 04:21:35.969658+00	2026-08-01 04:21:35.969658+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+cc6578b2-d611-42bb-91cb-18a714ad3034	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 04:27:20.232904+00	2026-08-01 04:27:20.232904+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+4a7ab39c-2e9f-45c0-aadf-b3f1a4acfd65	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 04:38:52.124957+00	2026-08-01 04:38:52.124957+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+7bb57633-f832-41a6-9505-eb4bf1f46787	1f231474-dd97-48ce-9b37-525dec938e45	2026-08-01 04:42:04.69385+00	2026-08-01 04:42:04.69385+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
+9e888a15-ea70-4c58-b6ab-9596ff2845f5	1f231474-dd97-48ce-9b37-525dec938e45	2026-08-01 04:42:44.726693+00	2026-08-01 04:42:44.726693+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
+908ebff7-5973-433d-ac24-c747a2865cc1	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 04:55:15.941883+00	2026-08-01 04:55:15.941883+00	\N	aal1	\N	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0	174.170.255.179	\N	\N	\N	\N	\N
+5c7234b2-a55e-4a3b-bc7a-74da1a87676a	1f231474-dd97-48ce-9b37-525dec938e45	2026-08-01 04:57:04.764643+00	2026-08-01 04:57:04.764643+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
+18081560-f359-41f7-bdf1-18198e25e98d	0c3c1159-e441-433d-9e57-48d45d170d4a	2026-08-01 05:08:37.736433+00	2026-08-01 05:08:37.736433+00	\N	aal1	\N	\N	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1	174.170.255.179	\N	\N	\N	\N	\N
 \.
 
 
@@ -4904,9 +4947,10 @@ COPY auth.sso_providers (id, resource_id, created_at, updated_at, disabled) FROM
 --
 
 COPY auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, invited_at, confirmation_token, confirmation_sent_at, recovery_token, recovery_sent_at, email_change_token_new, email_change, email_change_sent_at, last_sign_in_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at, phone, phone_confirmed_at, phone_change, phone_change_token, phone_change_sent_at, email_change_token_current, email_change_confirm_status, banned_until, reauthentication_token, reauthentication_sent_at, is_sso_user, deleted_at, is_anonymous) FROM stdin;
-00000000-0000-0000-0000-000000000000	0c3c1159-e441-433d-9e57-48d45d170d4a	authenticated	authenticated	abbyem08@gmail.com	$2a$10$iD2L/twhDOmhu94dKnnabuuIBy1Lr3hn4/x0RRJqwWhsMeJg.QCJ2	2026-07-29 02:36:30.432356+00	\N		\N		\N			\N	2026-07-31 17:06:22.051305+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-07-29 02:36:30.418002+00	2026-08-01 01:19:38.40512+00	\N	\N			\N		0	\N		\N	f	\N	f
+00000000-0000-0000-0000-000000000000	268f11dc-5e0e-4f42-98e3-70a5fe2f3171	authenticated	authenticated	mytyme2fly@gmail.com	$2a$10$aRZUgXFeVNrWDIQSYi7DAeETgRZA3kjXvIi2Opfl6o358IBcVXUC2	2026-08-01 02:05:51.903919+00	\N		\N		\N			\N	2026-08-01 02:32:52.50165+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-08-01 02:05:51.893355+00	2026-08-01 02:32:52.547118+00	\N	\N			\N		0	\N		\N	f	\N	f
 00000000-0000-0000-0000-000000000000	21696e81-0819-4c3d-b780-bc21f42da75f	authenticated	authenticated	marcy.martinez@ymail.com	$2a$10$oO00r958d1nlwdmyFV12yuG7Y57lqMa4b7Jt4dTKwfZzW7vD3XJmO	2026-08-01 01:18:23.560031+00	\N		\N		\N			\N	2026-08-01 01:21:04.992212+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-08-01 01:18:23.532636+00	2026-08-01 01:21:05.013415+00	\N	\N			\N		0	\N		\N	f	\N	f
-00000000-0000-0000-0000-000000000000	1f231474-dd97-48ce-9b37-525dec938e45	authenticated	authenticated	jmartinez@profreshsourcing.com	$2a$10$gVzKqcFilUG6UwrKGtoDyuAAwIH3AEeaSpFAOI81PEM7sZCs.urdy	2026-07-29 20:07:30.135261+00	\N		2026-07-29 20:07:14.228249+00		\N			\N	2026-07-30 14:21:45.73791+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-07-29 19:58:05.41764+00	2026-07-30 22:22:34.444239+00	\N	\N			\N		0	\N		\N	f	\N	f
+00000000-0000-0000-0000-000000000000	1f231474-dd97-48ce-9b37-525dec938e45	authenticated	authenticated	jmartinez@profreshsourcing.com	$2a$10$gVzKqcFilUG6UwrKGtoDyuAAwIH3AEeaSpFAOI81PEM7sZCs.urdy	2026-07-29 20:07:30.135261+00	\N		2026-07-29 20:07:14.228249+00		\N			\N	2026-08-01 05:02:10.144544+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-07-29 19:58:05.41764+00	2026-08-01 05:02:10.167314+00	\N	\N			\N		0	\N		\N	f	\N	f
+00000000-0000-0000-0000-000000000000	0c3c1159-e441-433d-9e57-48d45d170d4a	authenticated	authenticated	abbyem08@gmail.com	$2a$10$iD2L/twhDOmhu94dKnnabuuIBy1Lr3hn4/x0RRJqwWhsMeJg.QCJ2	2026-07-29 02:36:30.432356+00	\N		\N		\N			\N	2026-08-01 05:08:37.736304+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-07-29 02:36:30.418002+00	2026-08-01 05:08:37.740538+00	\N	\N			\N		0	\N		\N	f	\N	f
 00000000-0000-0000-0000-000000000000	71811925-e13f-49ea-aa1f-af54e011a7ea	authenticated	authenticated	j.martinez347@gmail.com	$2a$10$VWKgI9G.su0fe32cid0b0e9t01Z2HqxCz.KiyqPvUHo2.A4RbgyZO	2026-07-29 01:23:19.344718+00	\N		\N		\N			\N	2026-07-30 14:42:15.317539+00	{"provider": "email", "providers": ["email"]}	{"email_verified": true}	\N	2026-07-29 01:23:19.320117+00	2026-07-30 14:42:15.341951+00	\N	\N			\N		0	\N		\N	f	\N	f
 \.
 
@@ -4932,10 +4976,6 @@ COPY auth.webauthn_credentials (id, user_id, credential_id, public_key, attestat
 --
 
 COPY public.call_log (call_id, call_date, party_type, supplier_id, customer_id, prospect_id, contact_name, phone, product_id, price, price_type, availability, notes, followup_date, status) FROM stdin;
-1	2026-07-30	Supplier	1	\N	\N	Fernando	\N	1	5	FOB	\N	\N	2026-07-31	Quoted
-2	2026-07-30	Supplier	1	\N	\N	\N	\N	1	5	FOB	\N	\N	2026-07-31	Quoted
-4	2026-07-30	Supplier	2	\N	\N	\N	\N	1	10	FOB	\N	\N	\N	Quoted
-3	2026-07-30	Customer	\N	1	\N	\N	\N	1	6	FOB	\N	\N	\N	Quoted
 \.
 
 
@@ -4953,9 +4993,6 @@ COPY public.carriers (carrier_id, name, mc_number, dot_number, insurance_expiry,
 --
 
 COPY public.claims (claim_id, jacket_line_id, claim_type, description, date_opened, status, resolution, flag_for_credit_memo, resolution_price_adjustment, resolved_at, snapshot_jacket_number, snapshot_order_no, snapshot_customer, snapshot_commodity) FROM stdin;
-2	\N	Temperature	too hot, leaves wilted	2026-07-30	Resolved		t	1	2026-07-30 00:06:13.891+00	\N	\N	\N	\N
-1	\N	Damage	product looked "old"	2026-07-29	Resolved		t	2	2026-07-29 06:27:40.715+00	\N	\N	\N	\N
-3	\N	Damage	brown	2026-07-30	Resolved		t	2	2026-07-30 14:34:39.821+00	\N	\N	\N	\N
 \.
 
 
@@ -4972,10 +5009,6 @@ COPY public.customer_locations (location_id, customer_id, label, address, city, 
 --
 
 COPY public.customer_orders (customer_order_id, acumatica_order_no, customer_id, customer_po, order_date, requested_delivery, salesperson, order_status, source, notes, customer_location_id) FROM stdin;
-1	1000	1	555	2026-07-28	2026-07-30	\N	Open	Internal	\N	\N
-2	1001	1	666666	2026-07-28	2026-08-01	\N	Open	Internal	\N	\N
-3	5000	1	8	2026-07-29	2026-07-31	\N	Open	Internal	\N	\N
-4	1005	1	2501	\N	2026-07-31	\N	Open	Internal	\N	\N
 \.
 
 
@@ -4994,7 +5027,6 @@ COPY public.customers (customer_id, company, buyer_contact, phone, email, delive
 --
 
 COPY public.freight_records (freight_id, jacket_id, quote_date, carrier, truck_type, trip_type, quoted_rate, booked_rate, miles, status, carrier_invoice_number, invoice_received, carrier_paid, notes, extra_fees, extra_fees_notes) FROM stdin;
-1	1	2026-07-30	STS	\N	Multi Pick/One Drop	2000	3000	800	Booked	\N	f	t	\N	0	\N
 \.
 
 
@@ -5003,7 +5035,6 @@ COPY public.freight_records (freight_id, jacket_id, quote_date, carrier, truck_t
 --
 
 COPY public.jacket_commodity_loads (id, jacket_id, product_id, actual_cases_loaded, supplier_id) FROM stdin;
-1	1	1	2000	\N
 \.
 
 
@@ -5020,14 +5051,6 @@ COPY public.jacket_extras (extra_id, jacket_id, product_id, cases, status, notes
 --
 
 COPY public.jacket_lines (jacket_line_id, jacket_id, order_line_id, planned_cases, cases_to_load, actual_cases_loaded, actual_cases_delivered, estimated_pallets, line_weight, load_status, bol_number, exception_notes, pod_url, updated_at, notes, customer_notified_pickup, customer_notified_pickup_at, customer_notified_delivery, customer_notified_delivery_at) FROM stdin;
-19	1	1	600	600	0	0	15	26400	Planned	\N	\N	\N	2026-07-30 22:30:15.568851+00	\N	f	\N	f	\N
-20	1	5	30	30	0	0	1	1320	Planned	\N	\N	\N	2026-07-30 22:30:22.061201+00	\N	f	\N	f	\N
-21	1	3	1200	1200	0	0	30	52800	Planned	\N	\N	\N	2026-07-31 03:20:21.331542+00	\N	f	\N	f	\N
-22	1	4	500	500	0	0	13	22000	Planned	\N	\N	\N	2026-07-31 03:20:23.406468+00	\N	f	\N	f	\N
-27	1	6	600	600	0	0	15	26400	Planned	\N	\N	\N	2026-07-31 05:08:43.901698+00	\N	f	\N	f	\N
-28	1	2	300	300	0	0	8	13200	Planned	\N	\N	\N	2026-07-31 05:08:45.97187+00	\N	f	\N	f	\N
-29	1	7	180	180	0	0	5	5400	Planned	\N	\N	\N	2026-07-31 05:08:47.75558+00	\N	f	\N	f	\N
-30	1	8	80	80	0	0	2	3200	Planned	\N	\N	\N	2026-07-31 05:08:49.842308+00	\N	f	\N	f	\N
 \.
 
 
@@ -5036,11 +5059,6 @@ COPY public.jacket_lines (jacket_line_id, jacket_id, order_line_id, planned_case
 --
 
 COPY public.jackets (jacket_id, jacket_number, jacket_date, carrier, driver, driver_phone, truck, trailer, truck_type, route, jacket_status, weight_capacity, pallet_capacity, closed_at, notes) FROM stdin;
-1	201000	\N	\N	\N	\N	\N	\N	\N	\N	Planning	44000	24	\N	\N
-2	201001	\N	\N	\N	\N	\N	\N	\N	\N	Planning	44000	24	\N	\N
-3	201002	\N	\N	\N	\N	\N	\N	\N	\N	Planning	44000	24	\N	\N
-4	12345	\N	\N	\N	\N	\N	\N	\N	\N	Planning	44000	24	\N	\N
-5	201003	\N	\N	\N	\N	\N	\N	\N	\N	Planning	44000	24	\N	\N
 \.
 
 
@@ -5049,14 +5067,6 @@ COPY public.jackets (jacket_id, jacket_number, jacket_date, carrier, driver, dri
 --
 
 COPY public.order_lines (order_line_id, customer_order_id, supplier_id, shipper_po, product_id, cases_ordered, sell_price_per_case, fob_cost_per_case, pricing_type, line_status, notes, supplier_location_id, original_cases_ordered, original_sell_price_per_case, original_fob_cost_per_case, amendment_notes, amended_at) FROM stdin;
-1	1	1	555	1	600	16	10	FOB	Open	\N	\N	600	16	10	\N	\N
-3	1	2	222222	1	1200	30	15	FOB	Open	\N	\N	1200	30	15	\N	\N
-5	3	2	\N	1	30	50	45	Delivered	Open	\N	\N	30	50	45	\N	\N
-4	3	1	\N	1	500	10	10	Delivered	Open	\N	\N	500	10	10	\N	\N
-6	4	2	\N	1	600	21	16	Delivered	Open	\N	\N	600	21	16	\N	\N
-2	2	1	\N	1	300	17	10	FOB	Open	\N	\N	300	17	10	\N	\N
-7	4	4	\N	5	180	30	30	FOB	Open	\N	\N	180	30	30	\N	\N
-8	4	4	\N	2	80	25	20	FOB	Open	\N	\N	80	25	20	\N	\N
 \.
 
 
@@ -5081,9 +5091,6 @@ COPY public.order_requests (request_id, customer_id, requested_at, status, revie
 --
 
 COPY public.price_sheet_lines (price_sheet_line_id, price_sheet_id, product_id, cost_price, margin_pct, source_call_id, supplier_id, markup_type, markup_dollar) FROM stdin;
-2	2	1	5	20	1	1	percent	0
-3	3	1	5	20	1	1	percent	0
-1	1	1	10	6	4	2	percent	0
 \.
 
 
@@ -5100,9 +5107,6 @@ COPY public.price_sheet_recipients (price_sheet_recipient_id, price_sheet_id, cu
 --
 
 COPY public.price_sheets (price_sheet_id, sheet_date, valid_through, created_by, notes) FROM stdin;
-1	2026-07-30	2026-08-03	\N	Auto-built from latest supplier quotes
-2	2026-07-30	2026-08-03	\N	Auto-built from latest supplier quotes
-3	2026-07-30	2026-08-03	\N	Auto-built from latest supplier quotes
 \.
 
 
@@ -5140,22 +5144,6 @@ COPY public.status_history (history_id, entity_type, entity_id, old_status, new_
 --
 
 COPY public.stop_lines (stop_line_id, stop_id, jacket_line_id, cases_at_stop, pallets_at_stop, notes) FROM stdin;
-53	3	27	600	15	\N
-54	2	27	600	15	\N
-55	1	28	300	8	\N
-56	2	28	300	8	\N
-57	4	29	180	5	\N
-58	2	29	180	5	\N
-59	4	30	80	2	\N
-60	2	30	80	2	\N
-37	1	19	600	15	\N
-38	2	19	600	15	\N
-39	3	20	30	1	\N
-40	2	20	30	1	\N
-41	3	21	1200	30	\N
-42	2	21	1200	30	\N
-43	1	22	500	13	\N
-44	2	22	500	13	\N
 \.
 
 
@@ -5164,10 +5152,6 @@ COPY public.stop_lines (stop_line_id, stop_id, jacket_line_id, cases_at_stop, pa
 --
 
 COPY public.stops (stop_id, jacket_id, stop_number, stop_type, supplier_id, customer_id, address, contact, phone, appointment, status, notes, supplier_location_id, customer_location_id) FROM stdin;
-3	1	1	Pickup	2	\N	\N	\N	\N	2026-07-30 13:00:00+00	Planned	\N	\N	\N
-1	1	2	Pickup	1	\N	\N	\N	\N	2026-07-31 03:00:00+00	Planned	\N	\N	\N
-4	1	3	Pickup	4	\N	\N	\N	\N	\N	Planned	\N	\N	\N
-2	1	4	Delivery	\N	1	\N	\N	\N	2026-08-01 15:00:00+00	Planned	\N	\N	\N
 \.
 
 
@@ -5200,6 +5184,7 @@ COPY public.users (user_id, name, email, role, active, created_at) FROM stdin;
 0c3c1159-e441-433d-9e57-48d45d170d4a	Abbye	abbyem08@gmail.com	Admin	t	2026-07-29 02:44:18.407954+00
 1f231474-dd97-48ce-9b37-525dec938e45	JCM	jmartinez@profreshsourcing.com	Sales	t	2026-07-29 19:59:19.119635+00
 21696e81-0819-4c3d-b780-bc21f42da75f	Marcy	marcy.martinez@ymail.com	Sales	t	2026-08-01 01:19:10.139769+00
+268f11dc-5e0e-4f42-98e3-70a5fe2f3171	Teresa	mytyme2fly@gmail.com	Sales	t	2026-08-01 02:06:27.823555+00
 \.
 
 
@@ -5437,7 +5422,7 @@ COPY vault.secrets (id, name, description, secret, key_id, nonce, created_at, up
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: auth; Owner: -
 --
 
-SELECT pg_catalog.setval('auth.refresh_tokens_id_seq', 62, true);
+SELECT pg_catalog.setval('auth.refresh_tokens_id_seq', 78, true);
 
 
 --
@@ -7901,5 +7886,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict UvcdgnwP7aNXA60yOVHlIfaL3jkDIJMJoUhkMs7c2CemYSfexHrZXvFB6DjdgOd
+\unrestrict oIoQw88s7Ym5i52oKcyXL26Ujsa4dZH3uR7ADrlajSrxcge3Z7HsDAMG53aKKxW
 
