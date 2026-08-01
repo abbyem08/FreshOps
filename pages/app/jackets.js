@@ -134,6 +134,24 @@ export default function JacketsPage() {
     loadJacketDetail(activeId);
   }
 
+  async function deleteJacket(jacketId, jacketNumber) {
+    if (!confirm(`Delete Jacket ${jacketNumber} entirely — its stops, loaded cases, and freight record? Any order lines assigned to it become unassigned again (they are NOT deleted). This cannot be undone.`)) return;
+    const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').eq('jacket_id', jacketId);
+    const jacketLineIds = (jls || []).map(r => r.jacket_line_id);
+    if (jacketLineIds.length) {
+      await supabase.from('stop_lines').delete().in('jacket_line_id', jacketLineIds);
+    }
+    await supabase.from('jacket_lines').delete().eq('jacket_id', jacketId);
+    await supabase.from('stops').delete().eq('jacket_id', jacketId);
+    await supabase.from('jacket_commodity_loads').delete().eq('jacket_id', jacketId);
+    await supabase.from('freight_records').delete().eq('jacket_id', jacketId);
+    await supabase.from('jacket_extras').delete().eq('jacket_id', jacketId);
+    const { error } = await supabase.from('jackets').delete().eq('jacket_id', jacketId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    setActiveId(null);
+    loadJackets();
+  }
+
   async function updateCases(jacketLineId, cases, orderLine) {
     const p = orderLine.products;
     const estPallets = p.cases_per_pallet ? Math.ceil(cases / p.cases_per_pallet) : 0;
@@ -187,6 +205,9 @@ export default function JacketsPage() {
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
         </select>
         <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #6B8E4E', background: '#fff', color: '#6B8E4E', fontWeight: 600 }}>+ New Jacket</button>
+        {activeJacket && (
+          <button onClick={() => deleteJacket(activeJacket.jacket_id, activeJacket.jacket_number)} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #DCD5C1', background: '#fff', color: '#C0562D' }}>Delete This Jacket</button>
+        )}
       </div>
 
       {activeJacket && (

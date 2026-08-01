@@ -89,6 +89,28 @@ export default function OrdersPage() {
     loadAll();
   }
 
+  async function deleteOrder(order) {
+    const jackets = jacketByOrder[order.customer_order_id] || [];
+    const warning = jackets.length
+      ? `This order has lines assigned to Jacket(s): ${jackets.join(', ')}. Deleting will remove those lines from the truck too, along with all pricing and history for this order. This cannot be undone. Continue?`
+      : 'Delete this order and all its lines? This cannot be undone.';
+    if (!confirm(warning)) return;
+
+    const lineIds = (order.order_lines || []).map(l => l.order_line_id);
+    if (lineIds.length) {
+      const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').in('order_line_id', lineIds);
+      const jlIds = (jls || []).map(j => j.jacket_line_id);
+      if (jlIds.length) {
+        await supabase.from('stop_lines').delete().in('jacket_line_id', jlIds);
+        await supabase.from('jacket_lines').delete().in('jacket_line_id', jlIds);
+      }
+      await supabase.from('order_lines').delete().in('order_line_id', lineIds);
+    }
+    const { error } = await supabase.from('customer_orders').delete().eq('customer_order_id', order.customer_order_id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadAll();
+  }
+
   function openAddLine(orderId) { setLineForm(BLANK_LINE); setLineTarget({ orderId, lineId: null }); }
   function openEditLine(orderId, l) {
     setLineForm({ supplier_id: l.supplier_id, supplier_location_id: l.supplier_location_id || '', product_id: l.product_id, shipper_po: l.shipper_po || '', cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, fob_cost_per_case: l.fob_cost_per_case, pricing_type: l.pricing_type || 'FOB' });
@@ -115,6 +137,37 @@ export default function OrdersPage() {
       if (error) { alert('Save failed: ' + error.message); return; }
     }
     setLineTarget(null); setLineForm(BLANK_LINE);
+    loadAll();
+  }
+
+  async function deleteLine(lineId) {
+    if (!confirm('Delete this order line? If it\'s already assigned to a jacket, that assignment is removed too. This cannot be undone.')) return;
+    const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').eq('order_line_id', lineId);
+    const jacketLineIds = (jls || []).map(r => r.jacket_line_id);
+    if (jacketLineIds.length) {
+      await supabase.from('stop_lines').delete().in('jacket_line_id', jacketLineIds);
+      await supabase.from('jacket_lines').delete().in('jacket_line_id', jacketLineIds);
+    }
+    const { error } = await supabase.from('order_lines').delete().eq('order_line_id', lineId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadAll();
+  }
+
+  async function deleteOrder(orderId, orderNo) {
+    if (!confirm(`Delete order ${orderNo} entirely, including all its lines and any jacket assignments? This cannot be undone.`)) return;
+    const { data: ols } = await supabase.from('order_lines').select('order_line_id').eq('customer_order_id', orderId);
+    const lineIds = (ols || []).map(r => r.order_line_id);
+    if (lineIds.length) {
+      const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').in('order_line_id', lineIds);
+      const jacketLineIds = (jls || []).map(r => r.jacket_line_id);
+      if (jacketLineIds.length) {
+        await supabase.from('stop_lines').delete().in('jacket_line_id', jacketLineIds);
+        await supabase.from('jacket_lines').delete().in('jacket_line_id', jacketLineIds);
+      }
+      await supabase.from('order_lines').delete().in('order_line_id', lineIds);
+    }
+    const { error } = await supabase.from('customer_orders').delete().eq('customer_order_id', orderId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
     loadAll();
   }
 
@@ -188,6 +241,7 @@ export default function OrdersPage() {
               <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
               <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
               <button onClick={() => openEditOrder(o)} style={{ ...editBtn, marginLeft: 8 }}>Edit Order</button>
+              <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, marginLeft: 8, color: '#C0562D' }}>Delete Order</button>
             </div>
             {isOpen && (
               <div style={{ marginTop: 12 }}>
@@ -210,7 +264,7 @@ export default function OrdersPage() {
                         <td><input type="number" defaultValue={l.fob_cost_per_case} onBlur={e => updateLineField(l.order_line_id, 'fob_cost_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
                         <td style={{ color: margin >= 0 ? '#2F5233' : '#C0562D', fontWeight: 700 }}>${margin.toLocaleString()}</td>
-                        <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button></td>
+                        <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button> <button onClick={() => deleteLine(l.order_line_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
                       </tr>
                     );
                   })}</tbody>
