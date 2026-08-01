@@ -1,0 +1,36 @@
+{
+  "name": "FreshOps — Produce Brokerage",
+  "short_name": "FreshOps",
+  "description": "Order management, dispatch, and load tracking for produce brokerage operations.",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#F6F4EC",
+  "theme_color": "#214B34",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
