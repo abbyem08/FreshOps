@@ -8,28 +8,28 @@
 
   /* three-layer surface system */
   --fo-nav-bg: #F1F0EA;      /* Layer 1 — nav: very light warm gray */
-  --fo-page-bg: #F7F8F5;     /* Layer 2 — page: very light neutral */
+  --fo-page-bg: #F8F6F2;     /* Layer 2 — page: "Warm Neutral" from reference */
   --fo-card-bg: #FFFFFF;     /* Layer 3 — cards: pure white */
 
   --fo-border: #E7E5DD;
   --fo-border-soft: #EFEEE7;
-  --fo-text: #23261F;
+  --fo-text: #1F2937;
   --fo-text-dim: #6B6E64;
   --fo-text-faint: #9A9D93;
 
   /* primary / accent (logo greens) */
-  --fo-primary: #214B34;
-  --fo-primary-hover: #1A3D2A;
-  --fo-accent: #6DAA45;
-  --fo-accent-soft: #EAF3E1;
+  --fo-primary: #16400B;
+  --fo-primary-hover: #0F2E08;
+  --fo-accent: #2ECC71;
+  --fo-accent-soft: #E7F1EA;
 
   /* status — soft, muted, never harsh */
-  --fo-warn: #A6741B;
-  --fo-warn-bg: #FBF0DB;
-  --fo-error: #B0453A;
-  --fo-error-bg: #FBE9E7;
-  --fo-success: #2F6E4A;
-  --fo-success-bg: #E7F2E9;
+  --fo-warn: #B7710A;
+  --fo-warn-bg: #FCF0DC;
+  --fo-error: #E74C3C;
+  --fo-error-bg: #FBE7E5;
+  --fo-success: #16400B;
+  --fo-success-bg: #E7F1EA;
   --fo-info: #3E6690;
   --fo-info-bg: #E8EFF6;
   --fo-neutral-bg: #EFEEE7;
