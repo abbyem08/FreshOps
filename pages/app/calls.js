@@ -4,7 +4,7 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const BLANK_HEADER = { call_date: '', party_type: 'Supplier', party_id: '', contact_name: '', phone: '', followup_date: '', status: 'Quoted', notes: '' };
-const BLANK_QUOTE = { product_id: '', price: '', price_type: 'FOB', availability: '' };
+const BLANK_QUOTE = { product_id: '', price: '', price_type: 'FOB', availability: '', quote_expiration: '' };
 
 export default function CallsPage() {
   const [calls, setCalls] = useState([]);
@@ -42,7 +42,7 @@ export default function CallsPage() {
       call_date: c.call_date || '', party_type: c.party_type, party_id: c.party_type === 'Supplier' ? c.supplier_id : c.customer_id,
       contact_name: c.contact_name || '', phone: c.phone || '', followup_date: c.followup_date || '', status: c.status, notes: c.notes || '',
     });
-    setQuotes([{ product_id: c.product_id, price: c.price ?? '', price_type: c.price_type || 'FOB', availability: c.availability || '' }]);
+    setQuotes([{ product_id: c.product_id, price: c.price ?? '', price_type: c.price_type || 'FOB', availability: c.availability || '', quote_expiration: c.quote_expiration || '' }]);
     setEditingId(c.call_id);
     setShowForm(true);
   }
@@ -75,12 +75,12 @@ export default function CallsPage() {
     if (editingId) {
       const q = validQuotes[0];
       const { error } = await supabase.from('call_log').update({
-        ...baseFields, product_id: Number(q.product_id), price: q.price ? Number(q.price) : null, price_type: q.price_type, availability: q.availability || null,
+        ...baseFields, product_id: Number(q.product_id), price: q.price ? Number(q.price) : null, price_type: q.price_type, availability: q.availability || null, quote_expiration: q.quote_expiration || null,
       }).eq('call_id', editingId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
       const rows = validQuotes.map(q => ({
-        ...baseFields, product_id: Number(q.product_id), price: q.price ? Number(q.price) : null, price_type: q.price_type, availability: q.availability || null,
+        ...baseFields, product_id: Number(q.product_id), price: q.price ? Number(q.price) : null, price_type: q.price_type, availability: q.availability || null, quote_expiration: q.quote_expiration || null,
       }));
       const { error } = await supabase.from('call_log').insert(rows);
       if (error) { alert('Save failed: ' + error.message); return; }
@@ -149,6 +149,9 @@ export default function CallsPage() {
                 <label style={{ fontSize: 13 }}>Availability
                   <input value={q.availability} onChange={e => updateQuoteRow(i, 'availability', e.target.value)} style={input} />
                 </label>
+                <label style={{ fontSize: 13 }}>Quote Good Until (optional)
+                  <input type="date" value={q.quote_expiration} onChange={e => updateQuoteRow(i, 'quote_expiration', e.target.value)} style={input} />
+                </label>
                 {!editingId && quotes.length > 1 && (
                   <button onClick={() => removeQuoteRow(i)} style={{ ...editBtn, color: '#C0562D', height: 33 }}>Remove</button>
                 )}
@@ -164,7 +167,7 @@ export default function CallsPage() {
         </div>
       )}
       <table style={table}>
-        <thead><tr style={trHead}><th>Date</th><th>Party</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Price</th><th>Availability</th><th>Follow-up</th><th>Status</th><th></th></tr></thead>
+        <thead><tr style={trHead}><th>Date</th><th>Party</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Price</th><th>Availability</th><th>Good Until</th><th>Follow-up</th><th>Status</th><th></th></tr></thead>
         <tbody>{calls.map(c => (
           <tr key={c.call_id} style={tr}>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.call_date}</td>
@@ -172,6 +175,7 @@ export default function CallsPage() {
             <td>{c.products?.commodity} — {c.products?.pack_size}</td>
             <td style={{ textAlign: 'right' }}>{c.price != null ? `$${Number(c.price).toFixed(2)} ${c.price_type}` : '—'}</td>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.availability}</td>
+            <td style={{ fontSize: 12, color: c.quote_expiration && new Date(c.quote_expiration) < new Date() ? '#C0562D' : '#78716c' }}>{c.quote_expiration || '—'}</td>
             <td style={{ color: '#78716c', fontSize: 12 }}>{c.followup_date || '—'}</td>
             <td>{c.status}</td>
             <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button> <button onClick={() => deleteCall(c.call_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
