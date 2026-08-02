@@ -99,7 +99,7 @@ export default function PriceWorksheetPage() {
       margin_pct: 20,
       markup_type: 'percent',
       markup_dollar: 0,
-      est_carrier_cost_per_case: 0,
+      est_carrier_cost_per_pallet: 0,
       customer_freight_per_case: 0,
       source_call_id: byProduct[pid].call_id,
     }));
@@ -182,6 +182,37 @@ export default function PriceWorksheetPage() {
     const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false });
     setSheets(data || []);
     setActiveSheetId(data && data.length ? data[0].price_sheet_id : null);
+  }
+
+  async function saveSnapshot() {
+    if (!activeSheet) return;
+    if (!confirm('Save a permanent copy of this price sheet? This freezes today\'s numbers into the Customer and Supplier profile histories — editing the live sheet later won\'t change this saved copy.')) return;
+
+    const { data: snap, error: snapErr } = await supabase.from('price_sheet_snapshots').insert({
+      price_sheet_id: activeSheet.price_sheet_id, sheet_date: activeSheet.sheet_date, valid_through: activeSheet.valid_through,
+    }).select().single();
+    if (snapErr) { alert('Could not save: ' + snapErr.message); return; }
+
+    const snapshotLines = lines.map(l => ({
+      snapshot_id: snap.snapshot_id, product_id: l.product_id, supplier_id: l.supplier_id,
+      commodity: l.products?.commodity, pack_size: l.products?.pack_size,
+      raw_cost: l.cost_price, fee_total: feeTotalPerCase(l), internal_cost: internalCost(l),
+      customer_fob: customerFOB(l), customer_delivered: customerDelivered(l),
+      est_carrier_cost_per_pallet: l.est_carrier_cost_per_pallet, customer_freight_per_case: l.customer_freight_per_case,
+    }));
+    if (snapshotLines.length) {
+      const { error } = await supabase.from('price_sheet_snapshot_lines').insert(snapshotLines);
+      if (error) { alert('Sheet saved, but lines failed: ' + error.message); }
+    }
+
+    const snapshotRecipients = recipients.map(r => ({
+      snapshot_id: snap.snapshot_id, customer_id: r.customer_id, contact_email: r.contact_email, contact_phone: r.contact_phone,
+    }));
+    if (snapshotRecipients.length) {
+      const { error } = await supabase.from('price_sheet_snapshot_recipients').insert(snapshotRecipients);
+      if (error) { alert('Sheet saved, but recipients failed: ' + error.message); }
+    }
+    alert('Saved — this copy is now on file in each customer and supplier profile.');
   }
 
   async function toggleRecipient(customer) {
@@ -315,7 +346,8 @@ export default function PriceWorksheetPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <strong style={{ color: '#2F5233' }}>Sheet — valid through {activeSheet.valid_through}</strong>
               <div>
-                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer Price Sheet / Print</button>
+                <button onClick={saveSnapshot} style={{ ...btn, marginBottom: 0, background: '#6B8E4E' }}>Save Price Sheet</button>
+                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer Price Sheet / Print</button>
                 <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#C0562D', border: '1px solid #DCD5C1' }}>Delete Sheet</button>
               </div>
             </div>
@@ -387,8 +419,11 @@ export default function PriceWorksheetPage() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
                     <div>
-                      <div style={miniLabel}>FREIGHT — Est. Carrier Cost / cs</div>
-                      <input type="number" defaultValue={l.est_carrier_cost_per_case} onBlur={e => updateLine(l.price_sheet_line_id, 'est_carrier_cost_per_case', Number(e.target.value))} style={{ width: 80 }} />
+                      <div style={miniLabel}>FREIGHT — Est. Carrier Cost / pallet</div>
+                      <input type="number" defaultValue={l.est_carrier_cost_per_pallet} onBlur={e => updateLine(l.price_sheet_line_id, 'est_carrier_cost_per_pallet', Number(e.target.value))} style={{ width: 80 }} />
+                      {l.products?.cases_per_pallet && l.est_carrier_cost_per_pallet ? (
+                        <div style={{ fontSize: 10, color: '#a8a29e', marginTop: 2 }}>≈ ${(Number(l.est_carrier_cost_per_pallet) / l.products.cases_per_pallet).toFixed(2)}/case</div>
+                      ) : null}
                     </div>
                     <div>
                       <div style={miniLabel}>Customer Freight Charge / cs</div>

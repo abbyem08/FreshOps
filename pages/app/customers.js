@@ -15,6 +15,7 @@ export default function CustomersPage() {
   const [locOpenFor, setLocOpenFor] = useState(null);
   const [locForm, setLocForm] = useState(BLANK_LOC);
   const [editingLocId, setEditingLocId] = useState(null);
+  const [priceHistory, setPriceHistory] = useState([]);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -22,6 +23,8 @@ export default function CustomersPage() {
     setRows(data || []);
     const { data: locs } = await supabase.from('customer_locations').select('*').order('label');
     setLocations(locs || []);
+    const { data: hist } = await supabase.from('price_sheet_snapshot_recipients').select('*, price_sheet_snapshots(saved_at, sheet_date, valid_through)').order('customer_id');
+    setPriceHistory(hist || []);
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.customer_id); setShowForm(true); }
@@ -120,6 +123,18 @@ export default function CustomersPage() {
                     <button onClick={() => setLocOpenFor(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 4, marginLeft: 8 }}>Cancel</button>
                   </div>
                 </div>
+              )}
+            </div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Price Sheet History</div>
+              {priceHistory.filter(h => h.customer_id === r.customer_id).length === 0 ? (
+                <div style={{ fontSize: 12.5, color: '#a8a29e' }}>No saved price sheets sent to this customer yet.</div>
+              ) : (
+                priceHistory.filter(h => h.customer_id === r.customer_id).map(h => (
+                  <div key={h.id} style={{ fontSize: 13, padding: '3px 0' }}>
+                    Sent {h.price_sheet_snapshots?.saved_at ? new Date(h.price_sheet_snapshots.saved_at).toLocaleDateString() : '—'} — sheet dated {h.price_sheet_snapshots?.sheet_date}, valid through {h.price_sheet_snapshots?.valid_through}
+                  </div>
+                ))
               )}
             </div>
           </div>

@@ -15,6 +15,7 @@ export default function SuppliersPage() {
   const [locOpenFor, setLocOpenFor] = useState(null);
   const [locForm, setLocForm] = useState(BLANK_LOC);
   const [editingLocId, setEditingLocId] = useState(null);
+  const [quoteHistory, setQuoteHistory] = useState([]);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -22,6 +23,8 @@ export default function SuppliersPage() {
     setRows(data || []);
     const { data: locs } = await supabase.from('supplier_locations').select('*').order('label');
     setLocations(locs || []);
+    const { data: hist } = await supabase.from('price_sheet_snapshot_lines').select('*, price_sheet_snapshots(saved_at, sheet_date)').order('supplier_id');
+    setQuoteHistory(hist || []);
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.supplier_id); setShowForm(true); }
@@ -122,6 +125,18 @@ export default function SuppliersPage() {
                     <button onClick={() => setLocOpenFor(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 4, marginLeft: 8 }}>Cancel</button>
                   </div>
                 </div>
+              )}
+            </div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Quote History</div>
+              {quoteHistory.filter(h => h.supplier_id === r.supplier_id).length === 0 ? (
+                <div style={{ fontSize: 12.5, color: '#a8a29e' }}>No saved price sheet quotes from this supplier yet.</div>
+              ) : (
+                quoteHistory.filter(h => h.supplier_id === r.supplier_id).map(h => (
+                  <div key={h.snapshot_line_id} style={{ fontSize: 13, padding: '3px 0' }}>
+                    {h.price_sheet_snapshots?.sheet_date} — {h.commodity} {h.pack_size} — ${Number(h.raw_cost || 0).toFixed(2)}/cs raw
+                  </div>
+                ))
               )}
             </div>
           </div>
