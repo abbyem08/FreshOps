@@ -8,7 +8,7 @@ import Logo from './Logo';
 const NAV = [
   { href: '/app/dashboard', label: 'Dashboard' },
   { href: '/app/orders', label: 'Customer Orders' },
-  { href: '/app/jackets', label: 'Jackets' },
+  { href: '/app/jackets', label: 'InLoads / Jackets' },
   { href: '/app/dispatch', label: 'Dispatch & Freight' },
   { href: '/app/ops', label: 'Load Tracking' },
   { href: '/app/calls', label: 'Market Calls' },
