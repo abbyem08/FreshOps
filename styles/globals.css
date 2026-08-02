@@ -1,32 +1,55 @@
-/* styles/globals.css */
+/* styles/globals.css — FreshOps design system v2 */
+
 :root {
   /* brand */
-  --fo-fresh: #214B34;      /* dark forest green — "Fresh" */
-  --fo-ops: #6DAA45;        /* lighter fresh green — "Ops" */
-  --fo-ink: #1A1A1A;        /* monochrome logo color */
+  --fo-fresh: #214B34;
+  --fo-ops: #6DAA45;
+  --fo-ink: #1A1A1A;
 
-  /* surfaces — kept in the existing green/tan/cream palette, just
-     organized so the sidebar / page background / cards read as three
-     distinct layers instead of blending together */
-  --fo-sidebar: #2F5233;
-  --fo-sidebar-active: rgba(255,255,255,.16);
-  --fo-sidebar-text: rgba(255,255,255,.90);
-  --fo-sidebar-text-dim: rgba(255,255,255,.58);
-  --fo-page-bg: #F6F4EC;
-  --fo-card-bg: #ffffff;
-  --fo-border: #DCD5C1;
-  --fo-text: #2b2b28;
-  --fo-text-dim: #78716c;
-  --fo-text-faint: #a8a29e;
+  /* three-layer surface system */
+  --fo-nav-bg: #F1F0EA;      /* Layer 1 — nav: very light warm gray */
+  --fo-page-bg: #F7F8F5;     /* Layer 2 — page: very light neutral */
+  --fo-card-bg: #FFFFFF;     /* Layer 3 — cards: pure white */
 
-  /* status accents (already used ad hoc across pages — centralized here) */
-  --fo-warn-bg: #FCE9C9;
-  --fo-danger-bg: #F8D7D2;
-  --fo-danger: #C0562D;
-  --fo-success: #3E7C5A;
+  --fo-border: #E7E5DD;
+  --fo-border-soft: #EFEEE7;
+  --fo-text: #23261F;
+  --fo-text-dim: #6B6E64;
+  --fo-text-faint: #9A9D93;
 
-  --fo-radius: 8px;
-  --fo-shadow: 0 1px 2px rgba(43,43,40,.04), 0 1px 8px rgba(43,43,40,.05);
+  /* primary / accent (logo greens) */
+  --fo-primary: #214B34;
+  --fo-primary-hover: #1A3D2A;
+  --fo-accent: #6DAA45;
+  --fo-accent-soft: #EAF3E1;
+
+  /* status — soft, muted, never harsh */
+  --fo-warn: #A6741B;
+  --fo-warn-bg: #FBF0DB;
+  --fo-error: #B0453A;
+  --fo-error-bg: #FBE9E7;
+  --fo-success: #2F6E4A;
+  --fo-success-bg: #E7F2E9;
+  --fo-info: #3E6690;
+  --fo-info-bg: #E8EFF6;
+  --fo-neutral-bg: #EFEEE7;
+
+  /* spacing scale */
+  --fo-sp-1: 4px;
+  --fo-sp-2: 8px;
+  --fo-sp-3: 12px;
+  --fo-sp-4: 16px;
+  --fo-sp-5: 24px;
+  --fo-sp-6: 32px;
+  --fo-sp-7: 48px;
+
+  --fo-radius-sm: 8px;
+  --fo-radius-md: 12px;
+  --fo-radius-lg: 18px;
+  --fo-radius-full: 999px;
+
+  --fo-shadow-sm: 0 1px 2px rgba(35,38,31,.04), 0 1px 6px rgba(35,38,31,.04);
+  --fo-shadow-md: 0 2px 6px rgba(35,38,31,.05), 0 8px 24px rgba(35,38,31,.06);
 }
 
 * { box-sizing: border-box; }
@@ -36,17 +59,127 @@ body {
   color: var(--fo-text);
   background: var(--fo-page-bg);
   font-family: 'Inter', 'Geist', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/* a shared card look pages can opt into over time — doesn't change any
-   page that isn't using it, so nothing existing breaks */
+h1, h2, h3 { font-weight: 700; letter-spacing: -0.015em; margin: 0; }
+
+input, select, textarea, button { font-family: inherit; }
+input, select, textarea {
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-sm);
+  padding: 7px 10px;
+  font-size: 13.5px;
+  background: #fff;
+  color: var(--fo-text);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--fo-accent);
+  box-shadow: 0 0 0 3px var(--fo-accent-soft);
+}
+
+/* ---- Cards ---- */
 .fo-card {
   background: var(--fo-card-bg);
-  border: 1px solid var(--fo-border);
-  border-radius: var(--fo-radius);
-  box-shadow: var(--fo-shadow);
+  border: 1px solid var(--fo-border-soft);
+  border-radius: var(--fo-radius-lg);
+  box-shadow: var(--fo-shadow-sm);
+  padding: var(--fo-sp-5);
+}
+.fo-card-tight { padding: var(--fo-sp-4); }
+
+/* ---- KPI / metric cards ---- */
+.fo-kpi {
+  background: var(--fo-card-bg);
+  border: 1px solid var(--fo-border-soft);
+  border-radius: var(--fo-radius-lg);
+  box-shadow: var(--fo-shadow-sm);
+  padding: var(--fo-sp-5);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.fo-kpi:hover { box-shadow: var(--fo-shadow-md); transform: translateY(-1px); }
+.fo-kpi-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fo-text-dim); font-weight: 600; }
+.fo-kpi-value { font-size: 27px; font-weight: 700; color: var(--fo-primary); margin-top: 6px; letter-spacing: -0.01em; }
+.fo-kpi-sub { font-size: 12px; color: var(--fo-text-faint); margin-top: 3px; }
+
+/* ---- Buttons ---- */
+.fo-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: var(--fo-radius-md);
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .12s ease, box-shadow .12s ease, transform .05s ease;
+}
+.fo-btn:active { transform: scale(.98); }
+.fo-btn-primary { background: var(--fo-primary); color: #fff; }
+.fo-btn-primary:hover { background: var(--fo-primary-hover); }
+.fo-btn-secondary { background: #fff; color: var(--fo-text); border-color: var(--fo-border); }
+.fo-btn-secondary:hover { background: var(--fo-nav-bg); }
+.fo-btn-danger { background: var(--fo-error-bg); color: var(--fo-error); }
+.fo-btn-danger:hover { background: #f6d9d5; }
+.fo-btn-sm { padding: 5px 12px; font-size: 12.5px; border-radius: var(--fo-radius-sm); }
+
+/* ---- Badges ---- */
+.fo-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 11px;
+  border-radius: var(--fo-radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fo-badge-green { background: var(--fo-success-bg); color: var(--fo-success); }
+.fo-badge-amber { background: var(--fo-warn-bg); color: var(--fo-warn); }
+.fo-badge-red { background: var(--fo-error-bg); color: var(--fo-error); }
+.fo-badge-blue { background: var(--fo-info-bg); color: var(--fo-info); }
+.fo-badge-gray { background: var(--fo-neutral-bg); color: var(--fo-text-dim); }
+
+/* ---- Tables ---- */
+.fo-table-wrap {
+  background: var(--fo-card-bg);
+  border: 1px solid var(--fo-border-soft);
+  border-radius: var(--fo-radius-lg);
+  box-shadow: var(--fo-shadow-sm);
+  overflow: hidden;
+}
+.fo-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.fo-table thead th {
+  text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--fo-text-dim); background: var(--fo-nav-bg);
+  padding: 12px 16px; position: sticky; top: 0;
+}
+.fo-table tbody tr { border-top: 1px solid var(--fo-border-soft); transition: background .1s ease; }
+.fo-table tbody tr:nth-child(even) { background: #FCFCFA; }
+.fo-table tbody tr:hover { background: var(--fo-accent-soft); }
+.fo-table td { padding: 13px 16px; }
+
+/* ---- Section headings ---- */
+.fo-h1 { font-size: 24px; color: var(--fo-primary); margin-bottom: var(--fo-sp-5); }
+.fo-h2 { font-size: 16px; color: var(--fo-text); margin-bottom: var(--fo-sp-3); }
+.fo-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--fo-text-dim); font-weight: 600; }
+
+/* ---- Nav ---- */
+.fo-navlink {
+  display: flex; align-items: center; gap: 10px;
+  margin: 1px var(--fo-sp-2);
+  padding: 8px 12px;
+  font-size: 13.5px; font-weight: 500;
+  color: var(--fo-text-dim);
+  text-decoration: none;
+  border-radius: var(--fo-radius-md);
+  transition: background .12s ease, color .12s ease;
+}
+.fo-navlink:hover { background: rgba(33,75,52,.06); color: var(--fo-text); }
+.fo-navlink.active { background: var(--fo-primary); color: #fff; font-weight: 600; }
+.fo-nav-section-label {
+  padding: 16px 14px 4px;
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--fo-text-faint); font-weight: 700;
 }
 
 @media print {
@@ -56,28 +189,4 @@ body {
 .print-only { display: none; }
 @media print {
   .print-only { display: inline; }
-}
-
-.fo-navlink {
-  display: flex;
-  align-items: center;
-  padding: 9px 16px 9px 14px;
-  font-size: 13.5px;
-  color: var(--fo-sidebar-text);
-  text-decoration: none;
-  border-left: 3px solid transparent;
-  transition: background .12s ease;
-}
-.fo-navlink:hover { background: rgba(255,255,255,.08); }
-.fo-navlink.active {
-  background: var(--fo-sidebar-active);
-  border-left-color: var(--fo-ops);
-  font-weight: 600;
-}
-.fo-nav-section-label {
-  padding: 14px 16px 4px;
-  font-size: 10.5px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--fo-sidebar-text-dim);
 }
