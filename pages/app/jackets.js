@@ -23,6 +23,12 @@ export default function JacketsPage() {
   const [allocatingLineId, setAllocatingLineId] = useState(null);
   const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
   const [allOrderLinesNeed, setAllOrderLinesNeed] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [showNewOrder, setShowNewOrder] = useState(false);
+  const [newOrderForm, setNewOrderForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', cases: '' });
+  const [demandAllocateFor, setDemandAllocateFor] = useState(null);
+  const [demandAllocateForm, setDemandAllocateForm] = useState({ purchased_line_id: '', cases: '' });
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => { loadJackets(); loadMasters(); }, []);
   useEffect(() => { if (activeId) loadJacketDetail(activeId); }, [activeId]);
@@ -32,6 +38,8 @@ export default function JacketsPage() {
     setSuppliers(s || []);
     const { data: p } = await supabase.from('products').select('product_id, commodity, pack_size, cases_per_pallet, gross_weight_per_case').order('commodity');
     setProducts(p || []);
+    const { data: c } = await supabase.from('customers').select('customer_id, company').order('company');
+    setCustomers(c || []);
   }
 
   async function loadJackets() {
@@ -128,12 +136,12 @@ export default function JacketsPage() {
   }
 
   function openAllocate(purchasedLineId) { setAllocateForm({ order_line_id: '', cases: '' }); setAllocatingLineId(purchasedLineId); }
-  async function saveAllocate(purchased) {
-    if (!allocateForm.order_line_id || !allocateForm.cases) { alert('Pick an order line and enter cases.'); return; }
-    const cases = Number(allocateForm.cases);
+  async function performAllocation(purchased, orderLineId, casesInput) {
+    if (!orderLineId || !casesInput) { alert('Pick an order line and enter cases.'); return; }
+    const cases = Number(casesInput);
     const { available } = availableOnPurchased(purchased);
     if (cases > available) { alert(`Only ${available} cases available on this purchased line.`); return; }
-    const orderLine = allOrderLinesNeed.find(ol => ol.order_line_id === Number(allocateForm.order_line_id));
+    const orderLine = allOrderLinesNeed.find(ol => ol.order_line_id === Number(orderLineId));
     if (!orderLine) { alert('Could not find that order line.'); return; }
     if (cases > orderLine.needsSupply) { if (!confirm(`This order only needs ${orderLine.needsSupply} more cases — allocate ${cases} anyway?`)) return; }
 
@@ -164,8 +172,44 @@ export default function JacketsPage() {
       { stop_id: deliveryStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
     ]);
 
-    setAllocatingLineId(null);
     loadJacketDetail(activeId);
+    return true;
+  }
+
+  async function saveAllocate(purchased) {
+    const ok = await performAllocation(purchased, allocateForm.order_line_id, allocateForm.cases);
+    if (ok) setAllocatingLineId(null);
+  }
+
+  async function createOrderFromHere() {
+    if (!newOrderForm.customer_id || !newOrderForm.acumatica_no || !newOrderForm.product_id || !newOrderForm.cases) {
+      alert('Customer, Acumatica Order #, Product, and Cases are all required.'); return;
+    }
+    const { data: order, error: orderErr } = await supabase.from('customer_orders').insert({
+      acumatica_order_no: newOrderForm.acumatica_no, customer_id: Number(newOrderForm.customer_id),
+      customer_po: newOrderForm.customer_po || null, order_date: new Date().toISOString().slice(0, 10),
+      order_status: 'Open', source: 'Internal', order_type: 'Produce Sale',
+    }).select().single();
+    if (orderErr) { alert('Could not create order: ' + orderErr.message); return; }
+    const cases = Number(newOrderForm.cases);
+    const { error: lineErr } = await supabase.from('order_lines').insert({
+      customer_order_id: order.customer_order_id, product_id: Number(newOrderForm.product_id),
+      cases_ordered: cases, original_cases_ordered: cases, line_status: 'Open',
+    });
+    if (lineErr) { alert('Order created, but the line failed: ' + lineErr.message); return; }
+    setShowNewOrder(false); setNewOrderForm({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', cases: '' });
+    loadJacketDetail(activeId);
+  }
+
+  function openDemandAllocate(orderLineId, matchingPurchased) {
+    setDemandAllocateForm({ purchased_line_id: matchingPurchased.length === 1 ? matchingPurchased[0].jacket_product_line_id : '', cases: '' });
+    setDemandAllocateFor(orderLineId);
+  }
+  async function saveDemandAllocate(orderLine) {
+    const purchased = purchasedLines.find(p => p.jacket_product_line_id === Number(demandAllocateForm.purchased_line_id));
+    if (!purchased) { alert('Pick which purchased line to allocate from.'); return; }
+    const ok = await performAllocation(purchased, orderLine.order_line_id, demandAllocateForm.cases);
+    if (ok) setDemandAllocateFor(null);
   }
 
   async function createNewJacket() {
@@ -349,101 +393,14 @@ export default function JacketsPage() {
       </div>
 
       {activeJacket && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-          <div style={card}>
+        <div>
+          <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <strong style={{ color: '#2F5233' }}>Jacket {activeJacket.jacket_number} — {activeJacket.jacket_status}</strong>
               <span style={{ fontSize: 12, color: '#78716c' }}>{totalWeight.toLocaleString()} lb · {totalPallets} pallets</span>
             </div>
-
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#2F5233', marginTop: 4, marginBottom: 6 }}>Purchased Product</div>
-            {purchasedLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 8 }}>Nothing purchased on this Jacket yet.</div>}
-            {purchasedLines.map(p => {
-              const { base, allocated, available } = availableOnPurchased(p);
-              return (
-                <div key={p.jacket_product_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: 13.5 }}>
-                      <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
-                      <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
-                        Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? '#2F5233' : '#C0562D' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
-                      </div>
-                    </div>
-                    <div>
-                      <button onClick={() => openAllocate(p.jacket_product_line_id)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
-                      <button onClick={() => openEditPurchased(p)} style={{ ...editBtn, marginLeft: 6 }}>Edit</button>
-                      <button onClick={() => deletePurchased(p.jacket_product_line_id)} style={{ ...editBtn, marginLeft: 6, color: '#C0562D' }}>Delete</button>
-                    </div>
-                  </div>
-                  {allocatingLineId === p.jacket_product_line_id && (
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                      <label style={{ fontSize: 12 }}>Order needing {p.products?.commodity}
-                        <select value={allocateForm.order_line_id} onChange={e => setAllocateForm({ ...allocateForm, order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 260 }}>
-                          <option value="">— select —</option>
-                          {allOrderLinesNeed.filter(ol => ol.product_id === p.product_id).map(ol => (
-                            <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company} — needs {ol.needsSupply}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label style={{ fontSize: 12 }}>Cases
-                        <input type="number" value={allocateForm.cases} onChange={e => setAllocateForm({ ...allocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 90 }} />
-                      </label>
-                      <button onClick={() => saveAllocate(p)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
-                      <button onClick={() => setAllocatingLineId(null)} style={editBtn}>Cancel</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0', marginBottom: 8 }}>+ Add Purchased Product</button>
-            {showAddPurchased && (
-              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                <label style={{ fontSize: 13 }}>Supplier
-                  <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
-                    <option value="">— none —</option>
-                    {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
-                  </select>
-                </label>
-                <label style={{ fontSize: 13 }}>Product
-                  <select value={purchasedForm.product_id} onChange={e => setPurchasedForm({ ...purchasedForm, product_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
-                    <option value="">— select —</option>
-                    {products.map(pr => <option key={pr.product_id} value={pr.product_id}>{pr.commodity} — {pr.pack_size}</option>)}
-                  </select>
-                </label>
-                {detailField('Shipper PO', 'shipper_po', purchasedForm, setPurchasedForm)}
-                {detailField('Purchased Cases', 'purchased_cases', purchasedForm, setPurchasedForm, 'number')}
-                {detailField('Actual Cases Received', 'actual_cases_received', purchasedForm, setPurchasedForm, 'number')}
-                {detailField('Purchase Cost / cs', 'purchase_cost_per_case', purchasedForm, setPurchasedForm, 'number')}
-                {detailField('Fee Total / cs', 'fee_total_per_case', purchasedForm, setPurchasedForm, 'number')}
-                {detailField('Notes', 'notes', purchasedForm, setPurchasedForm)}
-                <div style={{ gridColumn: 'span 3' }}>
-                  <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
-                  <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
-                </div>
-              </div>
-            )}
-
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#2F5233', marginTop: 12, marginBottom: 6 }}>Order Allocations</div>
-            {jacketLines.filter(jl => jl.jacket_product_line_id).length === 0 ? (
-              <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 12 }}>No allocations from purchased product yet.</div>
-            ) : (
-              <table style={{ ...table, marginBottom: 12 }}>
-                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
-                <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
-                  <tr key={jl.jacket_line_id} style={tr}>
-                    <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
-                    <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
-                    <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
-                    <td>{jl.load_status}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            )}
-
             {editingDetails ? (
-              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginBottom: 12 }}>
+              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {detailField('Jacket Number', 'jacket_number', detailsForm, setDetailsForm)}
                   {detailField('Jacket Date', 'jacket_date', detailsForm, setDetailsForm, 'date')}
@@ -465,45 +422,203 @@ export default function JacketsPage() {
                 <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
               </div>
             ) : (
-              <button onClick={openEditDetails} style={{ marginBottom: 12, padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
-            )}
-            <table style={table}>
-              <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
-              <tbody>{jacketLines.map(jl => (
-                <tr key={jl.jacket_line_id} style={tr}>
-                  <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.jacket_product_lines?.suppliers?.company || jl.order_lines.suppliers?.company || 'no supplier'}</td>
-                  <td><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
-                  <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#a8a29e', cursor: 'pointer' }}>✕</button></td>
-                </tr>
-              ))}</tbody>
-            </table>
-            <button onClick={() => setShowAdd(!showAdd)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
-            {showAdd && (
-              <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #DCD5C1', borderRadius: 6, padding: 8 }}>
-                {eligibleLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13 }}>No eligible order lines.</div>}
-                {eligibleLines.map(ol => (
-                  <button key={ol.order_line_id} onClick={() => addLineToJacket(ol)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{ol.customer_orders.acumatica_order_no} | {ol.products.commodity} — {ol.products.pack_size} | {ol.suppliers?.company || 'no supplier'}</span>
-                    <span style={{ color: '#78716c' }}>{ol.remaining} avail</span>
-                  </button>
-                ))}
-              </div>
+              <button onClick={openEditDetails} style={{ padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
             )}
           </div>
-          <div style={card}>
-            <strong>Stops</strong>
-            <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 8 }}>Auto-derived from assigned order lines.</div>
-            {stops.map(s => {
-              const loc = s.stop_type === 'Pickup' ? s.supplier_locations : s.customer_locations;
-              const partyName = s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company;
-              return (
-                <div key={s.stop_id} style={{ fontSize: 13, borderBottom: '1px solid #DCD5C1', paddingBottom: 8, marginBottom: 8 }}>
-                  <div><strong>#{s.stop_number} {s.stop_type}</strong></div>
-                  <div style={{ color: '#78716c' }}>{partyName}{loc ? ` — ${loc.label}` : ''}</div>
-                  {loc && <div style={{ color: '#a8a29e', fontSize: 11 }}>{loc.address}, {loc.city} {loc.state}</div>}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* ---- SUPPLY ---- */}
+            <div style={card}>
+              <strong style={{ color: '#2F5233' }}>Supply — Purchased Product</strong>
+              <div style={{ marginTop: 10 }}>
+                {purchasedLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 8 }}>Nothing purchased on this Jacket yet.</div>}
+                {purchasedLines.map(p => {
+                  const { allocated, available } = availableOnPurchased(p);
+                  return (
+                    <div key={p.jacket_product_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 13.5 }}>
+                          <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
+                          <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
+                            Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? '#2F5233' : '#C0562D' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
+                          </div>
+                        </div>
+                        <div>
+                          <button onClick={() => openAllocate(p.jacket_product_line_id)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
+                          <button onClick={() => openEditPurchased(p)} style={{ ...editBtn, marginLeft: 6 }}>Edit</button>
+                          <button onClick={() => deletePurchased(p.jacket_product_line_id)} style={{ ...editBtn, marginLeft: 6, color: '#C0562D' }}>Delete</button>
+                        </div>
+                      </div>
+                      {allocatingLineId === p.jacket_product_line_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <label style={{ fontSize: 12 }}>Order needing {p.products?.commodity}
+                            <select value={allocateForm.order_line_id} onChange={e => setAllocateForm({ ...allocateForm, order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 220 }}>
+                              <option value="">— select —</option>
+                              {allOrderLinesNeed.filter(ol => ol.product_id === p.product_id).map(ol => (
+                                <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company} — needs {ol.needsSupply}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 12 }}>Cases
+                            <input type="number" value={allocateForm.cases} onChange={e => setAllocateForm({ ...allocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 80 }} />
+                          </label>
+                          <button onClick={() => saveAllocate(p)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                          <button onClick={() => setAllocatingLineId(null)} style={editBtn}>Cancel</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Purchased Product</button>
+              {showAddPurchased && (
+                <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                  <label style={{ fontSize: 13 }}>Supplier
+                    <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                      <option value="">— none —</option>
+                      {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 13 }}>Product
+                    <select value={purchasedForm.product_id} onChange={e => setPurchasedForm({ ...purchasedForm, product_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                      <option value="">— select —</option>
+                      {products.map(pr => <option key={pr.product_id} value={pr.product_id}>{pr.commodity} — {pr.pack_size}</option>)}
+                    </select>
+                  </label>
+                  {detailField('Shipper PO', 'shipper_po', purchasedForm, setPurchasedForm)}
+                  {detailField('Purchased Cases', 'purchased_cases', purchasedForm, setPurchasedForm, 'number')}
+                  {detailField('Actual Cases Received', 'actual_cases_received', purchasedForm, setPurchasedForm, 'number')}
+                  {detailField('Purchase Cost / cs', 'purchase_cost_per_case', purchasedForm, setPurchasedForm, 'number')}
+                  {detailField('Fee Total / cs', 'fee_total_per_case', purchasedForm, setPurchasedForm, 'number')}
+                  {detailField('Notes', 'notes', purchasedForm, setPurchasedForm)}
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
+                    <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                  </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            {/* ---- DEMAND ---- */}
+            <div style={card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ color: '#2F5233' }}>Demand — Open Orders Needing This Jacket's Product</strong>
+                <button onClick={() => setShowNewOrder(!showNewOrder)} style={{ ...editBtn, background: '#2F5233', color: '#fff', border: 'none' }}>+ New Order</button>
+              </div>
+              {showNewOrder && (
+                <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                  <label style={{ fontSize: 13 }}>Customer
+                    <select value={newOrderForm.customer_id} onChange={e => setNewOrderForm({ ...newOrderForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                      <option value="">— select —</option>
+                      {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
+                    </select>
+                  </label>
+                  {detailField('Acumatica Order #', 'acumatica_no', newOrderForm, setNewOrderForm)}
+                  {detailField('Customer PO', 'customer_po', newOrderForm, setNewOrderForm)}
+                  <label style={{ fontSize: 13 }}>Product
+                    <select value={newOrderForm.product_id} onChange={e => setNewOrderForm({ ...newOrderForm, product_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                      <option value="">— select —</option>
+                      {products.map(pr => <option key={pr.product_id} value={pr.product_id}>{pr.commodity} — {pr.pack_size}</option>)}
+                    </select>
+                  </label>
+                  {detailField('Cases', 'cases', newOrderForm, setNewOrderForm, 'number')}
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <button onClick={createOrderFromHere} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Order</button>
+                    <button onClick={() => setShowNewOrder(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: 10 }}>
+                {(() => {
+                  const purchasedProductIds = new Set(purchasedLines.map(p => p.product_id));
+                  const matchingDemand = allOrderLinesNeed.filter(ol => purchasedProductIds.has(ol.product_id));
+                  if (matchingDemand.length === 0) return <div style={{ color: '#a8a29e', fontSize: 13 }}>No open orders currently need this jacket's commodities.</div>;
+                  return matchingDemand.map(ol => {
+                    const matchingPurchased = purchasedLines.filter(p => p.product_id === ol.product_id);
+                    return (
+                      <div key={ol.order_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ fontSize: 13.5 }}>
+                            <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no}
+                            <div style={{ fontSize: 12, color: '#78716c' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
+                          </div>
+                          <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
+                        </div>
+                        {demandAllocateFor === ol.order_line_id && (
+                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            {matchingPurchased.length > 1 && (
+                              <label style={{ fontSize: 12 }}>From
+                                <select value={demandAllocateForm.purchased_line_id} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, purchased_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 180 }}>
+                                  <option value="">— select —</option>
+                                  {matchingPurchased.map(p => <option key={p.jacket_product_line_id} value={p.jacket_product_line_id}>{p.suppliers?.company} — {availableOnPurchased(p).available} avail</option>)}
+                                </select>
+                              </label>
+                            )}
+                            <label style={{ fontSize: 12 }}>Cases
+                              <input type="number" value={demandAllocateForm.cases} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 80 }} />
+                            </label>
+                            <button onClick={() => saveDemandAllocate(ol)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                            <button onClick={() => setDemandAllocateFor(null)} style={editBtn}>Cancel</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ ...card, marginTop: 16 }}>
+            <strong style={{ color: '#2F5233' }}>Order Allocations</strong>
+            {jacketLines.filter(jl => jl.jacket_product_line_id).length === 0 ? (
+              <div style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>No allocations from purchased product yet.</div>
+            ) : (
+              <table style={{ ...table, marginTop: 10 }}>
+                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
+                <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
+                  <tr key={jl.jacket_line_id} style={tr}>
+                    <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
+                    <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
+                    <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
+                    <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
+                    <td>{jl.load_status}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <button onClick={() => setShowAdvanced(!showAdvanced)} style={{ background: 'none', border: 'none', color: '#78716c', fontSize: 12, cursor: 'pointer', padding: 0 }}>{showAdvanced ? '▲ Hide' : '▼ Show'} Advanced (legacy quick-assign, no purchased-product tracking)</button>
+            {showAdvanced && (
+              <div style={{ ...card, marginTop: 8 }}>
+                <table style={table}>
+                  <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
+                  <tbody>{jacketLines.map(jl => (
+                    <tr key={jl.jacket_line_id} style={tr}>
+                      <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.jacket_product_lines?.suppliers?.company || jl.order_lines.suppliers?.company || 'no supplier'}</td>
+                      <td><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
+                      <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#a8a29e', cursor: 'pointer' }}>✕</button></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                <button onClick={() => setShowAdd(!showAdd)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
+                {showAdd && (
+                  <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #DCD5C1', borderRadius: 6, padding: 8 }}>
+                    {eligibleLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13 }}>No eligible order lines.</div>}
+                    {eligibleLines.map(ol => (
+                      <button key={ol.order_line_id} onClick={() => addLineToJacket(ol)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{ol.customer_orders.acumatica_order_no} | {ol.products.commodity} — {ol.products.pack_size} | {ol.suppliers?.company || 'no supplier'}</span>
+                        <span style={{ color: '#78716c' }}>{ol.remaining} avail</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
