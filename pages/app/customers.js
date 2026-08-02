@@ -16,6 +16,7 @@ export default function CustomersPage() {
   const [locForm, setLocForm] = useState(BLANK_LOC);
   const [editingLocId, setEditingLocId] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -85,17 +86,22 @@ export default function CustomersPage() {
       )}
       {rows.map(r => {
         const custLocs = locations.filter(l => l.customer_id === r.customer_id);
+        const custHistory = priceHistory.filter(h => h.customer_id === r.customer_id);
+        const isOpen = expandedId === r.customer_id;
         return (
           <div key={r.customer_id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
+              <button onClick={() => setExpandedId(isOpen ? null : r.customer_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', flex: 1 }}>
+                <span style={{ color: '#78716c', marginRight: 6 }}>{isOpen ? '⌄' : '›'}</span>
                 <strong>{r.company}</strong>
-                <div style={{ fontSize: 12.5, color: '#78716c' }}>{r.buyer_contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state}</div>
-              </div>
+                <div style={{ fontSize: 12.5, color: '#78716c', marginLeft: 14 }}>{r.buyer_contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} · {custLocs.length} location{custLocs.length === 1 ? '' : 's'} · {custHistory.length} price sheet{custHistory.length === 1 ? '' : 's'} on file</div>
+              </button>
               <div>
                 <button onClick={() => openEdit(r)} style={editBtn}>Edit</button>
               </div>
             </div>
+            {isOpen && (
+            <>
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Locations</div>
               {custLocs.length === 0 && <div style={{ fontSize: 12.5, color: '#a8a29e', marginBottom: 6 }}>No extra locations yet — main profile address is used by default.</div>}
@@ -127,16 +133,18 @@ export default function CustomersPage() {
             </div>
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Price Sheet History</div>
-              {priceHistory.filter(h => h.customer_id === r.customer_id).length === 0 ? (
+              {custHistory.length === 0 ? (
                 <div style={{ fontSize: 12.5, color: '#a8a29e' }}>No saved price sheets sent to this customer yet.</div>
               ) : (
-                priceHistory.filter(h => h.customer_id === r.customer_id).map(h => (
+                custHistory.map(h => (
                   <div key={h.id} style={{ fontSize: 13, padding: '3px 0' }}>
                     Sent {h.price_sheet_snapshots?.saved_at ? new Date(h.price_sheet_snapshots.saved_at).toLocaleDateString() : '—'} — sheet dated {h.price_sheet_snapshots?.sheet_date}, valid through {h.price_sheet_snapshots?.valid_through}
                   </div>
                 ))
               )}
             </div>
+            </>
+            )}
           </div>
         );
       })}

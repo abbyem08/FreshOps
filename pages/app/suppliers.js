@@ -16,6 +16,7 @@ export default function SuppliersPage() {
   const [locForm, setLocForm] = useState(BLANK_LOC);
   const [editingLocId, setEditingLocId] = useState(null);
   const [quoteHistory, setQuoteHistory] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -89,15 +90,20 @@ export default function SuppliersPage() {
       )}
       {rows.map(r => {
         const supLocs = locations.filter(l => l.supplier_id === r.supplier_id);
+        const supHistory = quoteHistory.filter(h => h.supplier_id === r.supplier_id);
+        const isOpen = expandedId === r.supplier_id;
         return (
           <div key={r.supplier_id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
+              <button onClick={() => setExpandedId(isOpen ? null : r.supplier_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', flex: 1 }}>
+                <span style={{ color: '#78716c', marginRight: 6 }}>{isOpen ? '⌄' : '›'}</span>
                 <strong>{r.company}</strong>
-                <div style={{ fontSize: 12.5, color: '#78716c' }}>{r.contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} {r.per_case_fee ? `· $${Number(r.per_case_fee).toFixed(2)}/cs fee` : ''}</div>
-              </div>
+                <div style={{ fontSize: 12.5, color: '#78716c', marginLeft: 14 }}>{r.contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} {r.per_case_fee ? `· $${Number(r.per_case_fee).toFixed(2)}/cs fee` : ''} · {supLocs.length} location{supLocs.length === 1 ? '' : 's'} · {supHistory.length} quote{supHistory.length === 1 ? '' : 's'} on file</div>
+              </button>
               <div><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></div>
             </div>
+            {isOpen && (
+            <>
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Locations</div>
               {supLocs.length === 0 && <div style={{ fontSize: 12.5, color: '#a8a29e', marginBottom: 6 }}>No extra locations yet — main profile address is used by default.</div>}
@@ -129,16 +135,18 @@ export default function SuppliersPage() {
             </div>
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Quote History</div>
-              {quoteHistory.filter(h => h.supplier_id === r.supplier_id).length === 0 ? (
+              {supHistory.length === 0 ? (
                 <div style={{ fontSize: 12.5, color: '#a8a29e' }}>No saved price sheet quotes from this supplier yet.</div>
               ) : (
-                quoteHistory.filter(h => h.supplier_id === r.supplier_id).map(h => (
+                supHistory.map(h => (
                   <div key={h.snapshot_line_id} style={{ fontSize: 13, padding: '3px 0' }}>
                     {h.price_sheet_snapshots?.sheet_date} — {h.commodity} {h.pack_size} — ${Number(h.raw_cost || 0).toFixed(2)}/cs raw
                   </div>
                 ))
               )}
             </div>
+            </>
+            )}
           </div>
         );
       })}
