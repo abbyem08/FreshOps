@@ -4,43 +4,47 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import Logo from './Logo';
+import {
+  IconDashboard, IconOrders, IconJacket, IconNeeds, IconCalls, IconPricing,
+  IconReports, IconCustomers, IconSuppliers, IconCarriers, IconProduct, IconRequests,
+} from './icons';
 
 const NAV_SECTIONS = [
   {
     label: null,
-    items: [{ href: '/app/dashboard', label: 'Dashboard' }],
+    items: [{ href: '/app/dashboard', label: 'Dashboard', Icon: IconDashboard }],
   },
   {
     label: 'Sell & Source',
     items: [
-      { href: '/app/orders', label: 'Customer Orders' },
-      { href: '/app/jackets', label: 'InLoads / Jackets' },
-      { href: '/app/ordering-needs', label: 'Ordering Needs' },
+      { href: '/app/orders', label: 'Customer Orders', Icon: IconOrders },
+      { href: '/app/jackets', label: 'InLoads / Jackets', Icon: IconJacket },
+      { href: '/app/ordering-needs', label: 'Ordering Needs', Icon: IconNeeds },
     ],
   },
   {
     label: 'Move It',
     items: [
-      { href: '/app/dispatch', label: 'Dispatch & Freight' },
-      { href: '/app/ops', label: 'Load Tracking' },
+      { href: '/app/dispatch', label: 'Dispatch & Freight', Icon: IconJacket },
+      { href: '/app/ops', label: 'Load Tracking', Icon: IconNeeds },
     ],
   },
   {
     label: 'Pricing',
     items: [
-      { href: '/app/calls', label: 'Market Calls' },
-      { href: '/app/pricesheets', label: 'Price Worksheet' },
+      { href: '/app/calls', label: 'Market Calls', Icon: IconCalls },
+      { href: '/app/pricesheets', label: 'Price Worksheet', Icon: IconPricing },
     ],
   },
   {
     label: 'Reference',
     items: [
-      { href: '/app/reports', label: 'Reports' },
-      { href: '/app/customers', label: 'Customers' },
-      { href: '/app/suppliers', label: 'Suppliers' },
-      { href: '/app/carriers', label: 'Carriers' },
-      { href: '/app/products', label: 'Product Master' },
-      { href: '/admin/requests', label: 'Order Requests' },
+      { href: '/app/reports', label: 'Reports', Icon: IconReports },
+      { href: '/app/customers', label: 'Customers', Icon: IconCustomers },
+      { href: '/app/suppliers', label: 'Suppliers', Icon: IconSuppliers },
+      { href: '/app/carriers', label: 'Carriers', Icon: IconCarriers },
+      { href: '/app/products', label: 'Product Master', Icon: IconProduct },
+      { href: '/admin/requests', label: 'Order Requests', Icon: IconRequests },
     ],
   },
 ];
@@ -59,41 +63,39 @@ export default function AppShell({ title, children }) {
     setReady(true);
   }
 
-  if (!ready) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'var(--fo-text-dim)' }}>Loading…</div>;
+  if (!ready) return <div style={{ padding: 40, color: 'var(--fo-text-dim)' }}>Loading…</div>;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--fo-page-bg)' }}>
-      <div className="no-print" style={{ width: 210, flexShrink: 0, background: 'var(--fo-sidebar)', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-        <nav style={{ flex: 1, padding: '10px 0', overflowY: 'auto' }}>
+      <div className="no-print" style={{ width: 226, flexShrink: 0, background: 'var(--fo-nav-bg)', borderRight: '1px solid var(--fo-border-soft)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px 16px 8px' }}>
+          <Logo variant="icon" size={26} />
+        </div>
+        <nav style={{ flex: 1, padding: '6px 0', overflowY: 'auto' }}>
           {NAV_SECTIONS.map((section, i) => (
             <div key={i}>
               {section.label && <div className="fo-nav-section-label">{section.label}</div>}
-              {section.items.map(n => (
-                <a key={n.href} href={n.href} className={'fo-navlink' + (router.pathname === n.href ? ' active' : '')}>
-                  {n.label}
-                </a>
-              ))}
+              {section.items.map(n => {
+                const isActive = router.pathname === n.href;
+                return (
+                  <a key={n.href} href={n.href} className={'fo-navlink' + (isActive ? ' active' : '')}>
+                    <n.Icon size={17} />
+                    {n.label}
+                  </a>
+                );
+              })}
             </div>
           ))}
         </nav>
-        <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Logo variant="icon" size={22} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>FreshOps</div>
-            <div style={{ fontSize: 10, color: 'var(--fo-sidebar-text-dim)' }}>Staff</div>
-          </div>
+        <div style={{ padding: 12, borderTop: '1px solid var(--fo-border-soft)' }}>
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ width: '100%' }}>
+            Sign Out
+          </button>
         </div>
-        <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
-          style={{ margin: 12, padding: '9px', background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>
-          Sign Out
-        </button>
       </div>
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 28px 40px' }}>
-          <div style={{ marginBottom: 22 }}>
-            <Logo variant="horizontal" size={44} />
-          </div>
-          <h1 style={{ color: 'var(--fo-fresh)', fontSize: 21, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>{title}</h1>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 36px 48px' }}>
+          <h1 className="fo-h1">{title}</h1>
           {children}
         </div>
       </div>
