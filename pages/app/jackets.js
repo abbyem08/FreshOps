@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
+const BLANK_PURCHASED = { supplier_id: '', product_id: '', shipper_po: '', purchased_cases: '', actual_cases_received: '', purchase_cost_per_case: '', fee_total_per_case: '', notes: '' };
+
 export default function JacketsPage() {
   const [jackets, setJackets] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -12,9 +14,25 @@ export default function JacketsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState({});
+  const [purchasedLines, setPurchasedLines] = useState([]);
+  const [showAddPurchased, setShowAddPurchased] = useState(false);
+  const [purchasedForm, setPurchasedForm] = useState(BLANK_PURCHASED);
+  const [editingPurchasedId, setEditingPurchasedId] = useState(null);
+  const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [allocatingLineId, setAllocatingLineId] = useState(null);
+  const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
+  const [allOrderLinesNeed, setAllOrderLinesNeed] = useState([]);
 
-  useEffect(() => { loadJackets(); }, []);
+  useEffect(() => { loadJackets(); loadMasters(); }, []);
   useEffect(() => { if (activeId) loadJacketDetail(activeId); }, [activeId]);
+
+  async function loadMasters() {
+    const { data: s } = await supabase.from('suppliers').select('supplier_id, company').order('company');
+    setSuppliers(s || []);
+    const { data: p } = await supabase.from('products').select('product_id, commodity, pack_size, cases_per_pallet, gross_weight_per_case').order('commodity');
+    setProducts(p || []);
+  }
 
   async function loadJackets() {
     const { data } = await supabase.from('jackets').select('*').order('jacket_number');
@@ -42,6 +60,112 @@ export default function JacketsPage() {
       return { ...ol, remaining: ol.cases_ordered - assigned };
     }).filter(ol => ol.remaining > 0);
     setEligibleLines(eligible);
+
+    // purchased product lines for this jacket
+    const { data: purchased } = await supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity, pack_size, cases_per_pallet)').eq('jacket_id', jacketId).order('jacket_product_line_id');
+    setPurchasedLines(purchased || []);
+
+    // every order line's remaining supply need, regardless of supplier —
+    // this is what "Allocate" picks from (Workflow B: orders can exist
+    // before any Jacket was purchased)
+    const { data: allOL } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, order_status, customers(company)), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
+    const needList = (allOL || [])
+      .filter(ol => ol.customer_orders?.order_status === 'Open')
+      .map(ol => {
+        const assigned = (allJacketLines || [])
+          .filter(jl => jl.order_line_id === ol.order_line_id && jl.jackets?.jacket_status !== 'Cancelled')
+          .reduce((s, jl) => s + Number(jl.cases_to_load || 0), 0);
+        return { ...ol, needsSupply: Number(ol.cases_ordered || 0) - assigned };
+      })
+      .filter(ol => ol.needsSupply > 0);
+    setAllOrderLinesNeed(needList);
+  }
+
+  function openAddPurchased() { setPurchasedForm(BLANK_PURCHASED); setEditingPurchasedId(null); setShowAddPurchased(true); }
+  function openEditPurchased(p) {
+    setPurchasedForm({ supplier_id: p.supplier_id || '', product_id: p.product_id, shipper_po: p.shipper_po || '', purchased_cases: p.purchased_cases, actual_cases_received: p.actual_cases_received ?? '', purchase_cost_per_case: p.purchase_cost_per_case, fee_total_per_case: p.fee_total_per_case, notes: p.notes || '' });
+    setEditingPurchasedId(p.jacket_product_line_id);
+    setShowAddPurchased(true);
+  }
+  async function savePurchased() {
+    if (!purchasedForm.product_id || !purchasedForm.purchased_cases) { alert('Product and Purchased Cases are required.'); return; }
+    const payload = {
+      jacket_id: activeId,
+      supplier_id: purchasedForm.supplier_id ? Number(purchasedForm.supplier_id) : null,
+      product_id: Number(purchasedForm.product_id),
+      shipper_po: purchasedForm.shipper_po || null,
+      purchased_cases: Number(purchasedForm.purchased_cases),
+      actual_cases_received: purchasedForm.actual_cases_received === '' ? null : Number(purchasedForm.actual_cases_received),
+      purchase_cost_per_case: purchasedForm.purchase_cost_per_case ? Number(purchasedForm.purchase_cost_per_case) : 0,
+      fee_total_per_case: purchasedForm.fee_total_per_case ? Number(purchasedForm.fee_total_per_case) : 0,
+      notes: purchasedForm.notes || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (editingPurchasedId) {
+      const { error } = await supabase.from('jacket_product_lines').update(payload).eq('jacket_product_line_id', editingPurchasedId);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('jacket_product_lines').insert(payload);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    }
+    setShowAddPurchased(false); setEditingPurchasedId(null); setPurchasedForm(BLANK_PURCHASED);
+    loadJacketDetail(activeId);
+  }
+  async function deletePurchased(id) {
+    if (!confirm('Remove this purchased product line? Any allocations already made from it will lose their source link (they are not deleted).')) return;
+    await supabase.from('jacket_lines').update({ jacket_product_line_id: null }).eq('jacket_product_line_id', id);
+    const { error } = await supabase.from('jacket_product_lines').delete().eq('jacket_product_line_id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadJacketDetail(activeId);
+  }
+
+  function availableOnPurchased(p) {
+    const base = p.actual_cases_received != null ? Number(p.actual_cases_received) : Number(p.purchased_cases);
+    const allocated = jacketLines
+      .filter(jl => jl.jacket_product_line_id === p.jacket_product_line_id)
+      .reduce((s, jl) => s + Number(jl.cases_to_load || 0), 0);
+    return { base, allocated, available: base - allocated };
+  }
+
+  function openAllocate(purchasedLineId) { setAllocateForm({ order_line_id: '', cases: '' }); setAllocatingLineId(purchasedLineId); }
+  async function saveAllocate(purchased) {
+    if (!allocateForm.order_line_id || !allocateForm.cases) { alert('Pick an order line and enter cases.'); return; }
+    const cases = Number(allocateForm.cases);
+    const { available } = availableOnPurchased(purchased);
+    if (cases > available) { alert(`Only ${available} cases available on this purchased line.`); return; }
+    const orderLine = allOrderLinesNeed.find(ol => ol.order_line_id === Number(allocateForm.order_line_id));
+    if (!orderLine) { alert('Could not find that order line.'); return; }
+    if (cases > orderLine.needsSupply) { if (!confirm(`This order only needs ${orderLine.needsSupply} more cases — allocate ${cases} anyway?`)) return; }
+
+    const p = orderLine.products;
+    const estPallets = p.cases_per_pallet ? Math.ceil(cases / p.cases_per_pallet) : 0;
+    const lineWeight = cases * (p.gross_weight_per_case || 0);
+    const allocatedCost = Number(purchased.purchase_cost_per_case || 0) + Number(purchased.fee_total_per_case || 0);
+
+    const { data: jl, error } = await supabase.from('jacket_lines').insert({
+      jacket_id: activeId, order_line_id: orderLine.order_line_id, jacket_product_line_id: purchased.jacket_product_line_id,
+      allocated_cost_per_case: allocatedCost, planned_cases: cases, cases_to_load: cases,
+      actual_cases_loaded: 0, actual_cases_delivered: 0, estimated_pallets: estPallets, line_weight: lineWeight, load_status: 'Planned'
+    }).select().single();
+    if (error) { alert('Allocation failed: ' + error.message); return; }
+
+    // if the order line has no supplier set yet, derive it from this allocation
+    if (!orderLine.supplier_id && purchased.supplier_id) {
+      await supabase.from('order_lines').update({ supplier_id: purchased.supplier_id }).eq('order_line_id', orderLine.order_line_id);
+    }
+
+    const supplierId = purchased.supplier_id;
+    const customerId = orderLine.customer_orders.customer_id;
+    const customerLocId = orderLine.customer_orders.customer_location_id || null;
+    const pickupStop = await findOrCreateStop(activeId, 'Pickup', supplierId, purchased.supplier_location_id || null, null, null);
+    const deliveryStop = await findOrCreateStop(activeId, 'Delivery', null, null, customerId, customerLocId);
+    await supabase.from('stop_lines').insert([
+      { stop_id: pickupStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
+      { stop_id: deliveryStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
+    ]);
+
+    setAllocatingLineId(null);
+    loadJacketDetail(activeId);
   }
 
   async function createNewJacket() {
@@ -197,7 +321,7 @@ export default function JacketsPage() {
   const [showNeeded, setShowNeeded] = useState(true);
 
   return (
-    <AppShell title="Jackets">
+    <AppShell title="InLoads / Jackets">
       <div style={{ ...card, marginBottom: 16 }}>
         <button onClick={() => setShowNeeded(!showNeeded)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <strong style={{ color: '#2F5233' }}>Cases Still Needed (across all open orders)</strong>
@@ -232,6 +356,91 @@ export default function JacketsPage() {
               <span style={{ fontSize: 12, color: '#78716c' }}>{totalWeight.toLocaleString()} lb · {totalPallets} pallets</span>
             </div>
 
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#2F5233', marginTop: 4, marginBottom: 6 }}>Purchased Product</div>
+            {purchasedLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 8 }}>Nothing purchased on this Jacket yet.</div>}
+            {purchasedLines.map(p => {
+              const { base, allocated, available } = availableOnPurchased(p);
+              return (
+                <div key={p.jacket_product_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 13.5 }}>
+                      <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
+                      <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
+                        Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? '#2F5233' : '#C0562D' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
+                      </div>
+                    </div>
+                    <div>
+                      <button onClick={() => openAllocate(p.jacket_product_line_id)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
+                      <button onClick={() => openEditPurchased(p)} style={{ ...editBtn, marginLeft: 6 }}>Edit</button>
+                      <button onClick={() => deletePurchased(p.jacket_product_line_id)} style={{ ...editBtn, marginLeft: 6, color: '#C0562D' }}>Delete</button>
+                    </div>
+                  </div>
+                  {allocatingLineId === p.jacket_product_line_id && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <label style={{ fontSize: 12 }}>Order needing {p.products?.commodity}
+                        <select value={allocateForm.order_line_id} onChange={e => setAllocateForm({ ...allocateForm, order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 260 }}>
+                          <option value="">— select —</option>
+                          {allOrderLinesNeed.filter(ol => ol.product_id === p.product_id).map(ol => (
+                            <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company} — needs {ol.needsSupply}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12 }}>Cases
+                        <input type="number" value={allocateForm.cases} onChange={e => setAllocateForm({ ...allocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 90 }} />
+                      </label>
+                      <button onClick={() => saveAllocate(p)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                      <button onClick={() => setAllocatingLineId(null)} style={editBtn}>Cancel</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0', marginBottom: 8 }}>+ Add Purchased Product</button>
+            {showAddPurchased && (
+              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <label style={{ fontSize: 13 }}>Supplier
+                  <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                    <option value="">— none —</option>
+                    {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
+                  </select>
+                </label>
+                <label style={{ fontSize: 13 }}>Product
+                  <select value={purchasedForm.product_id} onChange={e => setPurchasedForm({ ...purchasedForm, product_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
+                    <option value="">— select —</option>
+                    {products.map(pr => <option key={pr.product_id} value={pr.product_id}>{pr.commodity} — {pr.pack_size}</option>)}
+                  </select>
+                </label>
+                {detailField('Shipper PO', 'shipper_po', purchasedForm, setPurchasedForm)}
+                {detailField('Purchased Cases', 'purchased_cases', purchasedForm, setPurchasedForm, 'number')}
+                {detailField('Actual Cases Received', 'actual_cases_received', purchasedForm, setPurchasedForm, 'number')}
+                {detailField('Purchase Cost / cs', 'purchase_cost_per_case', purchasedForm, setPurchasedForm, 'number')}
+                {detailField('Fee Total / cs', 'fee_total_per_case', purchasedForm, setPurchasedForm, 'number')}
+                {detailField('Notes', 'notes', purchasedForm, setPurchasedForm)}
+                <div style={{ gridColumn: 'span 3' }}>
+                  <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
+                  <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#2F5233', marginTop: 12, marginBottom: 6 }}>Order Allocations</div>
+            {jacketLines.filter(jl => jl.jacket_product_line_id).length === 0 ? (
+              <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 12 }}>No allocations from purchased product yet.</div>
+            ) : (
+              <table style={{ ...table, marginBottom: 12 }}>
+                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
+                <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
+                  <tr key={jl.jacket_line_id} style={tr}>
+                    <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
+                    <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
+                    <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
+                    <td>{jl.load_status}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+
             {editingDetails ? (
               <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginBottom: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -261,7 +470,7 @@ export default function JacketsPage() {
               <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
               <tbody>{jacketLines.map(jl => (
                 <tr key={jl.jacket_line_id} style={tr}>
-                  <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.order_lines.suppliers.company}</td>
+                  <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.order_lines.suppliers?.company || 'no supplier'}</td>
                   <td><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
                   <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#a8a29e', cursor: 'pointer' }}>✕</button></td>
                 </tr>
@@ -273,7 +482,7 @@ export default function JacketsPage() {
                 {eligibleLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13 }}>No eligible order lines.</div>}
                 {eligibleLines.map(ol => (
                   <button key={ol.order_line_id} onClick={() => addLineToJacket(ol)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{ol.customer_orders.acumatica_order_no} | {ol.products.commodity} — {ol.products.pack_size} | {ol.suppliers.company}</span>
+                    <span>{ol.customer_orders.acumatica_order_no} | {ol.products.commodity} — {ol.products.pack_size} | {ol.suppliers?.company || 'no supplier'}</span>
                     <span style={{ color: '#78716c' }}>{ol.remaining} avail</span>
                   </button>
                 ))}
@@ -309,6 +518,7 @@ function detailField(label, key, form, setForm, type = 'text') {
   );
 }
 const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 };
+const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
 const tr = { borderBottom: '1px solid #DCD5C1' };
