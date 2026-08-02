@@ -127,10 +127,24 @@ export default function JacketsPage() {
   }
 
   async function removeLine(jacketLineId) {
+    // remember which stops this line was on, before we remove it
+    const { data: existingStopLines } = await supabase.from('stop_lines').select('stop_id').eq('jacket_line_id', jacketLineId);
+    const stopIds = [...new Set((existingStopLines || []).map(r => r.stop_id))];
+
     const { error: slErr } = await supabase.from('stop_lines').delete().eq('jacket_line_id', jacketLineId);
     if (slErr) { alert('Could not remove: ' + slErr.message); return; }
     const { error: jlErr } = await supabase.from('jacket_lines').delete().eq('jacket_line_id', jacketLineId);
     if (jlErr) { alert('Could not remove: ' + jlErr.message); return; }
+
+    // if a stop now has nothing left on it, remove the stop itself too —
+    // otherwise it lingers on the Stops panel forever with nothing in it
+    for (const stopId of stopIds) {
+      const { data: remaining } = await supabase.from('stop_lines').select('stop_line_id').eq('stop_id', stopId);
+      if (!remaining || remaining.length === 0) {
+        await supabase.from('stops').delete().eq('stop_id', stopId);
+      }
+    }
+
     loadJacketDetail(activeId);
   }
 
