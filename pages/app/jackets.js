@@ -96,12 +96,6 @@ export default function JacketsPage() {
       })
       .filter(ol => ol.needsSupply > 0);
     setAllOrderLinesNeed(needList);
-    setGlobalJacketLines(allJacketLines || []);
-
-    // every purchased product line across every jacket, so Demand can offer
-    // a choice of which truck to allocate from, not just this one
-    const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet)').order('jacket_product_line_id');
-    setAllPurchasedLines((allPurchased || []).filter(p => p.jackets?.jacket_status !== 'Cancelled'));
   }
 
   function openAddPurchased() { setPurchasedForm(BLANK_PURCHASED); setEditingPurchasedId(null); setShowAddPurchased(true); }
