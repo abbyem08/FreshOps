@@ -40,14 +40,7 @@ export default function AppShell({ title, children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif', background: '#F6F4EC' }}>
       <div className="no-print" style={{ width: 200, flexShrink: 0, background: '#2F5233', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Logo variant="icon" size={26} />
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>FreshOps</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)' }}>Staff</div>
-          </div>
-        </div>
-        <nav style={{ flex: 1, padding: '8px 0' }}>
+        <nav style={{ flex: 1, padding: '16px 0' }}>
           {NAV.map(n => (
             <a key={n.href} href={n.href} style={{
               display: 'block', padding: '10px 16px', fontSize: 13.5, color: 'rgba(255,255,255,.88)',
@@ -56,6 +49,13 @@ export default function AppShell({ title, children }) {
           ))}
           <a href="/admin/requests" style={{ display: 'block', padding: '10px 16px', fontSize: 13.5, color: 'rgba(255,255,255,.88)', textDecoration: 'none' }}>Order Requests</a>
         </nav>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo variant="icon" size={22} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>FreshOps</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)' }}>Staff</div>
+          </div>
+        </div>
         <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
           style={{ margin: 12, padding: '8px', background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
           Sign Out
