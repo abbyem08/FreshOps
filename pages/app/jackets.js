@@ -23,6 +23,8 @@ export default function JacketsPage() {
   const [allocatingLineId, setAllocatingLineId] = useState(null);
   const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
   const [allOrderLinesNeed, setAllOrderLinesNeed] = useState([]);
+  const [allPurchasedLines, setAllPurchasedLines] = useState([]);
+  const [allJacketLinesGlobal, setAllJacketLinesGlobal] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [newOrderForm, setNewOrderForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', cases: '' });
@@ -60,7 +62,8 @@ export default function JacketsPage() {
 
     // eligible order lines: cases_ordered minus what's already assigned across non-cancelled jackets
     const { data: allLines } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
-    const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_status)');
+    const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jacket_product_line_id, jackets(jacket_status)');
+    setAllJacketLinesGlobal(allJacketLines || []);
     const eligible = (allLines || []).map(ol => {
       const assigned = (allJacketLines || [])
         .filter(jl => jl.order_line_id === ol.order_line_id && jl.jackets?.jacket_status !== 'Cancelled')
@@ -72,6 +75,12 @@ export default function JacketsPage() {
     // purchased product lines for this jacket
     const { data: purchased } = await supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity, pack_size, cases_per_pallet)').eq('jacket_id', jacketId).order('jacket_product_line_id');
     setPurchasedLines(purchased || []);
+
+    // purchased product lines across EVERY jacket — this is what lets you
+    // pick which truck to allocate from when several trucks carry the same
+    // commodity from different shippers
+    const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet)').order('jacket_product_line_id');
+    setAllPurchasedLines((allPurchased || []).filter(p => p.jackets?.jacket_status !== 'Cancelled'));
 
     // every order line's remaining supply need, regardless of supplier —
     // this is what "Allocate" picks from (Workflow B: orders can exist
@@ -87,6 +96,12 @@ export default function JacketsPage() {
       })
       .filter(ol => ol.needsSupply > 0);
     setAllOrderLinesNeed(needList);
+    setGlobalJacketLines(allJacketLines || []);
+
+    // every purchased product line across every jacket, so Demand can offer
+    // a choice of which truck to allocate from, not just this one
+    const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet)').order('jacket_product_line_id');
+    setAllPurchasedLines((allPurchased || []).filter(p => p.jackets?.jacket_status !== 'Cancelled'));
   }
 
   function openAddPurchased() { setPurchasedForm(BLANK_PURCHASED); setEditingPurchasedId(null); setShowAddPurchased(true); }
@@ -129,8 +144,8 @@ export default function JacketsPage() {
 
   function availableOnPurchased(p) {
     const base = p.actual_cases_received != null ? Number(p.actual_cases_received) : Number(p.purchased_cases);
-    const allocated = jacketLines
-      .filter(jl => jl.jacket_product_line_id === p.jacket_product_line_id)
+    const allocated = allJacketLinesGlobal
+      .filter(jl => jl.jacket_product_line_id === p.jacket_product_line_id && jl.jackets?.jacket_status !== 'Cancelled')
       .reduce((s, jl) => s + Number(jl.cases_to_load || 0), 0);
     return { base, allocated, available: base - allocated };
   }
@@ -151,7 +166,7 @@ export default function JacketsPage() {
     const allocatedCost = Number(purchased.purchase_cost_per_case || 0) + Number(purchased.fee_total_per_case || 0);
 
     const { data: jl, error } = await supabase.from('jacket_lines').insert({
-      jacket_id: activeId, order_line_id: orderLine.order_line_id, jacket_product_line_id: purchased.jacket_product_line_id,
+      jacket_id: purchased.jacket_id, order_line_id: orderLine.order_line_id, jacket_product_line_id: purchased.jacket_product_line_id,
       allocated_cost_per_case: allocatedCost, planned_cases: cases, cases_to_load: cases,
       actual_cases_loaded: 0, actual_cases_delivered: 0, estimated_pallets: estPallets, line_weight: lineWeight, load_status: 'Planned'
     }).select().single();
@@ -165,8 +180,8 @@ export default function JacketsPage() {
     const supplierId = purchased.supplier_id;
     const customerId = orderLine.customer_orders.customer_id;
     const customerLocId = orderLine.customer_orders.customer_location_id || null;
-    const pickupStop = await findOrCreateStop(activeId, 'Pickup', supplierId, purchased.supplier_location_id || null, null, null);
-    const deliveryStop = await findOrCreateStop(activeId, 'Delivery', null, null, customerId, customerLocId);
+    const pickupStop = await findOrCreateStop(purchased.jacket_id, 'Pickup', supplierId, purchased.supplier_location_id || null, null, null);
+    const deliveryStop = await findOrCreateStop(purchased.jacket_id, 'Delivery', null, null, customerId, customerLocId);
     await supabase.from('stop_lines').insert([
       { stop_id: pickupStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
       { stop_id: deliveryStop.stop_id, jacket_line_id: jl.jacket_line_id, cases_at_stop: cases, pallets_at_stop: estPallets },
@@ -535,7 +550,7 @@ export default function JacketsPage() {
                   const matchingDemand = allOrderLinesNeed.filter(ol => purchasedProductIds.has(ol.product_id));
                   if (matchingDemand.length === 0) return <div style={{ color: '#a8a29e', fontSize: 13 }}>No open orders currently need this jacket's commodities.</div>;
                   return matchingDemand.map(ol => {
-                    const matchingPurchased = purchasedLines.filter(p => p.product_id === ol.product_id);
+                    const matchingPurchased = allPurchasedLines.filter(p => p.product_id === ol.product_id && availableOnPurchased(p).available > 0);
                     return (
                       <div key={ol.order_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -547,14 +562,12 @@ export default function JacketsPage() {
                         </div>
                         {demandAllocateFor === ol.order_line_id && (
                           <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                            {matchingPurchased.length > 1 && (
-                              <label style={{ fontSize: 12 }}>From
-                                <select value={demandAllocateForm.purchased_line_id} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, purchased_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 180 }}>
-                                  <option value="">— select —</option>
-                                  {matchingPurchased.map(p => <option key={p.jacket_product_line_id} value={p.jacket_product_line_id}>{p.suppliers?.company} — {availableOnPurchased(p).available} avail</option>)}
-                                </select>
-                              </label>
-                            )}
+                            <label style={{ fontSize: 12 }}>From which truck
+                              <select value={demandAllocateForm.purchased_line_id} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, purchased_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 220 }}>
+                                <option value="">— select —</option>
+                                {matchingPurchased.map(p => <option key={p.jacket_product_line_id} value={p.jacket_product_line_id}>Jacket {p.jackets?.jacket_number} — {p.suppliers?.company || 'no supplier'} — {availableOnPurchased(p).available} avail</option>)}
+                              </select>
+                            </label>
                             <label style={{ fontSize: 12 }}>Cases
                               <input type="number" value={demandAllocateForm.cases} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 80 }} />
                             </label>
@@ -576,15 +589,16 @@ export default function JacketsPage() {
               <div style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>No allocations from purchased product yet.</div>
             ) : (
               <table style={{ ...table, marginTop: 10 }}>
-                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
+                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th></th></tr></thead>
                 <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
                   <tr key={jl.jacket_line_id} style={tr}>
                     <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
                     <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
                     <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
+                    <td style={{ textAlign: 'right' }}><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
                     <td>{jl.load_status}</td>
+                    <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#C0562D', cursor: 'pointer' }}>Remove</button></td>
                   </tr>
                 ))}</tbody>
               </table>
