@@ -43,7 +43,7 @@ export default function JacketsPage() {
   async function loadJacketDetail(jacketId) {
     const { data: lines } = await supabase
       .from('jacket_lines')
-      .select('*, order_lines(*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case))')
+      .select('*, order_lines(*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)), jacket_product_lines(suppliers(company))')
       .eq('jacket_id', jacketId);
     setJacketLines(lines || []);
 
@@ -428,12 +428,13 @@ export default function JacketsPage() {
               <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 12 }}>No allocations from purchased product yet.</div>
             ) : (
               <table style={{ ...table, marginBottom: 12 }}>
-                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
+                <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
                 <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
                   <tr key={jl.jacket_line_id} style={tr}>
                     <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
                     <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
+                    <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
                     <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
                     <td>{jl.load_status}</td>
                   </tr>
@@ -470,7 +471,7 @@ export default function JacketsPage() {
               <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
               <tbody>{jacketLines.map(jl => (
                 <tr key={jl.jacket_line_id} style={tr}>
-                  <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.order_lines.suppliers?.company || 'no supplier'}</td>
+                  <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.jacket_product_lines?.suppliers?.company || jl.order_lines.suppliers?.company || 'no supplier'}</td>
                   <td><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
                   <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#a8a29e', cursor: 'pointer' }}>✕</button></td>
                 </tr>
