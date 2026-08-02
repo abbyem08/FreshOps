@@ -12,7 +12,7 @@ const NAV = [
   { href: '/app/dispatch', label: 'Dispatch & Freight' },
   { href: '/app/ops', label: 'Load Tracking' },
   { href: '/app/calls', label: 'Market Calls' },
-  { href: '/app/pricesheets', label: 'Price Sheets' },
+  { href: '/app/pricesheets', label: 'Price Worksheet' },
   { href: '/app/ordering-needs', label: 'Ordering Needs' },
   { href: '/app/reports', label: 'Reports' },
   { href: '/app/customers', label: 'Customers' },
