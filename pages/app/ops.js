@@ -4,6 +4,7 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const STATUS_OPTIONS = ['Planned', 'Loading', 'Loaded', 'In Transit', 'Delivered', 'Short', 'Exception'];
+const NOTIFICATION_OPTIONS = ['Not Loaded Yet', 'Inloaded', 'In Transit', 'Delivered', 'Cancelled'];
 
 export default function OpsPage() {
   const [lines, setLines] = useState([]);
@@ -23,6 +24,14 @@ export default function OpsPage() {
   const [addToOrderForm, setAddToOrderForm] = useState({ order_id: '', supplier_id: '' });
   const [amendingLineId, setAmendingLineId] = useState(null);
   const [amendValue, setAmendValue] = useState('');
+  const [reassigningId, setReassigningId] = useState(null);
+  const [reassignOptions, setReassignOptions] = useState([]);
+  const [reassignTarget, setReassignTarget] = useState('');
+  const [movingClaimId, setMovingClaimId] = useState(null);
+  const [moveCasesForm, setMoveCasesForm] = useState({ target_order_line_id: '', cases: '' });
+  const [moveCasesOptions, setMoveCasesOptions] = useState([]);
+  const [compensatingClaimId, setCompensatingClaimId] = useState(null);
+  const [compensationForm, setCompensationForm] = useState({ cases: '', notes: '' });
 
   useEffect(() => { load(); }, []);
 
@@ -88,12 +97,39 @@ export default function OpsPage() {
     load();
   }
 
-  async function toggleNotify(id, stage, currentlyOn) {
-    const fields = stage === 'pickup'
-      ? { customer_notified_pickup: !currentlyOn, customer_notified_pickup_at: !currentlyOn ? new Date().toISOString() : null }
-      : { customer_notified_delivery: !currentlyOn, customer_notified_delivery_at: !currentlyOn ? new Date().toISOString() : null };
-    const { error } = await supabase.from('jacket_lines').update(fields).eq('jacket_line_id', id);
+  async function updateNotificationStatus(id, status) {
+    const { error } = await supabase.from('jacket_lines').update({
+      customer_notification_status: status, customer_notification_status_at: new Date().toISOString()
+    }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
+    load();
+  }
+  async function updateDelivered(id, value) {
+    const { error } = await supabase.from('jacket_lines').update({
+      actual_cases_delivered: value, quantity_updated_at: new Date().toISOString()
+    }).eq('jacket_line_id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    load();
+  }
+
+  // ---- reassign an allocation to a different order/customer ----
+  async function openReassign(line) {
+    const { data } = await supabase
+      .from('order_lines')
+      .select('order_line_id, cases_ordered, customer_orders(acumatica_order_no, order_status, customers(company))')
+      .eq('product_id', line.order_lines?.product_id)
+      .neq('order_line_id', line.order_line_id);
+    setReassignOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
+    setReassignTarget('');
+    setReassigningId(line.jacket_line_id);
+  }
+  async function saveReassign(line) {
+    if (!reassignTarget) { alert('Pick which order to move this to.'); return; }
+    const { error } = await supabase.from('jacket_lines').update({
+      order_line_id: Number(reassignTarget), quantity_updated_at: new Date().toISOString()
+    }).eq('jacket_line_id', line.jacket_line_id);
+    if (error) { alert('Reassign failed: ' + error.message); return; }
+    setReassigningId(null);
     load();
   }
 
@@ -125,6 +161,61 @@ export default function OpsPage() {
     if (!confirm('Delete this claim? This cannot be undone.')) return;
     const { error } = await supabase.from('claims').delete().eq('claim_id', claimId);
     if (error) { alert('Delete failed: ' + error.message); return; }
+    load();
+  }
+
+  // ---- move cases: split part of an allocation off to a different order ----
+  async function openMoveCases(claim) {
+    const line = lines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached — nothing to move.'); return; }
+    const { data } = await supabase
+      .from('order_lines')
+      .select('order_line_id, customer_orders(acumatica_order_no, order_status, customers(company))')
+      .eq('product_id', line.order_lines?.product_id)
+      .neq('order_line_id', line.order_line_id);
+    setMoveCasesOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
+    setMoveCasesForm({ target_order_line_id: '', cases: '' });
+    setMovingClaimId(claim.claim_id);
+  }
+  async function saveMoveCases(claim) {
+    const line = lines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) return;
+    const cases = Number(moveCasesForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases to move.'); return; }
+    if (!moveCasesForm.target_order_line_id) { alert('Pick which order to move them to.'); return; }
+    if (cases > Number(line.cases_to_load)) { alert(`Only ${line.cases_to_load} cases are on this allocation.`); return; }
+
+    const { error: updateErr } = await supabase.from('jacket_lines').update({
+      cases_to_load: Number(line.cases_to_load) - cases, quantity_updated_at: new Date().toISOString()
+    }).eq('jacket_line_id', line.jacket_line_id);
+    if (updateErr) { alert('Move failed: ' + updateErr.message); return; }
+
+    const { error: insertErr } = await supabase.from('jacket_lines').insert({
+      jacket_id: line.jacket_id, order_line_id: Number(moveCasesForm.target_order_line_id),
+      jacket_product_line_id: line.jacket_product_line_id, allocated_cost_per_case: line.allocated_cost_per_case,
+      planned_cases: cases, cases_to_load: cases, actual_cases_loaded: 0, actual_cases_delivered: 0, load_status: line.load_status,
+      quantity_updated_at: new Date().toISOString(),
+    });
+    if (insertErr) { alert('Move partly failed: ' + insertErr.message); return; }
+    setMovingClaimId(null);
+    load();
+  }
+
+  // ---- compensation: extra cases given free, never billed ----
+  function openCompensation(claim) { setCompensationForm({ cases: '', notes: '' }); setCompensatingClaimId(claim.claim_id); }
+  async function saveCompensation(claim) {
+    const line = lines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached.'); return; }
+    const cases = Number(compensationForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many compensation cases.'); return; }
+    const { error } = await supabase.from('jacket_lines').update({
+      compensation_cases: Number(line.compensation_cases || 0) + cases,
+      compensation_notes: compensationForm.notes || line.compensation_notes,
+      actual_cases_delivered: Number(line.actual_cases_delivered || 0) + cases,
+      quantity_updated_at: new Date().toISOString(),
+    }).eq('jacket_line_id', line.jacket_line_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    setCompensatingClaimId(null);
     load();
   }
   async function saveResolve(claim) {
@@ -268,61 +359,90 @@ export default function OpsPage() {
         <p style={{ color: '#a8a29e' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
       ) : (
         <>
-          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Per-Order Detail</div>
-          <div style={{ display: 'flex', gap: 16, fontSize: 12, marginBottom: 8 }}>
+          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Per-Order Detail, by Commodity</div>
+          <div style={{ display: 'flex', gap: 16, fontSize: 12, marginBottom: 10 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ assigned to this jacket</span>
           </div>
-          <table style={table}>
-            <thead><tr style={trHead}><th>Jacket</th><th>Order #</th><th>Customer</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Delivered</th><th>BOL #</th><th>Status</th><th>Told: Picked Up</th><th>Told: Delivered</th><th>Exception / Notes</th></tr></thead>
-            <tbody>{filteredLines.map(jl => {
-              const f = flags[jl.jacket_line_id] || {};
-              const rowStyle = f.deliveryMismatch ? { ...tr, background: '#F8D7D2' } : f.commodityShortage ? { ...tr, background: '#FCE9C9' } : tr;
-              const amended = jl.order_lines?.original_cases_ordered != null && Number(jl.order_lines.original_cases_ordered) !== Number(jl.order_lines?.cases_ordered);
-              return (
-                <tr key={jl.jacket_line_id} style={rowStyle}>
-                  <td style={{ fontFamily: 'monospace' }}>{jl.jackets?.jacket_number}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
-                  <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
-                  <td>{jl.order_lines?.suppliers?.company}</td>
-                  <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {amendingLineId === jl.jacket_line_id ? (
-                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                        <input type="number" value={amendValue} onChange={e => setAmendValue(e.target.value)} style={{ width: 60 }} />
-                        <button onClick={() => saveAmend(jl)} style={miniBtn}>Save</button>
-                        <button onClick={() => setAmendingLineId(null)} style={miniBtn}>X</button>
-                      </div>
-                    ) : (
-                      <>
-                        {jl.order_lines?.cases_ordered}
-                        {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {jl.order_lines.original_cases_ordered}</div>}
-                        <div><button onClick={() => openAmend(jl)} style={{ ...miniBtn, marginTop: 2 }}>Amend</button></div>
-                      </>
-                    )}
-                  </td>
-                  <td><input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateField(jl.jacket_line_id, 'actual_cases_delivered', Number(e.target.value))} style={{ width: 64 }} /></td>
-                  <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 90 }} placeholder="BOL #" /></td>
-                  <td>
-                    <select defaultValue={jl.load_status} onChange={e => updateField(jl.jacket_line_id, 'load_status', e.target.value)}>
-                      {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <button onClick={() => toggleNotify(jl.jacket_line_id, 'pickup', jl.customer_notified_pickup)} style={notifyBtn(jl.customer_notified_pickup)}>
-                      {jl.customer_notified_pickup ? `✓ ${new Date(jl.customer_notified_pickup_at).toLocaleDateString()}` : 'Mark notified'}
-                    </button>
-                  </td>
-                  <td>
-                    <button onClick={() => toggleNotify(jl.jacket_line_id, 'delivery', jl.customer_notified_delivery)} style={notifyBtn(jl.customer_notified_delivery)}>
-                      {jl.customer_notified_delivery ? `✓ ${new Date(jl.customer_notified_delivery_at).toLocaleDateString()}` : 'Mark notified'}
-                    </button>
-                  </td>
-                  <td><input type="text" defaultValue={jl.exception_notes || ''} onBlur={e => updateField(jl.jacket_line_id, 'exception_notes', e.target.value)} style={{ width: 160 }} placeholder="Notes" /></td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
+          {groupList.map(g => {
+            const groupLines = filteredLines.filter(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.order_lines?.supplier_id === g.supplierId);
+            if (groupLines.length === 0) return null;
+            const variance = g.loaded - g.ordered;
+            return (
+              <div key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+                <div style={{ background: variance !== 0 && g.loaded > 0 ? '#FCE9C9' : '#F6F4EC', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <div><strong style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</strong> · <strong>{g.commodity} — {g.packSize}</strong> · {g.supplierName || 'no supplier'}</div>
+                  <div style={{ color: '#78716c' }}>Ordered {g.ordered} · Loaded {g.loaded}{variance !== 0 && g.loaded > 0 ? ` · Variance ${variance > 0 ? '+' : ''}${variance}` : ''}</div>
+                </div>
+                <table style={{ ...table, border: 'none', borderRadius: 0 }}>
+                  <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Delivered</th><th>BOL #</th><th>Load Status</th><th>Customer Told</th><th>Exception / Notes</th><th></th></tr></thead>
+                  <tbody>{groupLines.map(jl => {
+                    const f = flags[jl.jacket_line_id] || {};
+                    const rowStyle = f.deliveryMismatch ? { ...tr, background: '#F8D7D2' } : tr;
+                    const amended = jl.order_lines?.original_cases_ordered != null && Number(jl.order_lines.original_cases_ordered) !== Number(jl.order_lines?.cases_ordered);
+                    return (
+                      <Fragment key={jl.jacket_line_id}>
+                        <tr style={rowStyle}>
+                          <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            {amendingLineId === jl.jacket_line_id ? (
+                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                <input type="number" value={amendValue} onChange={e => setAmendValue(e.target.value)} style={{ width: 60 }} />
+                                <button onClick={() => saveAmend(jl)} style={miniBtn}>Save</button>
+                                <button onClick={() => setAmendingLineId(null)} style={miniBtn}>X</button>
+                              </div>
+                            ) : (
+                              <>
+                                {jl.order_lines?.cases_ordered}
+                                {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {jl.order_lines.original_cases_ordered} · {jl.order_lines?.amended_at ? new Date(jl.order_lines.amended_at).toLocaleString() : ''}</div>}
+                                <div><button onClick={() => openAmend(jl)} style={{ ...miniBtn, marginTop: 2 }}>Amend</button></div>
+                              </>
+                            )}
+                          </td>
+                          <td>
+                            <input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateDelivered(jl.jacket_line_id, Number(e.target.value))} style={{ width: 64 }} />
+                            {jl.compensation_cases > 0 && <div style={{ fontSize: 10, color: '#6B8E4E' }}>incl. {jl.compensation_cases} comp.</div>}
+                            {jl.quantity_updated_at && <div style={{ fontSize: 10, color: '#a8a29e' }}>{new Date(jl.quantity_updated_at).toLocaleString()}</div>}
+                          </td>
+                          <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 90 }} placeholder="BOL #" /></td>
+                          <td>
+                            <select defaultValue={jl.load_status} onChange={e => updateField(jl.jacket_line_id, 'load_status', e.target.value)}>
+                              {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <select value={jl.customer_notification_status || 'Not Loaded Yet'} onChange={e => updateNotificationStatus(jl.jacket_line_id, e.target.value)}>
+                              {NOTIFICATION_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                            </select>
+                            {jl.customer_notification_status_at && <div style={{ fontSize: 10, color: '#a8a29e' }}>{new Date(jl.customer_notification_status_at).toLocaleString()}</div>}
+                          </td>
+                          <td><input type="text" defaultValue={jl.exception_notes || ''} onBlur={e => updateField(jl.jacket_line_id, 'exception_notes', e.target.value)} style={{ width: 150 }} placeholder="Notes" /></td>
+                          <td><button onClick={() => openReassign(jl)} style={miniBtn}>Reassign</button></td>
+                        </tr>
+                        {reassigningId === jl.jacket_line_id && (
+                          <tr>
+                            <td colSpan={9} style={{ background: '#F6F4EC', padding: 10 }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                                <label style={{ fontSize: 12 }}>Move this allocation to a different order
+                                  <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 260 }}>
+                                    <option value="">— select —</option>
+                                    {reassignOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
+                                  </select>
+                                </label>
+                                <button onClick={() => saveReassign(jl)} style={{ ...miniBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                                <button onClick={() => setReassigningId(null)} style={miniBtn}>Cancel</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            );
+          })}
         </>
       )}
 
@@ -368,7 +488,12 @@ export default function OpsPage() {
                   <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
                   <td><span style={statusPill(c.status)}>{c.status}</span></td>
                   <td>{c.resolution_price_adjustment ? `-$${Number(c.resolution_price_adjustment).toFixed(2)}/cs` : '—'}</td>
-                  <td><button onClick={() => openResolve(c)} style={editBtn}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button> <button onClick={() => deleteClaim(c.claim_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
+                  <td>
+                    <button onClick={() => openResolve(c)} style={editBtn}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button>{' '}
+                    <button onClick={() => openMoveCases(c)} style={editBtn}>Move Cases</button>{' '}
+                    <button onClick={() => openCompensation(c)} style={editBtn}>Add Compensation</button>{' '}
+                    <button onClick={() => deleteClaim(c.claim_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button>
+                  </td>
                 </tr>
                 {resolvingId === c.claim_id && (
                   <tr>
@@ -395,6 +520,43 @@ export default function OpsPage() {
                       <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 6 }}>A price adjustment reduces that order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
                       <button onClick={() => saveResolve(c)} style={{ marginTop: 8, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
                       <button onClick={() => setResolvingId(null)} style={{ marginTop: 8, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    </td>
+                  </tr>
+                )}
+                {movingClaimId === c.claim_id && (
+                  <tr>
+                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
+                      <div style={{ fontSize: 12, color: '#78716c', marginBottom: 8 }}>Move part of this allocation to a different order — useful when a shortage means redistributing what actually arrived.</div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <label style={{ fontSize: 13 }}>Move to which order?
+                          <select value={moveCasesForm.target_order_line_id} onChange={e => setMoveCasesForm({ ...moveCasesForm, target_order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, minWidth: 240 }}>
+                            <option value="">— select —</option>
+                            {moveCasesOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 13 }}>Cases to move
+                          <input type="number" value={moveCasesForm.cases} onChange={e => setMoveCasesForm({ ...moveCasesForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 90 }} />
+                        </label>
+                        <button onClick={() => saveMoveCases(c)} style={{ padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
+                        <button onClick={() => setMovingClaimId(null)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {compensatingClaimId === c.claim_id && (
+                  <tr>
+                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
+                      <div style={{ fontSize: 12, color: '#78716c', marginBottom: 8 }}>Add extra cases at no charge — this increases what's physically delivered without touching the customer's price or billed quantity.</div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <label style={{ fontSize: 13 }}>Compensation cases
+                          <input type="number" value={compensationForm.cases} onChange={e => setCompensationForm({ ...compensationForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 90 }} />
+                        </label>
+                        <label style={{ fontSize: 13 }}>Notes
+                          <input value={compensationForm.notes} onChange={e => setCompensationForm({ ...compensationForm, notes: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, minWidth: 220 }} />
+                        </label>
+                        <button onClick={() => saveCompensation(c)} style={{ padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
+                        <button onClick={() => setCompensatingClaimId(null)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -474,16 +636,13 @@ export default function OpsPage() {
   );
 }
 
-function notifyBtn(on) {
-  return { padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap',
-    background: on ? '#6B8E4E' : '#fff', color: on ? '#fff' : '#333', border: on ? '1px solid #6B8E4E' : '1px solid #DCD5C1' };
-}
 function statusPill(status) {
   const colors = { Open: '#D9A441', 'Under Review': '#D9A441', Resolved: '#3E7C5A' };
   return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
 }
 const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
 const miniBtn = { padding: '2px 6px', fontSize: 10, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 4, cursor: 'pointer' };
+const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8 };
 const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
 const tr = { borderBottom: '1px solid #DCD5C1' };
