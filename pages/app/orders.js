@@ -89,28 +89,6 @@ export default function OrdersPage() {
     loadAll();
   }
 
-  async function deleteOrder(order) {
-    const jackets = jacketByOrder[order.customer_order_id] || [];
-    const warning = jackets.length
-      ? `This order has lines assigned to Jacket(s): ${jackets.join(', ')}. Deleting will remove those lines from the truck too, along with all pricing and history for this order. This cannot be undone. Continue?`
-      : 'Delete this order and all its lines? This cannot be undone.';
-    if (!confirm(warning)) return;
-
-    const lineIds = (order.order_lines || []).map(l => l.order_line_id);
-    if (lineIds.length) {
-      const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').in('order_line_id', lineIds);
-      const jlIds = (jls || []).map(j => j.jacket_line_id);
-      if (jlIds.length) {
-        await supabase.from('stop_lines').delete().in('jacket_line_id', jlIds);
-        await supabase.from('jacket_lines').delete().in('jacket_line_id', jlIds);
-      }
-      await supabase.from('order_lines').delete().in('order_line_id', lineIds);
-    }
-    const { error } = await supabase.from('customer_orders').delete().eq('customer_order_id', order.customer_order_id);
-    if (error) { alert('Delete failed: ' + error.message); return; }
-    loadAll();
-  }
-
   function openAddLine(orderId) { setLineForm(BLANK_LINE); setLineTarget({ orderId, lineId: null }); }
   function openEditLine(orderId, l) {
     setLineForm({ supplier_id: l.supplier_id, supplier_location_id: l.supplier_location_id || '', product_id: l.product_id, shipper_po: l.shipper_po || '', cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, fob_cost_per_case: l.fob_cost_per_case, pricing_type: l.pricing_type || 'FOB' });
@@ -206,22 +184,23 @@ export default function OrdersPage() {
               </select>
             </label>
           </div>
-          <button onClick={saveOrder} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingOrderId ? 'Update Order' : 'Save Order'}</button>
-          <button onClick={() => { setShowNewOrder(false); setEditingOrderId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={saveOrder} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingOrderId ? 'Update Order' : 'Save Order'}</button>
+          <button onClick={() => { setShowNewOrder(false); setEditingOrderId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '16px 0', flexWrap: 'wrap' }}>
         {['Open', 'Closed', 'Cancelled', 'All'].map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #DCD5C1', background: statusFilter === s ? '#2F5233' : '#fff', color: statusFilter === s ? '#fff' : '#333' }}>
+          <button key={s} onClick={() => setStatusFilter(s)} className="fo-btn fo-btn-sm"
+            style={{ background: statusFilter === s ? 'var(--fo-primary)' : 'var(--fo-card-bg)', color: statusFilter === s ? '#fff' : 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>
             {s}
           </button>
         ))}
         <input type="text" placeholder="Search order #, PO, or customer…" value={searchText} onChange={e => setSearchText(e.target.value)}
-          style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6, fontSize: 13, flex: 1, minWidth: 220 }} />
+          style={{ flex: 1, minWidth: 220 }} />
       </div>
 
+      <div className="fo-section" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {orders
         .filter(o => statusFilter === 'All' || o.order_status === statusFilter)
         .filter(o => {
@@ -236,16 +215,17 @@ export default function OrdersPage() {
           <div key={o.customer_order_id} style={card}>
             <div style={btnRow}>
               <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, flex: 1, textAlign: 'left' }}>
-                <span>{isOpen ? '⌄' : '›'} <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> {o.customers?.company} <span style={{ color: '#78716c', fontSize: 12 }}>PO {o.customer_po}</span></span>
+                <span>{isOpen ? '⌄' : '›'} <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> {o.customers?.company} <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>PO {o.customer_po}</span></span>
               </button>
               <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
               <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
               <button onClick={() => openEditOrder(o)} style={{ ...editBtn, marginLeft: 8 }}>Edit Order</button>
-              <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, marginLeft: 8, color: '#C0562D' }}>Delete Order</button>
+              <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, marginLeft: 8, color: 'var(--fo-error)' }}>Delete Order</button>
             </div>
             {isOpen && (
               <div style={{ marginTop: 12 }}>
-                <table style={table}>
+                <div className="fo-table-wrap">
+                <table style={table} className="fo-table">
                   <thead><tr style={trHead}><th>Commodity</th><th>Supplier</th><th>Shipper PO</th><th style={{ textAlign: 'right' }}>Cases</th><th>Sell $/cs</th><th>Cost $/cs</th><th>Revenue</th><th>Margin</th><th></th></tr></thead>
                   <tbody>{(o.order_lines || []).map(l => {
                     const revenue = l.cases_ordered * l.sell_price_per_case;
@@ -258,18 +238,19 @@ export default function OrdersPage() {
                         <td>{l.shipper_po}</td>
                         <td style={{ textAlign: 'right' }}>
                           {l.cases_ordered}
-                          {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {l.original_cases_ordered}</div>}
+                          {amended && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>orig: {l.original_cases_ordered}</div>}
                         </td>
                         <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td><input type="number" defaultValue={l.fob_cost_per_case} onBlur={e => updateLineField(l.order_line_id, 'fob_cost_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
-                        <td style={{ color: margin >= 0 ? '#2F5233' : '#C0562D', fontWeight: 700 }}>${margin.toLocaleString()}</td>
-                        <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button> <button onClick={() => deleteLine(l.order_line_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
+                        <td style={{ color: margin >= 0 ? 'var(--fo-success)' : 'var(--fo-error)', fontWeight: 700 }}>${margin.toLocaleString()}</td>
+                        <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button> <button onClick={() => deleteLine(l.order_line_id)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete</button></td>
                       </tr>
                     );
                   })}</tbody>
                 </table>
-                <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 4 }}>To amend an already-loaded order's quantity or price, use Load Tracking instead — that keeps the original number on file.</div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>To amend an already-loaded order's quantity or price, use Load Tracking instead — that keeps the original number on file.</div>
 
                 {lineTarget && lineTarget.orderId === o.customer_order_id ? (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
@@ -313,29 +294,35 @@ export default function OrdersPage() {
           </div>
         );
       })}
+      </div>
     </AppShell>
   );
 }
 
 function field(label, value, onChange, type = 'text') {
   return (
-    <label style={{ fontSize: 13 }}>{label}
+    <label style={{ fontSize: 13 }}>
+      <span className="fo-field-label">{label}</span>
       <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} style={input} />
     </label>
   );
 }
 function pill(status) {
-  const colors = { Open: '#6B8E4E', Closed: '#6B7280', Cancelled: '#B0403A' };
-  return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
+  const styles = {
+    Open: { background: 'var(--fo-success-bg)', color: 'var(--fo-success)' },
+    Closed: { background: 'var(--fo-neutral-bg)', color: 'var(--fo-text-dim)' },
+    Cancelled: { background: 'var(--fo-error-bg)', color: 'var(--fo-error)' },
+  };
+  return { display: 'inline-block', padding: '3px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, ...(styles[status] || styles.Closed) };
 }
-const jacketPill = { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: '#4B6B8A', fontFamily: 'monospace' };
-const unassignedPill = { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#78716c', background: '#EFEAD9' };
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
+const jacketPill = { display: 'inline-block', padding: '3px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: 'var(--fo-info)', background: 'var(--fo-info-bg)', fontFamily: 'monospace' };
+const unassignedPill = { display: 'inline-block', padding: '3px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: 'var(--fo-text-dim)', background: 'var(--fo-neutral-bg)' };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 16 };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
 const btnRow = { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 12 };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 };
-const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const table = { width: '100%', background: '#fff', borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm)', padding: 18, marginBottom: 14 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 };
+const input = { display: 'block', width: '100%', marginTop: 4 };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};
