@@ -191,11 +191,11 @@ export default function JacketsPage() {
   }
 
   async function createOrderFromHere() {
-    if (!newOrderForm.customer_id || !newOrderForm.acumatica_no || !newOrderForm.product_id || !newOrderForm.cases) {
-      alert('Customer, Acumatica Order #, Product, and Cases are all required.'); return;
+    if (!newOrderForm.customer_id || !newOrderForm.product_id || !newOrderForm.cases) {
+      alert('Customer, Product, and Cases are all required.'); return;
     }
     const { data: order, error: orderErr } = await supabase.from('customer_orders').insert({
-      acumatica_order_no: newOrderForm.acumatica_no, customer_id: Number(newOrderForm.customer_id),
+      acumatica_order_no: newOrderForm.acumatica_no || null, customer_id: Number(newOrderForm.customer_id),
       customer_po: newOrderForm.customer_po || null, order_date: new Date().toISOString().slice(0, 10),
       order_status: 'Open', source: 'Internal', order_type: 'Produce Sale',
     }).select().single();
@@ -522,7 +522,7 @@ export default function JacketsPage() {
                       {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
                     </select>
                   </label>
-                  {detailField('Acumatica Order #', 'acumatica_no', newOrderForm, setNewOrderForm)}
+                  {detailField('Acumatica Order # (optional)', 'acumatica_no', newOrderForm, setNewOrderForm)}
                   {detailField('Customer PO', 'customer_po', newOrderForm, setNewOrderForm)}
                   <label style={{ fontSize: 13 }}>Product
                     <select value={newOrderForm.product_id} onChange={e => setNewOrderForm({ ...newOrderForm, product_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>

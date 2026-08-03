@@ -266,9 +266,9 @@ export default function PriceWorksheetPage() {
 
     let orderId = convertForm.existingOrderId ? Number(convertForm.existingOrderId) : null;
     if (convertForm.mode === 'new') {
-      if (!convertForm.newAcumaticaNo || !convertForm.newCustomerId) { alert('New order needs an Acumatica Order # and a Customer.'); return; }
+      if (!convertForm.newCustomerId) { alert('New order needs a Customer.'); return; }
       const { data: newOrder, error: orderErr } = await supabase.from('customer_orders').insert({
-        acumatica_order_no: convertForm.newAcumaticaNo, customer_id: Number(convertForm.newCustomerId),
+        acumatica_order_no: convertForm.newAcumaticaNo || null, customer_id: Number(convertForm.newCustomerId),
         customer_po: convertForm.newCustomerPO || null, order_date: new Date().toISOString().slice(0, 10),
         order_status: 'Open', source: 'Internal',
       }).select().single();
@@ -451,7 +451,7 @@ export default function PriceWorksheetPage() {
                           </label>
                         ) : (
                           <>
-                            <label style={{ fontSize: 13 }}>Acumatica Order #<input value={convertForm.newAcumaticaNo} onChange={e => setConvertForm({ ...convertForm, newAcumaticaNo: e.target.value })} style={selectStyle} /></label>
+                            <label style={{ fontSize: 13 }}>Acumatica Order # (optional)<input value={convertForm.newAcumaticaNo} onChange={e => setConvertForm({ ...convertForm, newAcumaticaNo: e.target.value })} style={selectStyle} /></label>
                             <label style={{ fontSize: 13 }}>Customer
                               <select value={convertForm.newCustomerId} onChange={e => setConvertForm({ ...convertForm, newCustomerId: e.target.value })} style={selectStyle}>
                                 <option value="">— select —</option>

@@ -67,9 +67,9 @@ export default function OrdersPage() {
     setShowNewOrder(true);
   }
   async function saveOrder() {
-    if (!orderForm.acumatica_order_no || !orderForm.customer_id) { alert('Acumatica Order # and Customer are both required.'); return; }
+    if (!orderForm.customer_id) { alert('Customer is required.'); return; }
     const payload = {
-      acumatica_order_no: orderForm.acumatica_order_no,
+      acumatica_order_no: orderForm.acumatica_order_no || null,
       customer_id: Number(orderForm.customer_id),
       customer_location_id: orderForm.customer_location_id ? Number(orderForm.customer_location_id) : null,
       customer_po: orderForm.customer_po || null,
@@ -161,7 +161,7 @@ export default function OrdersPage() {
       {showNewOrder && (
         <div style={card}>
           <div style={grid}>
-            {field('Acumatica Order #', orderForm.acumatica_order_no, v => setOrderForm({ ...orderForm, acumatica_order_no: v }))}
+            {field('Acumatica Order # (optional — add later if you don\'t have it yet)', orderForm.acumatica_order_no, v => setOrderForm({ ...orderForm, acumatica_order_no: v }))}
             <label style={{ fontSize: 13 }}>Customer
               <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value, customer_location_id: '' })} style={input}>
                 <option value="">— select —</option>
@@ -215,7 +215,7 @@ export default function OrdersPage() {
           <div key={o.customer_order_id} style={card}>
             <div style={btnRow}>
               <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, flex: 1, textAlign: 'left' }}>
-                <span>{isOpen ? '⌄' : '›'} <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> {o.customers?.company} <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>PO {o.customer_po}</span></span>
+                <span>{isOpen ? '⌄' : '›'} {o.acumatica_order_no ? <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> : <span style={{ ...unassignedPill, background: 'var(--fo-warn-bg)', color: 'var(--fo-warn)' }}>No Acumatica #</span>} {o.customers?.company} <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>PO {o.customer_po}</span></span>
               </button>
               <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
               <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
