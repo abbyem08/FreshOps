@@ -1,5 +1,5 @@
 // components/AppShell.js
-// Shared sidebar + auth guard for every internal (staff) page.
+// Shared sidebar + header + auth guard for every internal (staff) page.
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
@@ -49,11 +49,16 @@ const NAV_SECTIONS = [
   },
 ];
 
-export default function AppShell({ title, children }) {
+export default function AppShell({ title, subtitle, children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [darkPreview, setDarkPreview] = useState(false);
 
   useEffect(() => { checkAuth(); }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-dark', darkPreview);
+  }, [darkPreview]);
 
   async function checkAuth() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -65,10 +70,12 @@ export default function AppShell({ title, children }) {
 
   if (!ready) return <div style={{ padding: 40, color: 'var(--fo-text-dim)' }}>Loading…</div>;
 
+  const today = new Date();
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--fo-page-bg)' }}>
-      <div className="no-print" style={{ width: 226, flexShrink: 0, background: 'var(--fo-nav-bg)', borderRight: '1px solid var(--fo-border-soft)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px 16px 8px' }}>
+      <div className="no-print" style={{ width: 224, flexShrink: 0, background: 'var(--fo-sidebar)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '18px 16px 10px' }}>
           <Logo variant="icon" size={26} />
         </div>
         <nav style={{ flex: 1, padding: '6px 0', overflowY: 'auto' }}>
@@ -87,15 +94,32 @@ export default function AppShell({ title, children }) {
             </div>
           ))}
         </nav>
-        <div style={{ padding: 12, borderTop: '1px solid var(--fo-border-soft)' }}>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ width: '100%' }}>
+        <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,.1)' }}>
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
+            style={{ width: '100%', padding: '9px', background: 'rgba(255,255,255,.1)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
             Sign Out
           </button>
         </div>
       </div>
+
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 36px 48px' }}>
-          <h1 className="fo-h1">{title}</h1>
+        <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 36px', borderBottom: '1px solid var(--fo-border-soft)', background: 'var(--fo-card-bg)' }}>
+          <div>
+            <h1 className="fo-h1" style={{ marginBottom: subtitle ? 2 : 0 }}>{title}</h1>
+            {subtitle && <div style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{subtitle}</div>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input placeholder="Search jackets, orders, products… (coming soon)" disabled
+              style={{ width: 300, background: 'var(--fo-section-bg)', border: '1px solid var(--fo-border-soft)', color: 'var(--fo-text-faint)' }} />
+            <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+              {today.toLocaleDateString(undefined, { weekday: 'long' })}<br/>{today.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+            <button onClick={() => setDarkPreview(!darkPreview)} className="fo-btn fo-btn-secondary fo-btn-sm" title="Preview only — not yet saved to your account (Phase 7)">
+              {darkPreview ? '☀ Light' : '● Command Center'}
+            </button>
+          </div>
+        </div>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 36px 48px' }}>
           {children}
         </div>
       </div>
