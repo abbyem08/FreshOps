@@ -4,7 +4,7 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const STATUS_OPTIONS = ['Planned', 'Loading', 'Loaded', 'In Transit', 'Delivered', 'Short', 'Exception'];
-const NOTIFICATION_OPTIONS = ['Not Loaded Yet', 'Inloaded', 'In Transit', 'Delivered', 'Cancelled'];
+const NOTIFICATION_TYPES = ['Loaded', 'In Transit', 'Delivered', 'Delayed / Issue'];
 
 export default function OpsPage() {
   const [lines, setLines] = useState([]);
@@ -32,6 +32,7 @@ export default function OpsPage() {
   const [moveCasesOptions, setMoveCasesOptions] = useState([]);
   const [compensatingClaimId, setCompensatingClaimId] = useState(null);
   const [compensationForm, setCompensationForm] = useState({ cases: '', notes: '' });
+  const [notificationsByLine, setNotificationsByLine] = useState({});
 
   useEffect(() => { load(); }, []);
 
@@ -45,6 +46,11 @@ export default function OpsPage() {
       .order('jacket_id')
       .order('jacket_line_id');
     setLines(jl || []);
+
+    const { data: notifs } = await supabase.from('customer_notifications').select('*').order('notified_at', { ascending: true });
+    const grouped = {};
+    (notifs || []).forEach(n => { grouped[n.jacket_line_id] = grouped[n.jacket_line_id] || []; grouped[n.jacket_line_id].push(n); });
+    setNotificationsByLine(grouped);
 
     const { data: cl } = await supabase.from('jacket_commodity_loads').select('*, jackets(jacket_number), products(commodity, pack_size), suppliers(company)').order('jacket_id');
     setCommodityLoads(cl || []);
@@ -97,11 +103,14 @@ export default function OpsPage() {
     load();
   }
 
-  async function updateNotificationStatus(id, status) {
-    const { error } = await supabase.from('jacket_lines').update({
-      customer_notification_status: status, customer_notification_status_at: new Date().toISOString()
-    }).eq('jacket_line_id', id);
-    if (error) { alert('Update failed: ' + error.message); return; }
+  async function logNotification(jacketLineId, type) {
+    const { error } = await supabase.from('customer_notifications').insert({ jacket_line_id: jacketLineId, notification_type: type });
+    if (error) { alert('Could not log: ' + error.message); return; }
+    load();
+  }
+  async function removeNotification(id) {
+    const { error } = await supabase.from('customer_notifications').delete().eq('notification_id', id);
+    if (error) { alert('Could not remove: ' + error.message); return; }
     load();
   }
   async function updateDelivered(id, value) {
@@ -324,7 +333,7 @@ export default function OpsPage() {
 
   return (
     <AppShell title="Load Tracking">
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 12 }}>Track load progress, document BOLs, log customer notifications, and catch discrepancies before they become problems.</div>
+      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 12 }}>Track load progress, document BOLs, log customer notifications, and catch discrepancies before they become problems.</div>
       <label style={{ fontSize: 13, display: 'block', marginBottom: 16 }}>Viewing
         <select value={jacketFilter} onChange={e => setJacketFilter(e.target.value)} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 220 }}>
           <option value="all">All Jackets</option>
@@ -335,13 +344,13 @@ export default function OpsPage() {
       {/* ---- Jacket-level: Actual Loaded by Commodity, per Shipper ---- */}
       {groupList.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Actual Loaded by Commodity, per Shipper (whole truck)</div>
-          <table style={table}>
+          <div style={{ fontWeight: 600, color: 'var(--fo-primary)', marginBottom: 6 }}>Actual Loaded by Commodity, per Shipper (whole truck)</div>
+          <table style={table} className="fo-table">
             <thead><tr style={trHead}><th>Jacket</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Total Ordered</th><th style={{ textAlign: 'right' }}>Actual Loaded</th><th style={{ textAlign: 'right' }}>Variance</th></tr></thead>
             <tbody>{groupList.map(g => {
               const variance = g.loaded - g.ordered;
               return (
-                <tr key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={variance !== 0 && g.loaded > 0 ? { ...tr, background: '#FCE9C9' } : tr}>
+                <tr key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={variance !== 0 && g.loaded > 0 ? { ...tr, background: 'var(--fo-warn-bg)' } : tr}>
                   <td style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</td>
                   <td>{g.supplierName || '—'}</td>
                   <td>{g.commodity} — {g.packSize}</td>
@@ -356,13 +365,13 @@ export default function OpsPage() {
       )}
 
       {filteredLines.length === 0 ? (
-        <p style={{ color: '#a8a29e' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
+        <p style={{ color: 'var(--fo-text-faint)' }}>No jacket lines yet — assign order lines to a Jacket first.</p>
       ) : (
         <>
-          <div style={{ fontWeight: 600, color: '#2F5233', marginBottom: 6 }}>Per-Order Detail, by Commodity</div>
+          <div style={{ fontWeight: 600, color: 'var(--fo-primary)', marginBottom: 6 }}>Per-Order Detail, by Commodity</div>
           <div style={{ display: 'flex', gap: 16, fontSize: 12, marginBottom: 10 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#FCE9C9', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: '#F8D7D2', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ assigned to this jacket</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: 'var(--fo-warn-bg)', display: 'inline-block', borderRadius: 2 }}></span> Commodity loaded ≠ ordered</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, background: 'var(--fo-error-bg)', display: 'inline-block', borderRadius: 2 }}></span> Delivered ≠ assigned to this jacket</span>
           </div>
           {groupList.map(g => {
             const groupLines = filteredLines.filter(l => l.jacket_id === g.jacketId && l.order_lines?.product_id === g.productId && l.order_lines?.supplier_id === g.supplierId);
@@ -370,15 +379,15 @@ export default function OpsPage() {
             const variance = g.loaded - g.ordered;
             return (
               <div key={g.jacketId + '-' + g.productId + '-' + g.supplierId} style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
-                <div style={{ background: variance !== 0 && g.loaded > 0 ? '#FCE9C9' : '#F6F4EC', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <div style={{ background: variance !== 0 && g.loaded > 0 ? 'var(--fo-warn-bg)' : 'var(--fo-section-bg)', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <div><strong style={{ fontFamily: 'monospace' }}>{g.jacketNumber}</strong> · <strong>{g.commodity} — {g.packSize}</strong> · {g.supplierName || 'no supplier'}</div>
-                  <div style={{ color: '#78716c' }}>Ordered {g.ordered} · Loaded {g.loaded}{variance !== 0 && g.loaded > 0 ? ` · Variance ${variance > 0 ? '+' : ''}${variance}` : ''}</div>
+                  <div style={{ color: 'var(--fo-text-dim)' }}>Ordered {g.ordered} · Loaded {g.loaded}{variance !== 0 && g.loaded > 0 ? ` · Variance ${variance > 0 ? '+' : ''}${variance}` : ''}</div>
                 </div>
                 <table style={{ ...table, border: 'none', borderRadius: 0 }}>
                   <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Actual Delivered</th><th>BOL #</th><th>Load Status</th><th>Customer Told</th><th>Exception / Notes</th><th></th></tr></thead>
                   <tbody>{groupLines.map(jl => {
                     const f = flags[jl.jacket_line_id] || {};
-                    const rowStyle = f.deliveryMismatch ? { ...tr, background: '#F8D7D2' } : tr;
+                    const rowStyle = f.deliveryMismatch ? { ...tr, background: 'var(--fo-error-bg)' } : tr;
                     const amended = jl.order_lines?.original_cases_ordered != null && Number(jl.order_lines.original_cases_ordered) !== Number(jl.order_lines?.cases_ordered);
                     return (
                       <Fragment key={jl.jacket_line_id}>
@@ -395,15 +404,15 @@ export default function OpsPage() {
                             ) : (
                               <>
                                 {jl.order_lines?.cases_ordered}
-                                {amended && <div style={{ fontSize: 10, color: '#a8a29e' }}>orig: {jl.order_lines.original_cases_ordered} · {jl.order_lines?.amended_at ? new Date(jl.order_lines.amended_at).toLocaleString() : ''}</div>}
+                                {amended && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>orig: {jl.order_lines.original_cases_ordered} · {jl.order_lines?.amended_at ? new Date(jl.order_lines.amended_at).toLocaleString() : ''}</div>}
                                 <div><button onClick={() => openAmend(jl)} style={{ ...miniBtn, marginTop: 2 }}>Amend</button></div>
                               </>
                             )}
                           </td>
                           <td>
                             <input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateDelivered(jl.jacket_line_id, Number(e.target.value))} style={{ width: 64 }} />
-                            {jl.compensation_cases > 0 && <div style={{ fontSize: 10, color: '#6B8E4E' }}>incl. {jl.compensation_cases} comp.</div>}
-                            {jl.quantity_updated_at && <div style={{ fontSize: 10, color: '#a8a29e' }}>{new Date(jl.quantity_updated_at).toLocaleString()}</div>}
+                            {jl.compensation_cases > 0 && <div style={{ fontSize: 10, color: 'var(--fo-accent)' }}>incl. {jl.compensation_cases} comp.</div>}
+                            {jl.quantity_updated_at && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>{new Date(jl.quantity_updated_at).toLocaleString()}</div>}
                           </td>
                           <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 90 }} placeholder="BOL #" /></td>
                           <td>
@@ -411,18 +420,26 @@ export default function OpsPage() {
                               {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td>
-                            <select value={jl.customer_notification_status || 'Not Loaded Yet'} onChange={e => updateNotificationStatus(jl.jacket_line_id, e.target.value)}>
-                              {NOTIFICATION_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                            </select>
-                            {jl.customer_notification_status_at && <div style={{ fontSize: 10, color: '#a8a29e' }}>{new Date(jl.customer_notification_status_at).toLocaleString()}</div>}
+                          <td style={{ minWidth: 160 }}>
+                            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+                              {NOTIFICATION_TYPES.map(t => (
+                                <button key={t} onClick={() => logNotification(jl.jacket_line_id, t)} style={{ ...miniBtn, background: 'var(--fo-primary)', color: '#fff', border: 'none' }}>+ {t}</button>
+                              ))}
+                            </div>
+                            {(notificationsByLine[jl.jacket_line_id] || []).map(n => (
+                              <div key={n.notification_id} style={{ fontSize: 10, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ background: 'var(--fo-neutral-bg)', borderRadius: 4, padding: '1px 5px' }}>{n.notification_type}</span>
+                                {new Date(n.notified_at).toLocaleString()}
+                                <button onClick={() => removeNotification(n.notification_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-error)', cursor: 'pointer', fontSize: 10, padding: 0 }}>✕</button>
+                              </div>
+                            ))}
                           </td>
                           <td><input type="text" defaultValue={jl.exception_notes || ''} onBlur={e => updateField(jl.jacket_line_id, 'exception_notes', e.target.value)} style={{ width: 150 }} placeholder="Notes" /></td>
                           <td><button onClick={() => openReassign(jl)} style={miniBtn}>Reassign</button></td>
                         </tr>
                         {reassigningId === jl.jacket_line_id && (
                           <tr>
-                            <td colSpan={9} style={{ background: '#F6F4EC', padding: 10 }}>
+                            <td colSpan={9} style={{ background: 'var(--fo-section-bg)', padding: 10 }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                                 <label style={{ fontSize: 12 }}>Move this allocation to a different order
                                   <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 260 }}>
@@ -430,7 +447,7 @@ export default function OpsPage() {
                                     {reassignOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
                                   </select>
                                 </label>
-                                <button onClick={() => saveReassign(jl)} style={{ ...miniBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                                <button onClick={() => saveReassign(jl)} style={{ ...miniBtn, background: 'var(--fo-accent)', color: '#fff', border: 'none' }}>Confirm</button>
                                 <button onClick={() => setReassigningId(null)} style={miniBtn}>Cancel</button>
                               </div>
                             </td>
@@ -447,13 +464,13 @@ export default function OpsPage() {
       )}
 
       {/* ---- Claims ---- */}
-      <div style={{ marginTop: 24, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 }}>
+      <div style={{ marginTop: 24, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 8, padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontWeight: 600, color: '#C0562D' }}>⚠ Claims &amp; Quality Issues</div>
-            <div style={{ fontSize: 12, color: '#a8a29e' }}>Operational record only — flag it, then AP/AR issues the actual credit memo in Acumatica.</div>
+            <div style={{ fontWeight: 600, color: 'var(--fo-error)' }}>⚠ Claims &amp; Quality Issues</div>
+            <div style={{ fontSize: 12, color: 'var(--fo-text-faint)' }}>Operational record only — flag it, then AP/AR issues the actual credit memo in Acumatica.</div>
           </div>
-          <button onClick={() => setShowClaimForm(!showClaimForm)} style={{ padding: '6px 14px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>+ Log Claim</button>
+          <button onClick={() => setShowClaimForm(!showClaimForm)} style={{ padding: '6px 14px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>+ Log Claim</button>
         </div>
         {showClaimForm && (
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -471,7 +488,7 @@ export default function OpsPage() {
             <label style={{ fontSize: 13, gridColumn: 'span 3' }}>Description
               <input value={claimForm.description} onChange={e => setClaimForm({ ...claimForm, description: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
             </label>
-            <button onClick={saveClaim} style={{ padding: '8px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', gridColumn: 'span 1' }}>Save Claim</button>
+            <button onClick={saveClaim} style={{ padding: '8px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', gridColumn: 'span 1' }}>Save Claim</button>
           </div>
         )}
         {filteredClaims.length > 0 && (
@@ -485,19 +502,19 @@ export default function OpsPage() {
                   <td>{c.jacket_lines?.order_lines?.customer_orders?.customers?.company || c.snapshot_customer || '—'}</td>
                   <td>{c.claim_type}</td><td>{c.description}</td>
                   <td>{c.jacket_lines?.order_lines?.products?.commodity || c.snapshot_commodity || '—'}</td>
-                  <td style={{ color: '#a8a29e', fontSize: 12 }}>{c.date_opened}</td>
+                  <td style={{ color: 'var(--fo-text-faint)', fontSize: 12 }}>{c.date_opened}</td>
                   <td><span style={statusPill(c.status)}>{c.status}</span></td>
                   <td>{c.resolution_price_adjustment ? `-$${Number(c.resolution_price_adjustment).toFixed(2)}/cs` : '—'}</td>
                   <td>
                     <button onClick={() => openResolve(c)} style={editBtn}>{c.status === 'Open' ? 'Resolve' : 'Edit'}</button>{' '}
                     <button onClick={() => openMoveCases(c)} style={editBtn}>Move Cases</button>{' '}
                     <button onClick={() => openCompensation(c)} style={editBtn}>Add Compensation</button>{' '}
-                    <button onClick={() => deleteClaim(c.claim_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button>
+                    <button onClick={() => deleteClaim(c.claim_id)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete</button>
                   </td>
                 </tr>
                 {resolvingId === c.claim_id && (
                   <tr>
-                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
+                    <td colSpan={10} style={{ background: 'var(--fo-section-bg)', padding: 12 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                         <label style={{ fontSize: 13 }}>Status
                           <select value={resolveForm.status} onChange={e => setResolveForm({ ...resolveForm, status: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
@@ -517,16 +534,16 @@ export default function OpsPage() {
                           <input value={resolveForm.resolution} onChange={e => setResolveForm({ ...resolveForm, resolution: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
                         </label>
                       </div>
-                      <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 6 }}>A price adjustment reduces that order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
-                      <button onClick={() => saveResolve(c)} style={{ marginTop: 8, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
-                      <button onClick={() => setResolvingId(null)} style={{ marginTop: 8, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                      <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 6 }}>A price adjustment reduces that order line's sell price for accurate margin — it never affects Market Call price history or trends.</div>
+                      <button onClick={() => saveResolve(c)} style={{ marginTop: 8, marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
+                      <button onClick={() => setResolvingId(null)} style={{ marginTop: 8, padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                     </td>
                   </tr>
                 )}
                 {movingClaimId === c.claim_id && (
                   <tr>
-                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
-                      <div style={{ fontSize: 12, color: '#78716c', marginBottom: 8 }}>Move part of this allocation to a different order — useful when a shortage means redistributing what actually arrived.</div>
+                    <td colSpan={10} style={{ background: 'var(--fo-section-bg)', padding: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginBottom: 8 }}>Move part of this allocation to a different order — useful when a shortage means redistributing what actually arrived.</div>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <label style={{ fontSize: 13 }}>Move to which order?
                           <select value={moveCasesForm.target_order_line_id} onChange={e => setMoveCasesForm({ ...moveCasesForm, target_order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, minWidth: 240 }}>
@@ -537,16 +554,16 @@ export default function OpsPage() {
                         <label style={{ fontSize: 13 }}>Cases to move
                           <input type="number" value={moveCasesForm.cases} onChange={e => setMoveCasesForm({ ...moveCasesForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 90 }} />
                         </label>
-                        <button onClick={() => saveMoveCases(c)} style={{ padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
-                        <button onClick={() => setMovingClaimId(null)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => saveMoveCases(c)} style={{ padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
+                        <button onClick={() => setMovingClaimId(null)} style={{ padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </td>
                   </tr>
                 )}
                 {compensatingClaimId === c.claim_id && (
                   <tr>
-                    <td colSpan={10} style={{ background: '#F6F4EC', padding: 12 }}>
-                      <div style={{ fontSize: 12, color: '#78716c', marginBottom: 8 }}>Add extra cases at no charge — this increases what's physically delivered without touching the customer's price or billed quantity.</div>
+                    <td colSpan={10} style={{ background: 'var(--fo-section-bg)', padding: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginBottom: 8 }}>Add extra cases at no charge — this increases what's physically delivered without touching the customer's price or billed quantity.</div>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <label style={{ fontSize: 13 }}>Compensation cases
                           <input type="number" value={compensationForm.cases} onChange={e => setCompensationForm({ ...compensationForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, width: 90 }} />
@@ -554,8 +571,8 @@ export default function OpsPage() {
                         <label style={{ fontSize: 13 }}>Notes
                           <input value={compensationForm.notes} onChange={e => setCompensationForm({ ...compensationForm, notes: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, minWidth: 220 }} />
                         </label>
-                        <button onClick={() => saveCompensation(c)} style={{ padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
-                        <button onClick={() => setCompensatingClaimId(null)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => saveCompensation(c)} style={{ padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
+                        <button onClick={() => setCompensatingClaimId(null)} style={{ padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </td>
                   </tr>
@@ -567,12 +584,12 @@ export default function OpsPage() {
       </div>
 
       {/* ---- Jacket Reconciliation ---- */}
-      <div style={{ marginTop: 24, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 }}>
-        <div style={{ fontWeight: 600, color: '#2F5233' }}>Jacket Reconciliation</div>
-        <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 12 }}>Product physically on a truck that isn't fully accounted for — loaded but not yet delivered, or rolled/extra product still needing a home.</div>
+      <div style={{ marginTop: 24, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 8, padding: 16 }}>
+        <div style={{ fontWeight: 600, color: 'var(--fo-primary)' }}>Jacket Reconciliation</div>
+        <div style={{ fontSize: 12, color: 'var(--fo-text-faint)', marginBottom: 12 }}>Product physically on a truck that isn't fully accounted for — loaded but not yet delivered, or rolled/extra product still needing a home.</div>
 
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Remaining on Truck</div>
-        {remainingOnTruck.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing outstanding.</p> : (
+        {remainingOnTruck.length === 0 ? <p style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>Nothing outstanding.</p> : (
           <table style={{ ...table, marginBottom: 20 }}>
             <thead><tr style={trHead}><th>Jacket</th><th>Shipper</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Loaded</th><th style={{ textAlign: 'right' }}>Delivered</th><th style={{ textAlign: 'right' }}>Remaining</th></tr></thead>
             <tbody>{remainingOnTruck.map(g => (
@@ -589,8 +606,8 @@ export default function OpsPage() {
         )}
 
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Rolled / Extra Product to Sell or Resolve</div>
-        {filteredExtras.length === 0 ? <p style={{ color: '#a8a29e', fontSize: 13 }}>Nothing unresolved right now.</p> : (
-          <table style={table}>
+        {filteredExtras.length === 0 ? <p style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>Nothing unresolved right now.</p> : (
+          <table style={table} className="fo-table">
             <thead><tr style={trHead}><th>Jacket</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th>Notes</th><th></th></tr></thead>
             <tbody>{filteredExtras.map(x => (
               <Fragment key={x.extra_id}>
@@ -608,7 +625,7 @@ export default function OpsPage() {
                 </tr>
                 {addToOrderId === x.extra_id && (
                   <tr>
-                    <td colSpan={6} style={{ background: '#F6F4EC', padding: 12 }}>
+                    <td colSpan={6} style={{ background: 'var(--fo-section-bg)', padding: 12 }}>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
                         <label style={{ fontSize: 13 }}>Add to which order?
                           <select value={addToOrderForm.order_id} onChange={e => setAddToOrderForm({ ...addToOrderForm, order_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 4, minWidth: 220 }}>
@@ -622,7 +639,7 @@ export default function OpsPage() {
                             {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
                           </select>
                         </label>
-                        <button onClick={() => addToOrder(x)} style={{ padding: '8px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
+                        <button onClick={() => addToOrder(x)} style={{ padding: '8px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
                       </div>
                     </td>
                   </tr>
@@ -637,12 +654,12 @@ export default function OpsPage() {
 }
 
 function statusPill(status) {
-  const colors = { Open: '#D9A441', 'Under Review': '#D9A441', Resolved: '#3E7C5A' };
-  return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || '#9CA3AF' };
+  const colors = { Open: 'var(--fo-warn)', 'Under Review': 'var(--fo-warn)', Resolved: 'var(--fo-success)' };
+  return { display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: colors[status] || 'var(--fo-text-faint)' };
 }
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const miniBtn = { padding: '2px 6px', fontSize: 10, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 4, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8 };
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
+const miniBtn = { padding: '3px 8px', fontSize: 10.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer' };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)' };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};

@@ -80,8 +80,8 @@ export default function CustomersPage() {
             {field('ZIP', form.zip, v => setForm({ ...form, zip: v }))}
             {field('Payment Terms', form.payment_terms, v => setForm({ ...form, payment_terms: v }))}
           </div>
-          <button onClick={save} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Customer' : 'Save Customer'}</button>
-          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={save} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingId ? 'Update Customer' : 'Save Customer'}</button>
+          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
       {rows.map(r => {
@@ -92,9 +92,9 @@ export default function CustomersPage() {
           <div key={r.customer_id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button onClick={() => setExpandedId(isOpen ? null : r.customer_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', flex: 1 }}>
-                <span style={{ color: '#78716c', marginRight: 6 }}>{isOpen ? '⌄' : '›'}</span>
+                <span style={{ color: 'var(--fo-text-dim)', marginRight: 6 }}>{isOpen ? '⌄' : '›'}</span>
                 <strong>{r.company}</strong>
-                <div style={{ fontSize: 12.5, color: '#78716c', marginLeft: 14 }}>{r.buyer_contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} · {custLocs.length} location{custLocs.length === 1 ? '' : 's'} · {custHistory.length} price sheet{custHistory.length === 1 ? '' : 's'} on file</div>
+                <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', marginLeft: 14 }}>{r.buyer_contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} · {custLocs.length} location{custLocs.length === 1 ? '' : 's'} · {custHistory.length} price sheet{custHistory.length === 1 ? '' : 's'} on file</div>
               </button>
               <div>
                 <button onClick={() => openEdit(r)} style={editBtn}>Edit</button>
@@ -102,19 +102,19 @@ export default function CustomersPage() {
             </div>
             {isOpen && (
             <>
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Locations</div>
-              {custLocs.length === 0 && <div style={{ fontSize: 12.5, color: '#a8a29e', marginBottom: 6 }}>No extra locations yet — main profile address is used by default.</div>}
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--fo-border)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fo-text-dim)', marginBottom: 6 }}>Locations</div>
+              {custLocs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--fo-text-faint)', marginBottom: 6 }}>No extra locations yet — main profile address is used by default.</div>}
               {custLocs.map(l => (
                 <div key={l.location_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
                   <span><strong>{l.label}</strong> — {l.address}, {l.city} {l.state}</span>
                   <span>
                     <button onClick={() => openEditLoc(l)} style={{ ...editBtn, padding: '2px 8px', fontSize: 11 }}>Edit</button>{' '}
-                    <button onClick={() => deleteLoc(l.location_id)} style={{ ...editBtn, padding: '2px 8px', fontSize: 11, color: '#C0562D' }}>Delete</button>
+                    <button onClick={() => deleteLoc(l.location_id)} style={{ ...editBtn, padding: '2px 8px', fontSize: 11, color: 'var(--fo-error)' }}>Delete</button>
                   </span>
                 </div>
               ))}
-              <button onClick={() => openAddLoc(r.customer_id)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', marginTop: 6, padding: 0 }}>+ Add Location</button>
+              <button onClick={() => openAddLoc(r.customer_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', marginTop: 6, padding: 0 }}>+ Add Location</button>
               {locOpenFor === r.customer_id && (
                 <div style={{ marginTop: 8, ...grid }}>
                   {field('Label (e.g. Main Warehouse)', locForm.label, v => setLocForm({ ...locForm, label: v }))}
@@ -125,16 +125,16 @@ export default function CustomersPage() {
                   {field('Contact', locForm.contact, v => setLocForm({ ...locForm, contact: v }))}
                   {field('Phone', locForm.phone, v => setLocForm({ ...locForm, phone: v }))}
                   <div style={{ gridColumn: 'span 3' }}>
-                    <button onClick={() => saveLoc(r.customer_id)} style={{ ...btn, background: '#6B8E4E', marginTop: 4 }}>Save Location</button>
-                    <button onClick={() => setLocOpenFor(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 4, marginLeft: 8 }}>Cancel</button>
+                    <button onClick={() => saveLoc(r.customer_id)} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 4 }}>Save Location</button>
+                    <button onClick={() => setLocOpenFor(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 4, marginLeft: 8 }}>Cancel</button>
                   </div>
                 </div>
               )}
             </div>
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #DCD5C1' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#78716c', marginBottom: 6 }}>Price Sheet History</div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--fo-border)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fo-text-dim)', marginBottom: 6 }}>Price Sheet History</div>
               {custHistory.length === 0 ? (
-                <div style={{ fontSize: 12.5, color: '#a8a29e' }}>No saved price sheets sent to this customer yet.</div>
+                <div style={{ fontSize: 12.5, color: 'var(--fo-text-faint)' }}>No saved price sheets sent to this customer yet.</div>
               ) : (
                 custHistory.map(h => (
                   <div key={h.id} style={{ fontSize: 13, padding: '3px 0' }}>
@@ -159,8 +159,8 @@ function field(label, value, onChange) {
     </label>
   );
 }
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 12 };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 };
-const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 16 };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)', padding: 18, marginBottom: 14 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 };
+const input = { display: 'block', width: '100%', marginTop: 4 };

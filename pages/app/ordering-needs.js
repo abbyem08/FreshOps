@@ -41,17 +41,17 @@ export default function OrderingNeedsPage() {
 
   return (
     <AppShell title="Ordering Needs">
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>What's still owed to customers but not yet assigned to a truck — this is what you need to line up from your suppliers.</div>
+      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>What's still owed to customers but not yet assigned to a truck — this is what you need to line up from your suppliers.</div>
       {rows.length === 0 ? (
-        <p style={{ color: '#a8a29e' }}>Nothing outstanding — every open order line is already assigned to a jacket.</p>
+        <p style={{ color: 'var(--fo-text-faint)' }}>Nothing outstanding — every open order line is already assigned to a jacket.</p>
       ) : (
-        <table style={table}>
+        <table style={table} className="fo-table">
           <thead><tr style={trHead}><th>Commodity</th><th style={{ textAlign: 'right' }}>Total Cases Needed</th><th>From Which Orders</th></tr></thead>
           <tbody>{rows.map((g, i) => (
             <tr key={i} style={tr}>
               <td>{g.commodity} — {g.packSize}</td>
-              <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>{g.needed}</td>
-              <td style={{ fontSize: 12, color: '#78716c' }}>{g.orders.join('; ')}</td>
+              <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fo-primary)' }}>{g.needed}</td>
+              <td style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{g.orders.join('; ')}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -60,6 +60,6 @@ export default function OrderingNeedsPage() {
   );
 }
 
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};

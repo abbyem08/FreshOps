@@ -48,11 +48,11 @@ export default function ProductsPage() {
             {field('Cases / Pallet', form.cases_per_pallet, v => setForm({ ...form, cases_per_pallet: v }))}
             {field('Default Origin', form.default_origin, v => setForm({ ...form, default_origin: v }))}
           </div>
-          <button onClick={save} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Product' : 'Save Product'}</button>
-          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={save} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingId ? 'Update Product' : 'Save Product'}</button>
+          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
-      <table style={table}>
+      <table style={table} className="fo-table">
         <thead><tr style={trHead}><th>Commodity</th><th>Pack Size</th><th style={{ textAlign: 'right' }}>Weight/Case</th><th style={{ textAlign: 'right' }}>Cases/Pallet</th><th>Origin</th><th></th></tr></thead>
         <tbody>{rows.map(r => (
           <tr key={r.product_id} style={tr}>
@@ -72,11 +72,11 @@ function field(label, value, onChange) {
     </label>
   );
 }
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 };
-const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 16 };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)', padding: 18, marginBottom: 16 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 };
+const input = { display: 'block', width: '100%', marginTop: 4 };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};

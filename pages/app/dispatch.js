@@ -35,7 +35,7 @@ export default function DispatchPage() {
     setJacket(j);
     const { data: stopRows } = await supabase
       .from('stops')
-      .select('*, suppliers(company, pickup_address, city, state, phone), customers(company, delivery_address, city, state, phone), supplier_locations(label, address, city, state, phone, contact), customer_locations(label, address, city, state, phone, contact), stop_lines(*, jacket_lines(*, order_lines(shipper_po, products(commodity, pack_size))))')
+      .select('*, suppliers(company, pickup_address, city, state, phone), customers(company, delivery_address, city, state, phone), supplier_locations(label, address, city, state, phone, contact), customer_locations(label, address, city, state, phone, contact), stop_lines(*, jacket_lines(*, order_lines(shipper_po, products(commodity, pack_size)), customer_notifications(notification_type, notified_at)))')
       .eq('jacket_id', id)
       .order('stop_number');
     setStops(stopRows || []);
@@ -95,7 +95,7 @@ export default function DispatchPage() {
     loadDetail(jacketId);
   }
 
-  if (!jacket) return <AppShell title="Dispatch &amp; Freight"><p style={{ color: '#a8a29e' }}>No jackets yet — create one on the Jackets page first.</p></AppShell>;
+  if (!jacket) return <AppShell title="Dispatch &amp; Freight"><p style={{ color: 'var(--fo-text-faint)' }}>No jackets yet — create one on the Jackets page first.</p></AppShell>;
 
   const pickups = stops.filter(s => s.stop_type === 'Pickup');
   const deliveries = stops.filter(s => s.stop_type === 'Delivery');
@@ -117,17 +117,17 @@ export default function DispatchPage() {
   return (
     <AppShell title="Dispatch & Freight">
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        <select value={jacketId || ''} onChange={e => setJacketId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6 }}>
+        <select value={jacketId || ''} onChange={e => setJacketId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid var(--fo-border)', borderRadius: 6 }}>
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
         </select>
-        <button onClick={() => window.print()} style={{ padding: '6px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>🖨 Print / Export for Carrier</button>
+        <button onClick={() => window.print()} style={{ padding: '6px 16px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>🖨 Print / Export for Carrier</button>
       </div>
 
       {/* ---- Freight panel ---- */}
-      <div style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingFreight ? 12 : 0 }}>
-          <strong style={{ color: '#2F5233' }}>Freight</strong>
-          {!editingFreight && <button className="no-print" onClick={openFreightEdit} style={{ padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{freight ? 'Edit' : '+ Add Freight Record'}</button>}
+          <strong style={{ color: 'var(--fo-primary)' }}>Freight</strong>
+          {!editingFreight && <button className="no-print" onClick={openFreightEdit} style={{ padding: '6px 14px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{freight ? 'Edit' : '+ Add Freight Record'}</button>}
         </div>
 
         {editingFreight ? (
@@ -162,8 +162,8 @@ export default function DispatchPage() {
                 <input type="checkbox" checked={!!freightForm.carrier_paid} onChange={e => setFreightForm({ ...freightForm, carrier_paid: e.target.checked })} /> Carrier Paid
               </label>
             </div>
-            <button onClick={saveFreight} style={{ marginTop: 12, marginRight: 8, padding: '8px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
-            <button onClick={() => setEditingFreight(false)} style={{ marginTop: 12, padding: '8px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={saveFreight} style={{ marginTop: 12, marginRight: 8, padding: '8px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save</button>
+            <button onClick={() => setEditingFreight(false)} style={{ marginTop: 12, padding: '8px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
           </div>
         ) : freight ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, fontSize: 13 }}>
@@ -181,36 +181,36 @@ export default function DispatchPage() {
             <div><div style={label}>Paid</div>{freight.carrier_paid ? 'Yes' : 'No'}</div>
           </div>
         ) : (
-          <p style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>No freight record yet for this jacket.</p>
+          <p style={{ color: 'var(--fo-text-faint)', fontSize: 13, marginTop: 8 }}>No freight record yet for this jacket.</p>
         )}
       </div>
 
       {/* ---- Printable carrier sheet ---- */}
-      <div style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #DCD5C1', paddingBottom: 12, marginBottom: 16 }}>
+      <div style={{ background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 8, padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--fo-border)', paddingBottom: 12, marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#2F5233' }}>Jacket {jacket.jacket_number}</div>
-            <div style={{ color: '#78716c' }}>{jacket.jacket_date} · {jacket.route}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--fo-primary)' }}>Jacket {jacket.jacket_number}</div>
+            <div style={{ color: 'var(--fo-text-dim)' }}>{jacket.jacket_date} · {jacket.route}</div>
           </div>
           <div style={{ fontSize: 13, textAlign: 'right' }}>
-            <div><span style={{ color: '#78716c' }}>Carrier:</span> {jacket.carrier}</div>
-            <div><span style={{ color: '#78716c' }}>Driver:</span> {jacket.driver} ({jacket.driver_phone})</div>
-            <div><span style={{ color: '#78716c' }}>Truck/Trailer:</span> {jacket.truck} / {jacket.trailer}</div>
+            <div><span style={{ color: 'var(--fo-text-dim)' }}>Carrier:</span> {jacket.carrier}</div>
+            <div><span style={{ color: 'var(--fo-text-dim)' }}>Driver:</span> {jacket.driver} ({jacket.driver_phone})</div>
+            <div><span style={{ color: 'var(--fo-text-dim)' }}>Truck/Trailer:</span> {jacket.truck} / {jacket.trailer}</div>
           </div>
         </div>
 
-        <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Pickups</div>
+        <div style={{ fontWeight: 600, color: 'var(--fo-accent)', marginBottom: 8 }}>Pickups</div>
         {pickups.map(s => (
-          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid var(--fo-border)', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--fo-section-bg)', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.suppliers?.company}</strong>
-              <span style={{ color: '#78716c' }}>{s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address}, ${s.suppliers?.city} ${s.suppliers?.state}`}</span>
+              <span style={{ color: 'var(--fo-text-dim)' }}>{s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address}, ${s.suppliers?.city} ${s.suppliers?.state}`}</span>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
               {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
-            <table style={table}>
+            <table style={table} className="fo-table">
               <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Shipper PO</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
               <tbody>{(s.stop_lines || []).map(sl => (
                 <tr key={sl.stop_line_id} style={tr}>
@@ -224,24 +224,31 @@ export default function DispatchPage() {
           </div>
         ))}
 
-        <div style={{ fontWeight: 600, color: '#6B8E4E', margin: '20px 0 8px' }}>Deliveries</div>
+        <div style={{ fontWeight: 600, color: 'var(--fo-accent)', margin: '20px 0 8px' }}>Deliveries</div>
         {deliveries.map(s => (
-          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid #DCD5C1', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ background: '#F6F4EC', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={s.stop_id} style={{ marginBottom: 16, border: '1px solid var(--fo-border)', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--fo-section-bg)', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
               <span className="print-only">#{s.stop_number}</span>
               <strong>— {s.customers?.company}</strong>
-              <span style={{ color: '#78716c' }}>{s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address}, ${s.customers?.city} ${s.customers?.state}`}</span>
+              <span style={{ color: 'var(--fo-text-dim)' }}>{s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address}, ${s.customers?.city} ${s.customers?.state}`}</span>
               <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
               {s.appointment && <span className="print-only" style={{ marginLeft: 'auto', fontWeight: 600 }}>Appt: {new Date(s.appointment).toLocaleString()}</span>}
             </div>
-            <table style={table}>
-              <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
+            <table style={table} className="fo-table">
+              <thead><tr style={trHead}><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right' }}>Pallets</th><th style={{ paddingRight: 12 }}>Customer Notified</th></tr></thead>
               <tbody>{(s.stop_lines || []).map(sl => (
                 <tr key={sl.stop_line_id} style={tr}>
                   <td style={{ paddingLeft: 12 }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
                   <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
-                  <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
+                  <td style={{ textAlign: 'right' }}>{sl.pallets_at_stop}</td>
+                  <td style={{ paddingRight: 12, fontSize: 11, color: 'var(--fo-text-dim)' }}>
+                    {(sl.jacket_lines?.customer_notifications || []).length === 0 ? '—' :
+                      sl.jacket_lines.customer_notifications.map((n, i) => (
+                        <div key={i}>{n.notification_type} — {new Date(n.notified_at).toLocaleString()}</div>
+                      ))
+                    }
+                  </td>
                 </tr>
               ))}</tbody>
             </table>
@@ -250,7 +257,7 @@ export default function DispatchPage() {
 
         <div style={{ display: 'flex', gap: 32, marginTop: 20 }}>
           <div>
-            <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Total Cases by Supplier</div>
+            <div style={{ fontWeight: 600, color: 'var(--fo-accent)', marginBottom: 8 }}>Total Cases by Supplier</div>
             <table style={{ ...table, maxWidth: 320 }}>
               <thead><tr style={trHead}><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th></tr></thead>
               <tbody>{Object.entries(bySupplier).map(([name, cases]) => (
@@ -259,7 +266,7 @@ export default function DispatchPage() {
             </table>
           </div>
           <div>
-            <div style={{ fontWeight: 600, color: '#6B8E4E', marginBottom: 8 }}>Total Cases by Customer — {deliveries.length} delivery stop{deliveries.length === 1 ? '' : 's'}</div>
+            <div style={{ fontWeight: 600, color: 'var(--fo-accent)', marginBottom: 8 }}>Total Cases by Customer — {deliveries.length} delivery stop{deliveries.length === 1 ? '' : 's'}</div>
             <table style={{ ...table, maxWidth: 320 }}>
               <thead><tr style={trHead}><th>Customer</th><th style={{ textAlign: 'right' }}>Cases</th></tr></thead>
               <tbody>{Object.entries(byCustomer).map(([name, cases]) => (
@@ -281,8 +288,8 @@ function ffield(labelText, value, onChange, type = 'text') {
   );
 }
 
-const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const label = { color: '#78716c', fontSize: 11 };
+const input = { display: 'block', width: '100%', marginTop: 4 };
+const label = { color: 'var(--fo-text-dim)', fontSize: 11 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};
