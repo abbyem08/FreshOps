@@ -20,6 +20,13 @@ export default function Document() {
         <meta name="mobile-web-app-capable" content="yes" />
       </Head>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            if (localStorage.getItem('fo-theme-preview') === 'dark') {
+              document.documentElement.classList.add('theme-dark');
+            }
+          } catch (e) {}
+        ` }} />
         <Main />
         <NextScript />
       </body>
