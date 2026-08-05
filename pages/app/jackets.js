@@ -395,9 +395,9 @@ export default function JacketsPage() {
         <select value={activeId || ''} onChange={e => setActiveId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid var(--fo-border)', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}>
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
         </select>
-        <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-accent)', background: '#fff', color: 'var(--fo-accent)', fontWeight: 600 }}>+ New Jacket</button>
+        <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-accent)', background: 'var(--fo-card-bg)', color: 'var(--fo-accent)', fontWeight: 600 }}>+ New Jacket</button>
         {activeJacket && (
-          <button onClick={() => deleteJacket(activeJacket.jacket_id, activeJacket.jacket_number)} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: '#fff', color: 'var(--fo-error)' }}>Delete This Jacket</button>
+          <button onClick={() => deleteJacket(activeJacket.jacket_id, activeJacket.jacket_number)} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: 'var(--fo-card-bg)', color: 'var(--fo-error)' }}>Delete This Jacket</button>
         )}
       </div>
 
@@ -428,10 +428,10 @@ export default function JacketsPage() {
                   {detailField('Pallet Capacity', 'pallet_capacity', detailsForm, setDetailsForm, 'number')}
                 </div>
                 <button onClick={updateJacketDetails} style={{ marginTop: 10, marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Details</button>
-                <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
               </div>
             ) : (
-              <button onClick={openEditDetails} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
+              <button onClick={openEditDetails} style={{ padding: '6px 14px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
             )}
           </div>
 
@@ -502,7 +502,7 @@ export default function JacketsPage() {
                   {detailField('Notes', 'notes', purchasedForm, setPurchasedForm)}
                   <div style={{ gridColumn: 'span 2' }}>
                     <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
-                    <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -533,7 +533,7 @@ export default function JacketsPage() {
                   {detailField('Cases', 'cases', newOrderForm, setNewOrderForm, 'number')}
                   <div style={{ gridColumn: 'span 2' }}>
                     <button onClick={createOrderFromHere} style={{ marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Order</button>
-                    <button onClick={() => setShowNewOrder(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => setShowNewOrder(false)} style={{ padding: '6px 16px', background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               )}

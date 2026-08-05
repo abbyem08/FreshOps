@@ -163,7 +163,7 @@ export default function CallsPage() {
           </div>
 
           <button onClick={saveCalls} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingId ? 'Update Call' : 'Save Call(s)'}</button>
-          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
       <div className="fo-table-wrap">

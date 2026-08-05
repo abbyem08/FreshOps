@@ -349,8 +349,8 @@ export default function PriceWorksheetPage() {
               <strong style={{ color: 'var(--fo-primary)' }}>Sheet — valid through {activeSheet.valid_through}</strong>
               <div>
                 <button onClick={saveSnapshot} style={{ ...btn, marginBottom: 0, background: 'var(--fo-accent)' }}>Save Price Sheet</button>
-                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#333', border: '1px solid var(--fo-border)' }}>Customer Price Sheet / Print</button>
-                <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: 'var(--fo-error)', border: '1px solid var(--fo-border)' }}>Delete Sheet</button>
+                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>Customer Price Sheet / Print</button>
+                <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: 'var(--fo-card-bg)', color: 'var(--fo-error)', border: '1px solid var(--fo-border)' }}>Delete Sheet</button>
               </div>
             </div>
 
@@ -472,7 +472,7 @@ export default function PriceWorksheetPage() {
                         </label>
                       </div>
                       <button onClick={() => saveConvert(l)} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 10 }}>Save Order Line</button>
-                      <button onClick={() => setConvertingLineId(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid var(--fo-border)', marginTop: 10, marginLeft: 8 }}>Cancel</button>
+                      <button onClick={() => setConvertingLineId(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 10, marginLeft: 8 }}>Cancel</button>
                     </div>
                   )}
                 </div>
@@ -499,7 +499,7 @@ export default function PriceWorksheetPage() {
                 </label>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
                   <button onClick={saveNewLine} style={{ ...btn, marginBottom: 0, background: 'var(--fo-accent)' }}>Save Line</button>
-                  <button onClick={() => setShowAddLine(false)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid var(--fo-border)' }}>Cancel</button>
+                  <button onClick={() => setShowAddLine(false)} style={{ ...btn, marginBottom: 0, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>Cancel</button>
                 </div>
               </div>
             )}

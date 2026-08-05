@@ -284,7 +284,7 @@ export default function OrdersPage() {
                       </label>
                     </div>
                     <button onClick={saveLine} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{lineTarget.lineId ? 'Update Line' : 'Save Line'}</button>
-                    <button onClick={() => setLineTarget(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+                    <button onClick={() => setLineTarget(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
                   </div>
                 ) : (
                   <button onClick={() => openAddLine(o.customer_order_id)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
