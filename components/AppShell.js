@@ -54,10 +54,19 @@ export default function AppShell({ title, subtitle, children }) {
   const [ready, setReady] = useState(false);
   const [darkPreview, setDarkPreview] = useState(false);
 
+  useEffect(() => {
+    // read the saved preference once on mount — before Phase 7's real
+    // per-account setting exists, this at least survives navigating
+    // between pages instead of resetting on every click
+    const saved = window.localStorage.getItem('fo-theme-preview');
+    if (saved === 'dark') setDarkPreview(true);
+  }, []);
+
   useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle('theme-dark', darkPreview);
+    window.localStorage.setItem('fo-theme-preview', darkPreview ? 'dark' : 'light');
   }, [darkPreview]);
 
   async function checkAuth() {
