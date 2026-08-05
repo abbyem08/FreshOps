@@ -309,16 +309,18 @@ export default function PriceWorksheetPage() {
           <button onClick={() => setPrintMode(false)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginRight: 8 }}>← Back to Price Worksheet</button>
           <button onClick={() => window.print()} style={btn}>🖨 Print</button>
         </div>
-        <div style={card}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#2F5233' }}>FreshOps Produce Pricing</div>
-          <div style={{ color: '#78716c', fontSize: 13, marginBottom: 12 }}>Valid through {activeSheet.valid_through}</div>
-          <table style={table}>
-            <thead><tr style={trHead}><th>Commodity</th><th>Pack / Size</th><th style={{ textAlign: 'right' }}>FOB $/cs</th><th style={{ textAlign: 'right' }}>Delivered $/cs</th></tr></thead>
+        {/* Customer-facing — always light and professional, independent of
+            any internal Command Center Dark preference */}
+        <div style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 24 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#165C3A' }}>FreshOps Produce Pricing</div>
+          <div style={{ color: '#6A746D', fontSize: 13, marginBottom: 12 }}>Valid through {activeSheet.valid_through}</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+            <thead><tr style={{ textAlign: 'left', color: '#6A746D', borderBottom: '1px solid #E2E7E1' }}><th>Commodity</th><th>Pack / Size</th><th style={{ textAlign: 'right' }}>FOB $/cs</th><th style={{ textAlign: 'right' }}>Delivered $/cs</th></tr></thead>
             <tbody>{lines.map(l => (
-              <tr key={l.price_sheet_line_id} style={tr}>
+              <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #E2E7E1' }}>
                 <td>{l.products?.commodity}</td><td>{l.products?.pack_size}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${customerFOB(l).toFixed(2)}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#2F5233' }}>${customerDelivered(l).toFixed(2)}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerFOB(l).toFixed(2)}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerDelivered(l).toFixed(2)}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -332,23 +334,23 @@ export default function PriceWorksheetPage() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         {sheets.map(s => (
           <button key={s.price_sheet_id} onClick={() => setActiveSheetId(s.price_sheet_id)}
-            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #DCD5C1', background: activeSheetId === s.price_sheet_id ? '#2F5233' : '#fff', color: activeSheetId === s.price_sheet_id ? '#fff' : '#333' }}>
+            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: activeSheetId === s.price_sheet_id ? 'var(--fo-primary)' : '#fff', color: activeSheetId === s.price_sheet_id ? '#fff' : '#333' }}>
             {s.sheet_date}
           </button>
         ))}
         <button onClick={createFromLatestQuotes} style={btn}>+ New Sheet from Latest Quotes</button>
       </div>
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Market Calls → Price Worksheet → Customer Price Sheet → Customer Order. Add as many fee line items as you need per commodity — cooling, inspection, commission, whatever applies. Freight is tracked separately from product markup.</div>
+      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>Market Calls → Price Worksheet → Customer Price Sheet → Customer Order. Add as many fee line items as you need per commodity — cooling, inspection, commission, whatever applies. Freight is tracked separately from product markup.</div>
 
       {activeSheet ? (
         <div style={{ display: 'grid', gridTemplateColumns: '2.8fr 1fr', gap: 16 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <strong style={{ color: '#2F5233' }}>Sheet — valid through {activeSheet.valid_through}</strong>
+              <strong style={{ color: 'var(--fo-primary)' }}>Sheet — valid through {activeSheet.valid_through}</strong>
               <div>
-                <button onClick={saveSnapshot} style={{ ...btn, marginBottom: 0, background: '#6B8E4E' }}>Save Price Sheet</button>
-                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Customer Price Sheet / Print</button>
-                <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#C0562D', border: '1px solid #DCD5C1' }}>Delete Sheet</button>
+                <button onClick={saveSnapshot} style={{ ...btn, marginBottom: 0, background: 'var(--fo-accent)' }}>Save Price Sheet</button>
+                <button onClick={() => setPrintMode(true)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: '#333', border: '1px solid var(--fo-border)' }}>Customer Price Sheet / Print</button>
+                <button onClick={() => deleteSheet(activeSheet.price_sheet_id)} style={{ ...btn, marginBottom: 0, marginLeft: 8, background: '#fff', color: 'var(--fo-error)', border: '1px solid var(--fo-border)' }}>Delete Sheet</button>
               </div>
             </div>
 
@@ -359,8 +361,8 @@ export default function PriceWorksheetPage() {
                 <div key={l.price_sheet_line_id} style={{ ...card, marginBottom: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <strong style={{ color: '#2F5233' }}>{l.products?.commodity} — {l.products?.pack_size}</strong>
-                      <div style={{ fontSize: 12, color: '#78716c' }}>
+                      <strong style={{ color: 'var(--fo-primary)' }}>{l.products?.commodity} — {l.products?.pack_size}</strong>
+                      <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>
                         RAW MARKET PRICE — {l.suppliers?.company || 'no supplier set'} · ${Number(l.cost_price || 0).toFixed(2)}/cs
                         {options.length > 1 && (
                           <select value={l.source_call_id || ''} onChange={e => switchQuote(l, e.target.value)} style={{ fontSize: 11, marginLeft: 8 }}>
@@ -370,13 +372,13 @@ export default function PriceWorksheetPage() {
                       </div>
                     </div>
                     <div>
-                      <button onClick={() => openConvert(l)} style={{ ...btn, marginBottom: 0, background: '#6B8E4E' }}>Create / Add to Order</button>
+                      <button onClick={() => openConvert(l)} style={{ ...btn, marginBottom: 0, background: 'var(--fo-accent)' }}>Create / Add to Order</button>
                       <button onClick={() => deleteLine(l.price_sheet_line_id)} style={{ ...editBtn, marginLeft: 8 }}>Remove</button>
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: '#78716c' }}>VARIABLE COSTS</div>
-                  {fees.length === 0 && <div style={{ fontSize: 12, color: '#a8a29e' }}>No fees added.</div>}
+                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: 'var(--fo-text-dim)' }}>VARIABLE COSTS</div>
+                  {fees.length === 0 && <div style={{ fontSize: 12, color: 'var(--fo-text-faint)' }}>No fees added.</div>}
                   {fees.map(f => (
                     <div key={f.fee_id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
                       <input placeholder="Description (e.g. cooling)" defaultValue={f.description} onBlur={e => updateFee(f.fee_id, 'description', e.target.value)} style={{ ...selectStyle, flex: 2, marginTop: 0 }} />
@@ -387,9 +389,9 @@ export default function PriceWorksheetPage() {
                       <button onClick={() => deleteFee(f.fee_id)} style={editBtn}>✕</button>
                     </div>
                   ))}
-                  <button onClick={() => addFee(l.price_sheet_line_id)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 12, cursor: 'pointer', marginTop: 6, padding: 0 }}>+ Add Fee</button>
+                  <button onClick={() => addFee(l.price_sheet_line_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 12, cursor: 'pointer', marginTop: 6, padding: 0 }}>+ Add Fee</button>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
                     <div>
                       <div style={miniLabel}>Internal Cost</div>
                       <div style={{ fontWeight: 700 }}>${internalCost(l).toFixed(2)}</div>
@@ -409,7 +411,7 @@ export default function PriceWorksheetPage() {
                     </div>
                     <div>
                       <div style={miniLabel}>Customer FOB</div>
-                      <div style={{ fontWeight: 700, color: '#2F5233' }}>${customerFOB(l).toFixed(2)}</div>
+                      <div style={{ fontWeight: 700, color: 'var(--fo-primary)' }}>${customerFOB(l).toFixed(2)}</div>
                     </div>
                     <div>
                       <div style={miniLabel}>Raw Cost / cs</div>
@@ -417,12 +419,12 @@ export default function PriceWorksheetPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
                     <div>
                       <div style={miniLabel}>FREIGHT — Est. Carrier Cost / pallet</div>
                       <input type="number" defaultValue={l.est_carrier_cost_per_pallet} onBlur={e => updateLine(l.price_sheet_line_id, 'est_carrier_cost_per_pallet', Number(e.target.value))} style={{ width: 80 }} />
                       {l.products?.cases_per_pallet && l.est_carrier_cost_per_pallet ? (
-                        <div style={{ fontSize: 10, color: '#a8a29e', marginTop: 2 }}>≈ ${(Number(l.est_carrier_cost_per_pallet) / l.products.cases_per_pallet).toFixed(2)}/case</div>
+                        <div style={{ fontSize: 10, color: 'var(--fo-text-faint)', marginTop: 2 }}>≈ ${(Number(l.est_carrier_cost_per_pallet) / l.products.cases_per_pallet).toFixed(2)}/case</div>
                       ) : null}
                     </div>
                     <div>
@@ -431,12 +433,12 @@ export default function PriceWorksheetPage() {
                     </div>
                     <div>
                       <div style={miniLabel}>Customer Delivered</div>
-                      <div style={{ fontWeight: 700, color: '#2F5233' }}>${customerDelivered(l).toFixed(2)}</div>
+                      <div style={{ fontWeight: 700, color: 'var(--fo-primary)' }}>${customerDelivered(l).toFixed(2)}</div>
                     </div>
                   </div>
 
                   {convertingLineId === l.price_sheet_line_id && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1', background: '#F6F4EC', padding: 12, borderRadius: 6 }}>
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)', background: 'var(--fo-section-bg)', padding: 12, borderRadius: 6 }}>
                       <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
                         <label style={{ fontSize: 13 }}><input type="radio" checked={convertForm.mode === 'existing'} onChange={() => setConvertForm({ ...convertForm, mode: 'existing' })} /> Add to existing order</label>
                         <label style={{ fontSize: 13 }}><input type="radio" checked={convertForm.mode === 'new'} onChange={() => setConvertForm({ ...convertForm, mode: 'new' })} /> Start a new order</label>
@@ -469,15 +471,15 @@ export default function PriceWorksheetPage() {
                           </select>
                         </label>
                       </div>
-                      <button onClick={() => saveConvert(l)} style={{ ...btn, background: '#6B8E4E', marginTop: 10 }}>Save Order Line</button>
-                      <button onClick={() => setConvertingLineId(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 10, marginLeft: 8 }}>Cancel</button>
+                      <button onClick={() => saveConvert(l)} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 10 }}>Save Order Line</button>
+                      <button onClick={() => setConvertingLineId(null)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid var(--fo-border)', marginTop: 10, marginLeft: 8 }}>Cancel</button>
                     </div>
                   )}
                 </div>
               );
             })}
 
-            <button onClick={openAddLine} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}>+ Add Line</button>
+            <button onClick={openAddLine} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}>+ Add Line</button>
             {showAddLine && (
               <div style={{ ...card, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 <label style={{ fontSize: 13 }}>Product
@@ -496,20 +498,20 @@ export default function PriceWorksheetPage() {
                   <input type="number" value={newLineForm.cost_price} onChange={e => setNewLineForm({ ...newLineForm, cost_price: e.target.value })} style={selectStyle} />
                 </label>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                  <button onClick={saveNewLine} style={{ ...btn, marginBottom: 0, background: '#6B8E4E' }}>Save Line</button>
-                  <button onClick={() => setShowAddLine(false)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid #DCD5C1' }}>Cancel</button>
+                  <button onClick={saveNewLine} style={{ ...btn, marginBottom: 0, background: 'var(--fo-accent)' }}>Save Line</button>
+                  <button onClick={() => setShowAddLine(false)} style={{ ...btn, marginBottom: 0, background: '#fff', color: '#333', border: '1px solid var(--fo-border)' }}>Cancel</button>
                 </div>
               </div>
             )}
           </div>
 
           <div style={card}>
-            <strong style={{ color: '#2F5233' }}>Sent To</strong>
+            <strong style={{ color: 'var(--fo-primary)' }}>Sent To</strong>
             <div style={{ marginTop: 8 }}>
               {customers.map(c => {
                 const sent = recipients.find(r => r.customer_id === c.customer_id);
                 return (
-                  <div key={c.customer_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #DCD5C1' }}>
+                  <div key={c.customer_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--fo-border)' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       <input type="checkbox" checked={!!sent} onChange={() => toggleRecipient(c)} />
                       {c.company}
@@ -527,17 +529,17 @@ export default function PriceWorksheetPage() {
           </div>
         </div>
       ) : (
-        <p style={{ color: '#a8a29e' }}>No price sheets yet. Log some Market Calls with supplier quotes, then click "+ New Sheet from Latest Quotes."</p>
+        <p style={{ color: 'var(--fo-text-faint)' }}>No price sheets yet. Log some Market Calls with supplier quotes, then click "+ New Sheet from Latest Quotes."</p>
       )}
     </AppShell>
   );
 }
 
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)', padding: 18 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
-const selectStyle = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const miniLabel = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.03em', color: '#78716c', fontWeight: 600, marginBottom: 2 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};
+const selectStyle = { display: 'block', width: '100%', marginTop: 4 };
+const miniLabel = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--fo-text-dim)', fontWeight: 600, marginBottom: 2 };

@@ -95,42 +95,47 @@ export default function ReportsPage() {
 
   return (
     <AppShell title="Reports">
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 13 }}>Report
+      <div className="fo-card" style={{ display: 'flex', gap: 14, alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap' }}>
+        <label style={{ fontSize: 13 }}>
+          <span className="fo-field-label">Report</span>
           <select value={reportType} onChange={e => setReportType(e.target.value)} style={input}>
             {REPORT_TYPES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
         </label>
-        <label style={{ fontSize: 13 }}>From
+        <label style={{ fontSize: 13 }}>
+          <span className="fo-field-label">From</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={input} />
         </label>
-        <label style={{ fontSize: 13 }}>To
+        <label style={{ fontSize: 13 }}>
+          <span className="fo-field-label">To</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={input} />
         </label>
         <button onClick={runReport} style={btn}>Run Report</button>
-        {rows.length > 0 && <button onClick={exportCSV} style={{ ...btn, background: '#6B8E4E' }}>⬇ Export CSV</button>}
+        {rows.length > 0 && <button onClick={exportCSV} style={{ ...btn, background: 'var(--fo-accent)' }}>⬇ Export CSV</button>}
       </div>
 
-      {loading ? <p style={{ color: '#a8a29e' }}>Running…</p> : rows.length === 0 ? (
-        <p style={{ color: '#a8a29e' }}>No data for this report / date range yet.</p>
+      {loading ? <p style={{ color: 'var(--fo-text-faint)' }}>Running…</p> : rows.length === 0 ? (
+        <p style={{ color: 'var(--fo-text-faint)' }}>No data for this report / date range yet.</p>
       ) : (
-        <table style={table}>
+        <div className="fo-table-wrap">
+        <table style={table} className="fo-table">
           <thead><tr style={trHead}>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
           <tbody>{rows.map((r, i) => (
             <tr key={i} style={tr}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>
           ))}</tbody>
         </table>
+        </div>
       )}
 
-      <div style={{ marginTop: 24, fontSize: 12, color: '#a8a29e' }}>
+      <div style={{ marginTop: 24, fontSize: 12, color: 'var(--fo-text-faint)' }}>
         Don't see a report you need? Tell me what you're trying to answer (e.g. "margin by month," "which suppliers I buy the most from") and I'll add it as its own report type.
       </div>
     </AppShell>
   );
 }
 
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' };
-const input = { display: 'block', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' };
+const input = { display: 'block', padding: '8px 11px', marginTop: 4 };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};

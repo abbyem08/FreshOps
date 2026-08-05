@@ -377,14 +377,14 @@ export default function JacketsPage() {
     <AppShell title="InLoads / Jackets">
       <div style={{ ...card, marginBottom: 16 }}>
         <button onClick={() => setShowNeeded(!showNeeded)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <strong style={{ color: '#2F5233' }}>Cases Still Needed (across all open orders)</strong>
-          <span style={{ color: '#78716c', fontSize: 12 }}>{showNeeded ? '▲ hide' : '▼ show'}</span>
+          <strong style={{ color: 'var(--fo-primary)' }}>Cases Still Needed (across all open orders)</strong>
+          <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>{showNeeded ? '▲ hide' : '▼ show'}</span>
         </button>
         {showNeeded && (
-          neededList.length === 0 ? <div style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>Everything open is already assigned to a jacket.</div> : (
+          neededList.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 13, marginTop: 8 }}>Everything open is already assigned to a jacket.</div> : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', marginTop: 10 }}>
               {neededList.map(([name, cases]) => (
-                <div key={name} style={{ fontSize: 13 }}><strong style={{ color: '#2F5233' }}>{cases}</strong> <span style={{ color: '#78716c' }}>{name}</span></div>
+                <div key={name} style={{ fontSize: 13 }}><strong style={{ color: 'var(--fo-primary)' }}>{cases}</strong> <span style={{ color: 'var(--fo-text-dim)' }}>{name}</span></div>
               ))}
             </div>
           )
@@ -392,12 +392,12 @@ export default function JacketsPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        <select value={activeId || ''} onChange={e => setActiveId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid #DCD5C1', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}>
+        <select value={activeId || ''} onChange={e => setActiveId(Number(e.target.value))} style={{ padding: '6px 10px', border: '1px solid var(--fo-border)', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}>
           {jackets.map(j => <option key={j.jacket_id} value={j.jacket_id}>{j.jacket_number}</option>)}
         </select>
-        <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #6B8E4E', background: '#fff', color: '#6B8E4E', fontWeight: 600 }}>+ New Jacket</button>
+        <button onClick={createNewJacket} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-accent)', background: '#fff', color: 'var(--fo-accent)', fontWeight: 600 }}>+ New Jacket</button>
         {activeJacket && (
-          <button onClick={() => deleteJacket(activeJacket.jacket_id, activeJacket.jacket_number)} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #DCD5C1', background: '#fff', color: '#C0562D' }}>Delete This Jacket</button>
+          <button onClick={() => deleteJacket(activeJacket.jacket_id, activeJacket.jacket_number)} style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: '#fff', color: 'var(--fo-error)' }}>Delete This Jacket</button>
         )}
       </div>
 
@@ -405,11 +405,11 @@ export default function JacketsPage() {
         <div>
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <strong style={{ color: '#2F5233' }}>Jacket {activeJacket.jacket_number} — {activeJacket.jacket_status}</strong>
-              <span style={{ fontSize: 12, color: '#78716c' }}>{totalWeight.toLocaleString()} lb · {totalPallets} pallets</span>
+              <strong style={{ color: 'var(--fo-primary)' }}>Jacket {activeJacket.jacket_number} — {activeJacket.jacket_status}</strong>
+              <span style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{totalWeight.toLocaleString()} lb · {totalPallets} pallets</span>
             </div>
             {editingDetails ? (
-              <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12 }}>
+              <div style={{ border: '1px solid var(--fo-border)', borderRadius: 6, padding: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {detailField('Jacket Number', 'jacket_number', detailsForm, setDetailsForm)}
                   {detailField('Jacket Date', 'jacket_date', detailsForm, setDetailsForm, 'date')}
@@ -427,39 +427,39 @@ export default function JacketsPage() {
                   {detailField('Weight Capacity (lb)', 'weight_capacity', detailsForm, setDetailsForm, 'number')}
                   {detailField('Pallet Capacity', 'pallet_capacity', detailsForm, setDetailsForm, 'number')}
                 </div>
-                <button onClick={updateJacketDetails} style={{ marginTop: 10, marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Details</button>
-                <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={updateJacketDetails} style={{ marginTop: 10, marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Details</button>
+                <button onClick={() => setEditingDetails(false)} style={{ marginTop: 10, padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
               </div>
             ) : (
-              <button onClick={openEditDetails} style={{ padding: '6px 14px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
+              <button onClick={openEditDetails} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Edit Jacket Details</button>
             )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {/* ---- SUPPLY ---- */}
             <div style={card}>
-              <strong style={{ color: '#2F5233' }}>Supply — Purchased Product</strong>
+              <strong style={{ color: 'var(--fo-primary)' }}>Supply — Purchased Product</strong>
               <div style={{ marginTop: 10 }}>
-                {purchasedLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13, marginBottom: 8 }}>Nothing purchased on this Jacket yet.</div>}
+                {purchasedLines.length === 0 && <div style={{ color: 'var(--fo-text-faint)', fontSize: 13, marginBottom: 8 }}>Nothing purchased on this Jacket yet.</div>}
                 {purchasedLines.map(p => {
                   const { allocated, available } = availableOnPurchased(p);
                   return (
-                    <div key={p.jacket_product_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                    <div key={p.jacket_product_line_id} style={{ border: '1px solid var(--fo-border)', borderRadius: 6, padding: 10, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ fontSize: 13.5 }}>
                           <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
-                          <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
-                            Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? '#2F5233' : '#C0562D' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
+                          <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginTop: 2 }}>
+                            Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? 'var(--fo-primary)' : 'var(--fo-error)' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
                           </div>
                         </div>
                         <div>
-                          <button onClick={() => openAllocate(p.jacket_product_line_id)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
+                          <button onClick={() => openAllocate(p.jacket_product_line_id)} style={{ ...editBtn, background: 'var(--fo-accent)', color: '#fff', border: 'none' }}>Allocate</button>
                           <button onClick={() => openEditPurchased(p)} style={{ ...editBtn, marginLeft: 6 }}>Edit</button>
-                          <button onClick={() => deletePurchased(p.jacket_product_line_id)} style={{ ...editBtn, marginLeft: 6, color: '#C0562D' }}>Delete</button>
+                          <button onClick={() => deletePurchased(p.jacket_product_line_id)} style={{ ...editBtn, marginLeft: 6, color: 'var(--fo-error)' }}>Delete</button>
                         </div>
                       </div>
                       {allocatingLineId === p.jacket_product_line_id && (
-                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                           <label style={{ fontSize: 12 }}>Order needing {p.products?.commodity}
                             <select value={allocateForm.order_line_id} onChange={e => setAllocateForm({ ...allocateForm, order_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 220 }}>
                               <option value="">— select —</option>
@@ -471,7 +471,7 @@ export default function JacketsPage() {
                           <label style={{ fontSize: 12 }}>Cases
                             <input type="number" value={allocateForm.cases} onChange={e => setAllocateForm({ ...allocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 80 }} />
                           </label>
-                          <button onClick={() => saveAllocate(p)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                          <button onClick={() => saveAllocate(p)} style={{ ...editBtn, background: 'var(--fo-accent)', color: '#fff', border: 'none' }}>Confirm</button>
                           <button onClick={() => setAllocatingLineId(null)} style={editBtn}>Cancel</button>
                         </div>
                       )}
@@ -479,9 +479,9 @@ export default function JacketsPage() {
                   );
                 })}
               </div>
-              <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Purchased Product</button>
+              <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Purchased Product</button>
               {showAddPurchased && (
-                <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <div style={{ border: '1px solid var(--fo-border)', borderRadius: 6, padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                   <label style={{ fontSize: 13 }}>Supplier
                     <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
                       <option value="">— none —</option>
@@ -501,8 +501,8 @@ export default function JacketsPage() {
                   {detailField('Fee Total / cs', 'fee_total_per_case', purchasedForm, setPurchasedForm, 'number')}
                   {detailField('Notes', 'notes', purchasedForm, setPurchasedForm)}
                   <div style={{ gridColumn: 'span 2' }}>
-                    <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
-                    <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={savePurchased} style={{ marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>{editingPurchasedId ? 'Update' : 'Save'}</button>
+                    <button onClick={() => setShowAddPurchased(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -511,11 +511,11 @@ export default function JacketsPage() {
             {/* ---- DEMAND ---- */}
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ color: '#2F5233' }}>Demand — Open Orders Needing This Jacket's Product</strong>
-                <button onClick={() => setShowNewOrder(!showNewOrder)} style={{ ...editBtn, background: '#2F5233', color: '#fff', border: 'none' }}>+ New Order</button>
+                <strong style={{ color: 'var(--fo-primary)' }}>Demand — Open Orders Needing This Jacket's Product</strong>
+                <button onClick={() => setShowNewOrder(!showNewOrder)} style={{ ...editBtn, background: 'var(--fo-primary)', color: '#fff', border: 'none' }}>+ New Order</button>
               </div>
               {showNewOrder && (
-                <div style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <div style={{ border: '1px solid var(--fo-border)', borderRadius: 6, padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                   <label style={{ fontSize: 13 }}>Customer
                     <select value={newOrderForm.customer_id} onChange={e => setNewOrderForm({ ...newOrderForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }}>
                       <option value="">— select —</option>
@@ -532,8 +532,8 @@ export default function JacketsPage() {
                   </label>
                   {detailField('Cases', 'cases', newOrderForm, setNewOrderForm, 'number')}
                   <div style={{ gridColumn: 'span 2' }}>
-                    <button onClick={createOrderFromHere} style={{ marginRight: 8, padding: '6px 16px', background: '#6B8E4E', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Order</button>
-                    <button onClick={() => setShowNewOrder(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={createOrderFromHere} style={{ marginRight: 8, padding: '6px 16px', background: 'var(--fo-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Save Order</button>
+                    <button onClick={() => setShowNewOrder(false)} style={{ padding: '6px 16px', background: '#fff', border: '1px solid var(--fo-border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -542,20 +542,20 @@ export default function JacketsPage() {
                 {(() => {
                   const purchasedProductIds = new Set(purchasedLines.map(p => p.product_id));
                   const matchingDemand = allOrderLinesNeed.filter(ol => purchasedProductIds.has(ol.product_id));
-                  if (matchingDemand.length === 0) return <div style={{ color: '#a8a29e', fontSize: 13 }}>No open orders currently need this jacket's commodities.</div>;
+                  if (matchingDemand.length === 0) return <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No open orders currently need this jacket's commodities.</div>;
                   return matchingDemand.map(ol => {
                     const matchingPurchased = allPurchasedLines.filter(p => p.product_id === ol.product_id && availableOnPurchased(p).available > 0);
                     return (
-                      <div key={ol.order_line_id} style={{ border: '1px solid #DCD5C1', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                      <div key={ol.order_line_id} style={{ border: '1px solid var(--fo-border)', borderRadius: 6, padding: 10, marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div style={{ fontSize: 13.5 }}>
                             <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no}
-                            <div style={{ fontSize: 12, color: '#78716c' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
+                            <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
                           </div>
-                          <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Allocate</button>
+                          <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} style={{ ...editBtn, background: 'var(--fo-accent)', color: '#fff', border: 'none' }}>Allocate</button>
                         </div>
                         {demandAllocateFor === ol.order_line_id && (
-                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #DCD5C1', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: 12 }}>From which truck
                               <select value={demandAllocateForm.purchased_line_id} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, purchased_line_id: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, minWidth: 220 }}>
                                 <option value="">— select —</option>
@@ -565,7 +565,7 @@ export default function JacketsPage() {
                             <label style={{ fontSize: 12 }}>Cases
                               <input type="number" value={demandAllocateForm.cases} onChange={e => setDemandAllocateForm({ ...demandAllocateForm, cases: e.target.value })} style={{ display: 'block', padding: '6px 8px', marginTop: 2, width: 80 }} />
                             </label>
-                            <button onClick={() => saveDemandAllocate(ol)} style={{ ...editBtn, background: '#6B8E4E', color: '#fff', border: 'none' }}>Confirm</button>
+                            <button onClick={() => saveDemandAllocate(ol)} style={{ ...editBtn, background: 'var(--fo-accent)', color: '#fff', border: 'none' }}>Confirm</button>
                             <button onClick={() => setDemandAllocateFor(null)} style={editBtn}>Cancel</button>
                           </div>
                         )}
@@ -578,11 +578,12 @@ export default function JacketsPage() {
           </div>
 
           <div style={{ ...card, marginTop: 16 }}>
-            <strong style={{ color: '#2F5233' }}>Order Allocations</strong>
+            <strong style={{ color: 'var(--fo-primary)' }}>Order Allocations</strong>
             {jacketLines.filter(jl => jl.jacket_product_line_id).length === 0 ? (
-              <div style={{ color: '#a8a29e', fontSize: 13, marginTop: 8 }}>No allocations from purchased product yet.</div>
+              <div style={{ color: 'var(--fo-text-faint)', fontSize: 13, marginTop: 8 }}>No allocations from purchased product yet.</div>
             ) : (
-              <table style={{ ...table, marginTop: 10 }}>
+              <div className="fo-table-wrap" style={{ marginTop: 10 }}>
+              <table style={table} className="fo-table">
                 <thead><tr style={trHead}><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier (allocated from)</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th></th></tr></thead>
                 <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
                   <tr key={jl.jacket_line_id} style={tr}>
@@ -592,35 +593,36 @@ export default function JacketsPage() {
                     <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
                     <td style={{ textAlign: 'right' }}><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
                     <td>{jl.load_status}</td>
-                    <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#C0562D', cursor: 'pointer' }}>Remove</button></td>
+                    <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-error)', cursor: 'pointer' }}>Remove</button></td>
                   </tr>
                 ))}</tbody>
               </table>
+              </div>
             )}
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <button onClick={() => setShowAdvanced(!showAdvanced)} style={{ background: 'none', border: 'none', color: '#78716c', fontSize: 12, cursor: 'pointer', padding: 0 }}>{showAdvanced ? '▲ Hide' : '▼ Show'} Advanced (legacy quick-assign, no purchased-product tracking)</button>
+            <button onClick={() => setShowAdvanced(!showAdvanced)} style={{ background: 'none', border: 'none', color: 'var(--fo-text-dim)', fontSize: 12, cursor: 'pointer', padding: 0 }}>{showAdvanced ? '▲ Hide' : '▼ Show'} Advanced (legacy quick-assign, no purchased-product tracking)</button>
             {showAdvanced && (
               <div style={{ ...card, marginTop: 8 }}>
-                <table style={table}>
+                <table style={table} className="fo-table">
                   <thead><tr style={trHead}><th>Order Line</th><th>Cases to Load</th><th></th></tr></thead>
                   <tbody>{jacketLines.map(jl => (
                     <tr key={jl.jacket_line_id} style={tr}>
                       <td>{jl.order_lines.customer_orders.acumatica_order_no} | {jl.order_lines.products.commodity} — {jl.order_lines.products.pack_size} | {jl.jacket_product_lines?.suppliers?.company || jl.order_lines.suppliers?.company || 'no supplier'}</td>
                       <td><input type="number" defaultValue={jl.cases_to_load} onBlur={e => updateCases(jl.jacket_line_id, Number(e.target.value), jl.order_lines)} style={{ width: 70 }} /></td>
-                      <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: '#a8a29e', cursor: 'pointer' }}>✕</button></td>
+                      <td><button onClick={() => removeLine(jl.jacket_line_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-text-faint)', cursor: 'pointer' }}>✕</button></td>
                     </tr>
                   ))}</tbody>
                 </table>
-                <button onClick={() => setShowAdd(!showAdd)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
+                <button onClick={() => setShowAdd(!showAdd)} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
                 {showAdd && (
-                  <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #DCD5C1', borderRadius: 6, padding: 8 }}>
-                    {eligibleLines.length === 0 && <div style={{ color: '#a8a29e', fontSize: 13 }}>No eligible order lines.</div>}
+                  <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid var(--fo-border)', borderRadius: 6, padding: 8 }}>
+                    {eligibleLines.length === 0 && <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No eligible order lines.</div>}
                     {eligibleLines.map(ol => (
                       <button key={ol.order_line_id} onClick={() => addLineToJacket(ol)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
                         <span>{ol.customer_orders.acumatica_order_no} | {ol.products.commodity} — {ol.products.pack_size} | {ol.suppliers?.company || 'no supplier'}</span>
-                        <span style={{ color: '#78716c' }}>{ol.remaining} avail</span>
+                        <span style={{ color: 'var(--fo-text-dim)' }}>{ol.remaining} avail</span>
                       </button>
                     ))}
                   </div>
@@ -636,13 +638,14 @@ export default function JacketsPage() {
 
 function detailField(label, key, form, setForm, type = 'text') {
   return (
-    <label style={{ fontSize: 13 }}>{label}
-      <input type={type} value={form[key] ?? ''} onChange={e => setForm({ ...form, [key]: e.target.value })} style={{ display: 'block', width: '100%', padding: '6px 8px', marginTop: 4 }} />
+    <label style={{ fontSize: 13 }}>
+      <span className="fo-field-label">{label}</span>
+      <input type={type} value={form[key] ?? ''} onChange={e => setForm({ ...form, [key]: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }} />
     </label>
   );
 }
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16 };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)', padding: 18 };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};

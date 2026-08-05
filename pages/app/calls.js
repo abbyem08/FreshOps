@@ -100,7 +100,7 @@ export default function CallsPage() {
 
   return (
     <AppShell title="Market Calls">
-      <div style={{ color: '#78716c', fontSize: 13, marginBottom: 16 }}>Every call to a supplier or customer — and any price quoted — lives here. Price Sheets pull straight from these entries. One call can cover several commodities at once.</div>
+      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>Every call to a supplier or customer — and any price quoted — lives here. Price Sheets pull straight from these entries. One call can cover several commodities at once.</div>
       <button onClick={openAdd} style={btn}>+ Log Call</button>
       {showForm && (
         <div style={card}>
@@ -128,8 +128,8 @@ export default function CallsPage() {
             {field('Notes', header.notes, v => setHeader({ ...header, notes: v }))}
           </div>
 
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#2F5233', marginBottom: 8 }}>Commodities Quoted This Call</div>
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fo-primary)', marginBottom: 8 }}>Commodities Quoted This Call</div>
             {quotes.map((q, i) => (
               <div key={i} style={{ ...grid, marginBottom: 8, alignItems: 'end' }}>
                 <label style={{ fontSize: 13 }}>Product
@@ -153,51 +153,54 @@ export default function CallsPage() {
                   <input type="date" value={q.quote_expiration} onChange={e => updateQuoteRow(i, 'quote_expiration', e.target.value)} style={input} />
                 </label>
                 {!editingId && quotes.length > 1 && (
-                  <button onClick={() => removeQuoteRow(i)} style={{ ...editBtn, color: '#C0562D', height: 33 }}>Remove</button>
+                  <button onClick={() => removeQuoteRow(i)} style={{ ...editBtn, color: 'var(--fo-error)', height: 33 }}>Remove</button>
                 )}
               </div>
             ))}
             {!editingId && (
-              <button onClick={addQuoteRow} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Another Commodity</button>
+              <button onClick={addQuoteRow} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Another Commodity</button>
             )}
           </div>
 
-          <button onClick={saveCalls} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{editingId ? 'Update Call' : 'Save Call(s)'}</button>
-          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={saveCalls} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingId ? 'Update Call' : 'Save Call(s)'}</button>
+          <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
-      <table style={table}>
+      <div className="fo-table-wrap">
+      <table style={table} className="fo-table">
         <thead><tr style={trHead}><th>Date</th><th>Party</th><th>Commodity</th><th style={{ textAlign: 'right' }}>Price</th><th>Availability</th><th>Good Until</th><th>Follow-up</th><th>Status</th><th></th></tr></thead>
         <tbody>{calls.map(c => (
           <tr key={c.call_id} style={tr}>
-            <td style={{ color: '#78716c', fontSize: 12 }}>{c.call_date}</td>
+            <td style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>{c.call_date}</td>
             <td>{partyLabel(c)}</td>
             <td>{c.products?.commodity} — {c.products?.pack_size}</td>
             <td style={{ textAlign: 'right' }}>{c.price != null ? `$${Number(c.price).toFixed(2)} ${c.price_type}` : '—'}</td>
-            <td style={{ color: '#78716c', fontSize: 12 }}>{c.availability}</td>
-            <td style={{ fontSize: 12, color: c.quote_expiration && new Date(c.quote_expiration) < new Date() ? '#C0562D' : '#78716c' }}>{c.quote_expiration || '—'}</td>
-            <td style={{ color: '#78716c', fontSize: 12 }}>{c.followup_date || '—'}</td>
+            <td style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>{c.availability}</td>
+            <td style={{ fontSize: 12, color: c.quote_expiration && new Date(c.quote_expiration) < new Date() ? 'var(--fo-error)' : 'var(--fo-text-dim)' }}>{c.quote_expiration || '—'}</td>
+            <td style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>{c.followup_date || '—'}</td>
             <td>{c.status}</td>
-            <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button> <button onClick={() => deleteCall(c.call_id)} style={{ ...editBtn, color: '#C0562D' }}>Delete</button></td>
+            <td><button onClick={() => openEdit(c)} style={editBtn}>Edit</button> <button onClick={() => deleteCall(c.call_id)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete</button></td>
           </tr>
         ))}</tbody>
       </table>
+      </div>
     </AppShell>
   );
 }
 
 function field(label, value, onChange, type = 'text') {
   return (
-    <label style={{ fontSize: 13 }}>{label}
+    <label style={{ fontSize: 13 }}>
+      <span className="fo-field-label">{label}</span>
       <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} style={input} />
     </label>
   );
 }
-const btn = { padding: '8px 16px', background: '#2F5233', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', marginBottom: 16 };
-const editBtn = { padding: '4px 10px', fontSize: 12, background: '#fff', border: '1px solid #DCD5C1', borderRadius: 6, cursor: 'pointer' };
-const card = { background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, padding: 16, marginBottom: 16 };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 };
-const input = { display: 'block', width: '100%', padding: '6px 8px', marginTop: 4, border: '1px solid #DCD5C1', borderRadius: 4, fontSize: 13 };
-const table = { width: '100%', background: '#fff', border: '1px solid #DCD5C1', borderRadius: 8, borderCollapse: 'collapse', fontSize: 13.5 };
-const trHead = { textAlign: 'left', color: '#78716c', borderBottom: '1px solid #DCD5C1' };
-const tr = { borderBottom: '1px solid #DCD5C1' };
+const btn = { padding: '10px 18px', background: 'var(--fo-primary)', color: '#fff', border: 'none', borderRadius: 'var(--fo-radius-md)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 16 };
+const editBtn = { padding: '6px 13px', fontSize: 12.5, background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border)', borderRadius: 'var(--fo-radius-sm)', cursor: 'pointer', fontWeight: 500 };
+const card = { background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-lg)', boxShadow: 'var(--fo-shadow-sm), var(--fo-glow)', padding: 18, marginBottom: 16 };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 };
+const input = { display: 'block', width: '100%', marginTop: 4 };
+const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
+const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
+const tr = {};
