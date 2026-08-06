@@ -1,5 +1,5 @@
 // pages/app/jacket/[id].js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../../components/AppShell';
 import { supabase } from '../../../lib/supabaseClient';
@@ -45,6 +45,25 @@ export default function JacketWorkspace() {
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
   const [editingPayment, setEditingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({});
+  const [carriers, setCarriers] = useState([]);
+  const [editingFreight, setEditingFreight] = useState(false);
+  const [freightForm, setFreightForm] = useState({});
+  const [commodityLoads, setCommodityLoads] = useState([]);
+  const [notificationsByLine, setNotificationsByLine] = useState({});
+  const [showClaimForm, setShowClaimForm] = useState(false);
+  const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
+  const [resolvingId, setResolvingId] = useState(null);
+  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '', jacket_line_id: '' });
+  const [amendingOrderedLineId, setAmendingOrderedLineId] = useState(null);
+  const [amendOrderedValue, setAmendOrderedValue] = useState('');
+  const [reassigningLineId, setReassigningLineId] = useState(null);
+  const [reassignOptions, setReassignOptions] = useState([]);
+  const [reassignTarget, setReassignTarget] = useState('');
+  const [movingClaimId, setMovingClaimId] = useState(null);
+  const [moveCasesForm, setMoveCasesForm] = useState({ target_order_line_id: '', cases: '' });
+  const [moveCasesOptions, setMoveCasesOptions] = useState([]);
+  const [compensatingClaimId, setCompensatingClaimId] = useState(null);
+  const [compensationForm, setCompensationForm] = useState({ cases: '', notes: '' });
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data?.user?.email) setUserEmail(data.user.email); });
@@ -90,13 +109,35 @@ export default function JacketWorkspace() {
       .filter(ol => ol.needsSupply > 0);
     setAllOrderLinesNeed(needList);
 
-    const { data: stopRows } = await supabase.from('stops').select('*, suppliers(company), customers(company)').eq('jacket_id', jacketId).order('stop_number');
+    const { data: carrierRows } = await supabase.from('carriers').select('carrier_id, name').order('name');
+    setCarriers(carrierRows || []);
+
+    const { data: stopRows } = await supabase
+      .from('stops')
+      .select('*, suppliers(company, pickup_address, city, state, phone), customers(company, delivery_address, city, state, phone), supplier_locations(label, address, city, state, phone, contact), customer_locations(label, address, city, state, phone, contact), stop_lines(*, jacket_lines(*, order_lines(shipper_po, products(commodity, pack_size)), customer_notifications(notification_type, notified_at)))')
+      .eq('jacket_id', jacketId)
+      .order('stop_number');
     setStops(stopRows || []);
     const { data: fr } = await supabase.from('freight_records').select('*').eq('jacket_id', jacketId).order('quote_date', { ascending: false }).limit(1).maybeSingle();
     setFreight(fr || null);
 
-    const { data: cl } = await supabase.from('claims').select('*, jacket_lines(order_line_id)').eq('status', 'Open');
-    setClaims((cl || []).filter(c => (lines || []).some(l => l.jacket_line_id === c.jacket_line_id)));
+    const { data: cLoads } = await supabase.from('jacket_commodity_loads').select('*').eq('jacket_id', jacketId);
+    setCommodityLoads(cLoads || []);
+    const lineIds = (lines || []).map(l => l.jacket_line_id);
+    if (lineIds.length) {
+      const { data: notifs } = await supabase.from('customer_notifications').select('*').in('jacket_line_id', lineIds).order('notified_at', { ascending: true });
+      const grouped = {};
+      (notifs || []).forEach(n => { grouped[n.jacket_line_id] = grouped[n.jacket_line_id] || []; grouped[n.jacket_line_id].push(n); });
+      setNotificationsByLine(grouped);
+    } else {
+      setNotificationsByLine({});
+    }
+
+    const { data: cl } = await supabase
+      .from('claims')
+      .select('*, jacket_lines(jacket_id, order_line_id, order_lines(order_line_id, sell_price_per_case, products(commodity, pack_size), customer_orders(acumatica_order_no, customers(company))))')
+      .order('date_opened', { ascending: false });
+    setClaims((cl || []).filter(c => c.jacket_lines?.jacket_id === jacketId));
 
     const { data: ev } = await supabase.from('jacket_events').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setEvents(ev || []);
@@ -297,6 +338,213 @@ export default function JacketWorkspace() {
     loadAll();
   }
 
+  // ---- Freight ----
+  function toLocalInputValue(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function openFreightEdit() {
+    setFreightForm(freight || { carrier: jacket?.carrier || '', trip_type: 'One Pick/One Drop', quoted_rate: '', booked_rate: '', extra_fees: '', extra_fees_notes: '', miles: '', status: 'Quoted', carrier_invoice_number: '', invoice_received: false, carrier_paid: false });
+    setEditingFreight(true);
+  }
+  async function saveFreight() {
+    if (!freightForm.carrier) { alert('Carrier is required.'); return; }
+    const payload = {
+      jacket_id: jacketId, carrier: freightForm.carrier, trip_type: freightForm.trip_type,
+      quoted_rate: freightForm.quoted_rate ? Number(freightForm.quoted_rate) : null,
+      booked_rate: freightForm.booked_rate ? Number(freightForm.booked_rate) : null,
+      extra_fees: freightForm.extra_fees ? Number(freightForm.extra_fees) : 0,
+      extra_fees_notes: freightForm.extra_fees_notes || null,
+      miles: freightForm.miles ? Number(freightForm.miles) : null,
+      status: freightForm.status, carrier_invoice_number: freightForm.carrier_invoice_number || null,
+      invoice_received: !!freightForm.invoice_received, carrier_paid: !!freightForm.carrier_paid,
+    };
+    if (freight) {
+      const { error } = await supabase.from('freight_records').update(payload).eq('freight_id', freight.freight_id);
+      if (error) { alert('Save failed: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('freight_records').insert({ ...payload, quote_date: new Date().toISOString().slice(0, 10) });
+      if (error) { alert('Save failed: ' + error.message); return; }
+    }
+    await logEvent('freight_updated', `Freight ${freight ? 'updated' : 'booked'} — ${payload.carrier}, ${payload.status}`);
+    setEditingFreight(false);
+    loadAll();
+  }
+
+  // ---- Stops ----
+  async function updateStopNumber(stopId, newNumber) {
+    const { error } = await supabase.from('stops').update({ stop_number: Number(newNumber) }).eq('stop_id', stopId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+  async function updateAppointment(stopId, value) {
+    const { error } = await supabase.from('stops').update({ appointment: value ? new Date(value).toISOString() : null }).eq('stop_id', stopId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+
+  // ---- Load Tracking: jacket-level actual loaded, by commodity/shipper ----
+  async function updateCommodityLoad(productId, supplierId, value) {
+    const existing = commodityLoads.find(c => c.product_id === productId && c.supplier_id === supplierId);
+    let error;
+    if (existing) {
+      ({ error } = await supabase.from('jacket_commodity_loads').update({ actual_cases_loaded: value }).eq('id', existing.id));
+    } else {
+      ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, supplier_id: supplierId, actual_cases_loaded: value }));
+    }
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+  async function updateJacketLineField(id, fieldName, value) {
+    const { error } = await supabase.from('jacket_lines').update({ [fieldName]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+  function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
+  async function saveAmendOrdered(line) {
+    const { error } = await supabase.from('order_lines').update({ cases_ordered: Number(amendOrderedValue), amended_at: new Date().toISOString() }).eq('order_line_id', line.order_line_id);
+    if (error) { alert('Amend failed: ' + error.message); return; }
+    setAmendingOrderedLineId(null);
+    loadAll();
+  }
+  async function logNotification(jacketLineId, type) {
+    const { error } = await supabase.from('customer_notifications').insert({ jacket_line_id: jacketLineId, notification_type: type });
+    if (error) { alert('Could not log: ' + error.message); return; }
+    loadAll();
+  }
+  async function removeNotification(id) {
+    const { error } = await supabase.from('customer_notifications').delete().eq('notification_id', id);
+    if (error) { alert('Could not remove: ' + error.message); return; }
+    loadAll();
+  }
+  async function updateDelivered(id, value) {
+    const { error } = await supabase.from('jacket_lines').update({ actual_cases_delivered: value, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    loadAll();
+  }
+  async function openReassignLine(line) {
+    const { data } = await supabase
+      .from('order_lines').select('order_line_id, cases_ordered, customer_orders(acumatica_order_no, order_status, customers(company))')
+      .eq('product_id', line.order_lines?.product_id).neq('order_line_id', line.order_line_id);
+    setReassignOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
+    setReassignTarget('');
+    setReassigningLineId(line.jacket_line_id);
+  }
+  async function saveReassignLine(line) {
+    if (!reassignTarget) { alert('Pick which order to move this to.'); return; }
+    const { error } = await supabase.from('jacket_lines').update({ order_line_id: Number(reassignTarget), quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', line.jacket_line_id);
+    if (error) { alert('Reassign failed: ' + error.message); return; }
+    setReassigningLineId(null);
+    loadAll();
+  }
+
+  // ---- Claims ----
+  async function saveClaim() {
+    if (!claimForm.jacket_line_id || !claimForm.description) { alert('Pick a jacket line and describe the issue.'); return; }
+    const line = jacketLines.find(l => l.jacket_line_id === Number(claimForm.jacket_line_id));
+    const { error } = await supabase.from('claims').insert({
+      jacket_line_id: Number(claimForm.jacket_line_id), claim_type: claimForm.claim_type, description: claimForm.description, status: 'Open',
+      snapshot_jacket_number: jacket.jacket_number, snapshot_order_no: line?.order_lines?.customer_orders?.acumatica_order_no || null,
+      snapshot_customer: line?.order_lines?.customer_orders?.customers?.company || null, snapshot_commodity: line?.order_lines?.products?.commodity || null,
+    });
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logEvent('claim_opened', `Claim opened — ${claimForm.claim_type}: ${claimForm.description}`);
+    setClaimForm({ jacket_line_id: '', claim_type: 'Quality', description: '' });
+    setShowClaimForm(false);
+    loadAll();
+  }
+  function openResolve(claim) {
+    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', jacket_line_id: claim.jacket_line_id || '' });
+    setResolvingId(claim.claim_id);
+  }
+  async function deleteClaim(claimId) {
+    if (!confirm('Delete this claim? This cannot be undone.')) return;
+    const { error } = await supabase.from('claims').delete().eq('claim_id', claimId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadAll();
+  }
+  async function openMoveCases(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached — nothing to move.'); return; }
+    const { data } = await supabase
+      .from('order_lines').select('order_line_id, customer_orders(acumatica_order_no, order_status, customers(company))')
+      .eq('product_id', line.order_lines?.product_id).neq('order_line_id', line.order_line_id);
+    setMoveCasesOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
+    setMoveCasesForm({ target_order_line_id: '', cases: '' });
+    setMovingClaimId(claim.claim_id);
+  }
+  async function saveMoveCases(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) return;
+    const cases = Number(moveCasesForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases to move.'); return; }
+    if (!moveCasesForm.target_order_line_id) { alert('Pick which order to move them to.'); return; }
+    if (cases > Number(line.cases_to_load)) { alert(`Only ${line.cases_to_load} cases are on this allocation.`); return; }
+    const { error: updateErr } = await supabase.from('jacket_lines').update({ cases_to_load: Number(line.cases_to_load) - cases, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', line.jacket_line_id);
+    if (updateErr) { alert('Move failed: ' + updateErr.message); return; }
+    const { error: insertErr } = await supabase.from('jacket_lines').insert({
+      jacket_id: line.jacket_id, order_line_id: Number(moveCasesForm.target_order_line_id), jacket_product_line_id: line.jacket_product_line_id,
+      allocated_cost_per_case: line.allocated_cost_per_case, planned_cases: cases, cases_to_load: cases, actual_cases_loaded: 0, actual_cases_delivered: 0,
+      load_status: line.load_status, quantity_updated_at: new Date().toISOString(),
+    });
+    if (insertErr) { alert('Move partly failed: ' + insertErr.message); return; }
+    await logEvent('cases_moved', `Moved ${cases} cases to a different order (claim resolution)`);
+    setMovingClaimId(null);
+    loadAll();
+  }
+  function openCompensation(claim) { setCompensationForm({ cases: '', notes: '' }); setCompensatingClaimId(claim.claim_id); }
+  async function saveCompensation(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached.'); return; }
+    const cases = Number(compensationForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many compensation cases.'); return; }
+    const { error } = await supabase.from('jacket_lines').update({
+      compensation_cases: Number(line.compensation_cases || 0) + cases, compensation_notes: compensationForm.notes || line.compensation_notes,
+      actual_cases_delivered: Number(line.actual_cases_delivered || 0) + cases, quantity_updated_at: new Date().toISOString(),
+    }).eq('jacket_line_id', line.jacket_line_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logEvent('compensation_added', `${cases} compensation cases added, no charge`);
+    setCompensatingClaimId(null);
+    loadAll();
+  }
+  async function saveResolve(claim) {
+    const adjustment = resolveForm.price_adjustment ? Number(resolveForm.price_adjustment) : null;
+    const newJacketLineId = resolveForm.jacket_line_id ? Number(resolveForm.jacket_line_id) : null;
+    const reassigned = newJacketLineId !== (claim.jacket_line_id || null);
+    let snapshotUpdate = {};
+    if (reassigned && newJacketLineId) {
+      const line = jacketLines.find(l => l.jacket_line_id === newJacketLineId);
+      snapshotUpdate = {
+        snapshot_jacket_number: jacket.jacket_number, snapshot_order_no: line?.order_lines?.customer_orders?.acumatica_order_no || null,
+        snapshot_customer: line?.order_lines?.customer_orders?.customers?.company || null, snapshot_commodity: line?.order_lines?.products?.commodity || null,
+      };
+    }
+    const { error } = await supabase.from('claims').update({
+      status: resolveForm.status, resolution: resolveForm.resolution, resolution_price_adjustment: adjustment,
+      resolved_at: resolveForm.status === 'Resolved' ? new Date().toISOString() : null, flag_for_credit_memo: !!adjustment,
+      jacket_line_id: newJacketLineId, ...snapshotUpdate,
+    }).eq('claim_id', claim.claim_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    if (adjustment) {
+      const lineId = newJacketLineId || claim.jacket_line_id;
+      const line = jacketLines.find(l => l.jacket_line_id === lineId);
+      const ol = line?.order_lines || claim.jacket_lines?.order_lines;
+      if (ol) {
+        const newPrice = Number(ol.sell_price_per_case) - adjustment;
+        const orderLineId = ol.order_line_id || claim.jacket_lines?.order_lines?.order_line_id;
+        if (orderLineId) {
+          const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
+          if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
+        }
+      }
+    }
+    await logEvent('claim_resolved', `Claim resolved — ${resolveForm.status}${adjustment ? `, price adjusted -$${adjustment}` : ''}`);
+    setResolvingId(null);
+    loadAll();
+  }
+
   if (!jacket) return <AppShell title="Jacket"><p style={{ color: 'var(--fo-text-faint)' }}>Loading…</p></AppShell>;
 
   const totalPallets = purchasedLines.reduce((s, p) => s + (p.products?.cases_per_pallet ? Math.ceil((p.actual_cases_received ?? p.purchased_cases) / p.products.cases_per_pallet) : 0), 0);
@@ -306,6 +554,30 @@ export default function JacketWorkspace() {
   const estCost = jacketLines.reduce((s, l) => s + Number(l.cases_to_load || 0) * Number(l.allocated_cost_per_case || 0), 0);
   const freightCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
   const estProfit = estRevenue - estCost - freightCost;
+
+  // ---- Load Tracking: group by commodity + shipper (this jacket only) ----
+  const commodityGroups = {};
+  jacketLines.forEach(l => {
+    const pid = l.order_lines?.product_id;
+    const sid = l.order_lines?.supplier_id;
+    if (!pid) return;
+    const key = pid + '-' + sid;
+    if (!commodityGroups[key]) {
+      commodityGroups[key] = { productId: pid, supplierId: sid, supplierName: l.order_lines?.suppliers?.company, commodity: l.order_lines?.products?.commodity, packSize: l.order_lines?.products?.pack_size, ordered: 0, delivered: 0 };
+    }
+    commodityGroups[key].ordered += Number(l.cases_to_load || 0);
+    commodityGroups[key].delivered += Number(l.actual_cases_delivered || 0);
+  });
+  Object.values(commodityGroups).forEach(g => {
+    const loadRow = commodityLoads.find(c => c.product_id === g.productId && c.supplier_id === g.supplierId);
+    g.loaded = loadRow ? Number(loadRow.actual_cases_loaded || 0) : 0;
+    g.remaining = g.loaded - g.delivered;
+  });
+  const groupList = Object.values(commodityGroups);
+  const pickups = stops.filter(s => s.stop_type === 'Pickup');
+  const deliveries = stops.filter(s => s.stop_type === 'Delivery');
+  const freightTotalCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
+  const perMile = freight?.miles ? (Number(freight.booked_rate || 0) / freight.miles).toFixed(2) : null;
 
   return (
     <AppShell title={`Jacket ${jacket.jacket_number}`} subtitle={jacket.jacket_status}>
@@ -526,31 +798,279 @@ export default function JacketWorkspace() {
           )}
 
           {activeTab === 'Logistics' && (
-            <div className="fo-card">
-              <div className="fo-h2">Route</div>
-              <div style={{ fontSize: 13, color: 'var(--fo-text-dim)', marginBottom: 14 }}>
-                {stops.filter(s => s.stop_type === 'Pickup').length} pickup(s) → {stops.filter(s => s.stop_type === 'Delivery').length} delivery(ies)
-              </div>
-              {stops.map(s => (
-                <div key={s.stop_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--fo-border-soft)', fontSize: 13.5 }}>
-                  <div><span className={s.stop_type === 'Pickup' ? 'fo-badge fo-badge-blue' : 'fo-badge fo-badge-green'}>#{s.stop_number} {s.stop_type}</span> {s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company}</div>
-                  {s.appointment && <span style={{ color: 'var(--fo-text-dim)' }}>{new Date(s.appointment).toLocaleString()}</span>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* ---- Freight ---- */}
+              <div className="fo-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Freight</div>
+                  {!editingFreight && <button onClick={openFreightEdit} className="fo-btn fo-btn-secondary fo-btn-sm">{freight ? 'Edit' : '+ Add Freight Record'}</button>}
                 </div>
-              ))}
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
-                <div className="fo-h2">Freight</div>
-                {freight ? (
-                  <div style={{ fontSize: 13.5, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {editingFreight ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                      <label style={{ fontSize: 13 }}><span className="fo-field-label">Carrier</span>
+                        <select value={freightForm.carrier} onChange={e => setFreightForm({ ...freightForm, carrier: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                          <option value="">— select —</option>
+                          {carriers.map(c => <option key={c.carrier_id} value={c.name}>{c.name}</option>)}
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 13 }}><span className="fo-field-label">Trip Type</span>
+                        <select value={freightForm.trip_type} onChange={e => setFreightForm({ ...freightForm, trip_type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                          {['One Pick/One Drop', 'Multi Pick/One Drop', 'One Pick/Multi Drop', 'Multi Pick/Multi Drop'].map(t => <option key={t}>{t}</option>)}
+                        </select>
+                      </label>
+                      {textField('Quoted Rate ($)', freightForm.quoted_rate, v => setFreightForm({ ...freightForm, quoted_rate: v }), 'number')}
+                      {textField('Booked Rate ($)', freightForm.booked_rate, v => setFreightForm({ ...freightForm, booked_rate: v }), 'number')}
+                      {textField('Extra Fees ($)', freightForm.extra_fees, v => setFreightForm({ ...freightForm, extra_fees: v }), 'number')}
+                      {textField('Extra Fees Notes', freightForm.extra_fees_notes, v => setFreightForm({ ...freightForm, extra_fees_notes: v }))}
+                      {textField('Miles', freightForm.miles, v => setFreightForm({ ...freightForm, miles: v }), 'number')}
+                      <label style={{ fontSize: 13 }}><span className="fo-field-label">Status</span>
+                        <select value={freightForm.status} onChange={e => setFreightForm({ ...freightForm, status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                          <option>Quoted</option><option>Booked</option>
+                        </select>
+                      </label>
+                      {textField('Carrier Invoice #', freightForm.carrier_invoice_number, v => setFreightForm({ ...freightForm, carrier_invoice_number: v }))}
+                      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, marginTop: 20 }}>
+                        <input type="checkbox" checked={!!freightForm.invoice_received} onChange={e => setFreightForm({ ...freightForm, invoice_received: e.target.checked })} /> Invoice Received
+                      </label>
+                      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, marginTop: 20 }}>
+                        <input type="checkbox" checked={!!freightForm.carrier_paid} onChange={e => setFreightForm({ ...freightForm, carrier_paid: e.target.checked })} /> Carrier Paid
+                      </label>
+                    </div>
+                    <button onClick={saveFreight} className="fo-btn fo-btn-primary" style={{ marginTop: 12, marginRight: 8 }}>Save</button>
+                    <button onClick={() => setEditingFreight(false)} className="fo-btn fo-btn-secondary" style={{ marginTop: 12 }}>Cancel</button>
+                  </div>
+                ) : freight ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, fontSize: 13, marginTop: 10 }}>
                     <div><div className="fo-label">Carrier</div>{freight.carrier}</div>
+                    <div><div className="fo-label">Trip Type</div>{freight.trip_type}</div>
                     <div><div className="fo-label">Miles</div>{freight.miles || '—'}</div>
-                    <div><div className="fo-label">Total Cost</div>${(Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0)).toLocaleString()}</div>
+                    <div><div className="fo-label">$/Mile</div>{perMile ? `$${perMile}` : '—'}</div>
+                    <div><div className="fo-label">Booked Rate</div>${Number(freight.booked_rate || 0).toLocaleString()}</div>
+                    <div><div className="fo-label">Extra Fees</div>{freight.extra_fees ? `$${Number(freight.extra_fees).toLocaleString()}` : '—'}</div>
+                    <div><div className="fo-label">Total Cost</div><strong>${freightTotalCost.toLocaleString()}</strong></div>
                     <div><div className="fo-label">Status</div>{freight.status}</div>
                     <div><div className="fo-label">Invoice</div>{freight.invoice_received ? 'Received' : 'Pending'}</div>
                     <div><div className="fo-label">Paid</div>{freight.carrier_paid ? 'Yes' : 'No'}</div>
                   </div>
-                ) : <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No freight record yet.</div>}
+                ) : <div style={{ color: 'var(--fo-text-faint)', fontSize: 13, marginTop: 8 }}>No freight record yet.</div>}
               </div>
-              <a href="/app/dispatch" className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginTop: 16, display: 'inline-block', textDecoration: 'none' }}>Open Full Dispatch Sheet →</a>
+
+              {/* ---- Stops / Route ---- */}
+              <div className="fo-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Route — {pickups.length} pickup(s) → {deliveries.length} delivery(ies)</div>
+                  <button onClick={() => window.print()} className="fo-btn fo-btn-secondary fo-btn-sm">🖨 Print</button>
+                </div>
+                {stops.map(s => (
+                  <div key={s.stop_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', overflow: 'hidden', marginTop: 10 }}>
+                    <div style={{ background: 'var(--fo-section-bg)', padding: '8px 12px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span className={s.stop_type === 'Pickup' ? 'fo-badge fo-badge-blue' : 'fo-badge fo-badge-green'}>#{s.stop_number} {s.stop_type}</span>
+                      <strong>{s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company}</strong>
+                      <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>
+                        {s.stop_type === 'Pickup'
+                          ? (s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address || ''}, ${s.suppliers?.city || ''} ${s.suppliers?.state || ''}`)
+                          : (s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address || ''}, ${s.customers?.city || ''} ${s.customers?.state || ''}`)}
+                      </span>
+                      <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
+                      <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
+                    </div>
+                    <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr><th style={{ paddingLeft: 12 }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
+                      <tbody>{(s.stop_lines || []).map(sl => (
+                        <tr key={sl.stop_line_id}>
+                          <td style={{ paddingLeft: 12 }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
+                          <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
+                          <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+
+              {/* ---- Load Tracking ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Load Tracking, by Commodity</div>
+                {groupList.length === 0 ? (
+                  <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No allocations to track yet.</div>
+                ) : groupList.map(g => {
+                  const groupLines = jacketLines.filter(l => l.order_lines?.product_id === g.productId && l.order_lines?.supplier_id === g.supplierId);
+                  const variance = g.loaded - g.ordered;
+                  return (
+                    <div key={g.productId + '-' + g.supplierId} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', overflow: 'hidden', marginBottom: 12 }}>
+                      <div style={{ background: variance !== 0 && g.loaded > 0 ? 'var(--fo-warn-bg)' : 'var(--fo-section-bg)', padding: '8px 12px', fontSize: 13, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <div><strong>{g.commodity} — {g.packSize}</strong> · {g.supplierName || 'no supplier'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span>Ordered {g.ordered}</span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Loaded
+                            <input type="number" defaultValue={g.loaded} onBlur={e => updateCommodityLoad(g.productId, g.supplierId, Number(e.target.value))} style={{ width: 60 }} />
+                          </label>
+                          {variance !== 0 && g.loaded > 0 && <span style={{ fontWeight: 600 }}>Variance {variance > 0 ? '+' : ''}{variance}</span>}
+                        </div>
+                      </div>
+                      <div className="fo-table-wrap" style={{ borderRadius: 0, boxShadow: 'none', border: 'none' }}>
+                      <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead><tr><th>Customer</th><th>Order #</th><th style={{ textAlign: 'right' }}>Ordered</th><th>Delivered</th><th>BOL #</th><th>Status</th><th>Customer Told</th><th></th></tr></thead>
+                        <tbody>{groupLines.map(jl => {
+                          const amended = jl.order_lines?.original_cases_ordered != null && Number(jl.order_lines.original_cases_ordered) !== Number(jl.order_lines?.cases_ordered);
+                          const mismatch = Number(jl.cases_to_load || 0) > 0 && Number(jl.actual_cases_delivered || 0) > 0 && Number(jl.cases_to_load) !== Number(jl.actual_cases_delivered);
+                          return (
+                            <Fragment key={jl.jacket_line_id}>
+                              <tr style={mismatch ? { background: 'var(--fo-error-bg)' } : {}}>
+                                <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
+                                <td style={{ textAlign: 'right' }}>
+                                  {amendingOrderedLineId === jl.jacket_line_id ? (
+                                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                      <input type="number" value={amendOrderedValue} onChange={e => setAmendOrderedValue(e.target.value)} style={{ width: 60 }} />
+                                      <button onClick={() => saveAmendOrdered(jl)} className="fo-btn fo-btn-sm">Save</button>
+                                      <button onClick={() => setAmendingOrderedLineId(null)} className="fo-btn fo-btn-sm">X</button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {jl.order_lines?.cases_ordered}
+                                      {amended && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>orig: {jl.order_lines.original_cases_ordered}</div>}
+                                      <div><button onClick={() => openAmendOrdered(jl)} className="fo-btn fo-btn-sm" style={{ marginTop: 2 }}>Amend</button></div>
+                                    </>
+                                  )}
+                                </td>
+                                <td>
+                                  <input type="number" defaultValue={jl.actual_cases_delivered} onBlur={e => updateDelivered(jl.jacket_line_id, Number(e.target.value))} style={{ width: 64 }} />
+                                  {jl.compensation_cases > 0 && <div style={{ fontSize: 10, color: 'var(--fo-success)' }}>incl. {jl.compensation_cases} comp.</div>}
+                                </td>
+                                <td><input type="text" defaultValue={jl.bol_number || ''} onBlur={e => updateJacketLineField(jl.jacket_line_id, 'bol_number', e.target.value)} style={{ width: 90 }} placeholder="BOL #" /></td>
+                                <td>
+                                  <select defaultValue={jl.load_status} onChange={e => updateJacketLineField(jl.jacket_line_id, 'load_status', e.target.value)}>
+                                    {['Planned', 'Loading', 'Loaded', 'In Transit', 'Delivered', 'Short', 'Exception'].map(s => <option key={s}>{s}</option>)}
+                                  </select>
+                                </td>
+                                <td style={{ minWidth: 150 }}>
+                                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+                                    {['Loaded', 'In Transit', 'Delivered', 'Delayed / Issue'].map(t => (
+                                      <button key={t} onClick={() => logNotification(jl.jacket_line_id, t)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ {t}</button>
+                                    ))}
+                                  </div>
+                                  {(notificationsByLine[jl.jacket_line_id] || []).map(n => (
+                                    <div key={n.notification_id} style={{ fontSize: 10, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ background: 'var(--fo-neutral-bg)', borderRadius: 4, padding: '1px 5px' }}>{n.notification_type}</span>
+                                      {new Date(n.notified_at).toLocaleString()}
+                                      <button onClick={() => removeNotification(n.notification_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-error)', cursor: 'pointer', fontSize: 10, padding: 0 }}>✕</button>
+                                    </div>
+                                  ))}
+                                </td>
+                                <td><button onClick={() => openReassignLine(jl)} className="fo-btn fo-btn-sm">Reassign</button></td>
+                              </tr>
+                              {reassigningLineId === jl.jacket_line_id && (
+                                <tr>
+                                  <td colSpan={8} style={{ background: 'var(--fo-section-bg)', padding: 10 }}>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                                      <label style={{ fontSize: 12 }}>Move to a different order
+                                        <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)} style={{ display: 'block', minWidth: 240, marginTop: 2 }}>
+                                          <option value="">— select —</option>
+                                          {reassignOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
+                                        </select>
+                                      </label>
+                                      <button onClick={() => saveReassignLine(jl)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
+                                      <button onClick={() => setReassigningLineId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}</tbody>
+                      </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ---- Claims ---- */}
+              <div className="fo-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Claims / Quality Issues</div>
+                  <button onClick={() => setShowClaimForm(!showClaimForm)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ Log Claim</button>
+                </div>
+                {showClaimForm && (
+                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Jacket Line</span>
+                      <select value={claimForm.jacket_line_id} onChange={e => setClaimForm({ ...claimForm, jacket_line_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option value="">— select —</option>
+                        {jacketLines.map(l => <option key={l.jacket_line_id} value={l.jacket_line_id}>{l.order_lines?.products?.commodity} — {l.order_lines?.customer_orders?.customers?.company}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Type</span>
+                      <select value={claimForm.claim_type} onChange={e => setClaimForm({ ...claimForm, claim_type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option>Quality</option><option>Shortage</option><option>Overage</option><option>Damage</option><option>Pricing</option><option>Other</option>
+                      </select>
+                    </label>
+                    {textField('Description', claimForm.description, v => setClaimForm({ ...claimForm, description: v }))}
+                    <div style={{ gridColumn: 'span 3' }}>
+                      <button onClick={saveClaim} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save Claim</button>
+                      <button onClick={() => setShowClaimForm(false)} className="fo-btn fo-btn-secondary">Cancel</button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ marginTop: 12 }}>
+                  {claims.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No claims on this Jacket.</div> : claims.map(c => (
+                    <div key={c.claim_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 10, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ fontSize: 13.5 }}>
+                          <span className={c.status === 'Open' ? 'fo-badge fo-badge-amber' : c.status === 'Under Review' ? 'fo-badge fo-badge-amber' : 'fo-badge fo-badge-green'}>{c.status}</span>{' '}
+                          <strong>{c.claim_type}</strong> — {c.description}
+                          <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{c.snapshot_customer} · {c.snapshot_commodity}</div>
+                        </div>
+                        <div>
+                          <button onClick={() => openResolve(c)} className="fo-btn fo-btn-sm">{c.status === 'Open' ? 'Resolve' : 'Edit'}</button>{' '}
+                          <button onClick={() => openMoveCases(c)} className="fo-btn fo-btn-sm">Move Cases</button>{' '}
+                          <button onClick={() => openCompensation(c)} className="fo-btn fo-btn-sm">Add Compensation</button>{' '}
+                          <button onClick={() => deleteClaim(c.claim_id)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                        </div>
+                      </div>
+                      {resolvingId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                          <label style={{ fontSize: 13 }}><span className="fo-field-label">Status</span>
+                            <select value={resolveForm.status} onChange={e => setResolveForm({ ...resolveForm, status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                              <option>Open</option><option>Under Review</option><option>Resolved</option>
+                            </select>
+                          </label>
+                          {textField('Price Adjustment ($/case, optional)', resolveForm.price_adjustment, v => setResolveForm({ ...resolveForm, price_adjustment: v }), 'number')}
+                          <div style={{ gridColumn: 'span 2' }}>{textField('Resolution Notes', resolveForm.resolution, v => setResolveForm({ ...resolveForm, resolution: v }))}</div>
+                          <div style={{ gridColumn: 'span 2' }}>
+                            <button onClick={() => saveResolve(c)} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
+                            <button onClick={() => setResolvingId(null)} className="fo-btn fo-btn-secondary">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                      {movingClaimId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <label style={{ fontSize: 13 }}>Move to which order?
+                            <select value={moveCasesForm.target_order_line_id} onChange={e => setMoveCasesForm({ ...moveCasesForm, target_order_line_id: e.target.value })} style={{ display: 'block', minWidth: 220, marginTop: 4 }}>
+                              <option value="">— select —</option>
+                              {moveCasesOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 13 }}>Cases<input type="number" value={moveCasesForm.cases} onChange={e => setMoveCasesForm({ ...moveCasesForm, cases: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
+                          <button onClick={() => saveMoveCases(c)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
+                          <button onClick={() => setMovingClaimId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                        </div>
+                      )}
+                      {compensatingClaimId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <label style={{ fontSize: 13 }}>Compensation cases<input type="number" value={compensationForm.cases} onChange={e => setCompensationForm({ ...compensationForm, cases: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
+                          <label style={{ fontSize: 13 }}>Notes<input value={compensationForm.notes} onChange={e => setCompensationForm({ ...compensationForm, notes: e.target.value })} style={{ display: 'block', minWidth: 200, marginTop: 4 }} /></label>
+                          <button onClick={() => saveCompensation(c)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
+                          <button onClick={() => setCompensatingClaimId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--fo-text-faint)' }}>Note: "rolled/extra product" reconciliation across jackets still lives on the standalone Load Tracking page for now — that page stays available even though it's off the main nav.</div>
             </div>
           )}
 
