@@ -252,7 +252,7 @@ export default function JacketWorkspace() {
     if (claims.length > 0) openIssues.push(`${claims.length} open claim(s)`);
     const stillAvailable = purchasedLines.reduce((s, p) => s + availableOnPurchased(p).available, 0);
     if (stillAvailable > 0) openIssues.push(`${stillAvailable} cases still available/unsold`);
-    if (!freight) openIssues.push('no freight record');
+    if (purchasedLines.length > 0 && !freight) openIssues.push('no freight record');
     const msg = openIssues.length
       ? `This Jacket still has open items: ${openIssues.join(', ')}. Close anyway?`
       : 'Close this Jacket?';
