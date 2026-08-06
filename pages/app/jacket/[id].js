@@ -28,6 +28,8 @@ export default function JacketWorkspace() {
   const [amendments, setAmendments] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [userEmail, setUserEmail] = useState('Staff');
+  const [needs, setNeeds] = useState([]);
+  const [showNeeds, setShowNeeds] = useState(true);
 
   const [showAddPurchased, setShowAddPurchased] = useState(false);
   const [purchasedForm, setPurchasedForm] = useState(BLANK_PURCHASED);
@@ -150,6 +152,25 @@ export default function JacketWorkspace() {
     setDocuments(docs || []);
     const { data: fol } = await supabase.from('freight_only_lines').select('*, customer_orders(acumatica_order_no, customer_po, customers(company))').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setFreightOnlyLines(fol || []);
+
+    // Cases Still Needed — across ALL open orders, not just this jacket's,
+    // so it stays useful for sourcing/truck planning while you're in here
+    const { data: allOLForNeeds } = await supabase.from('order_lines').select('order_line_id, cases_ordered, product_id, products(commodity, pack_size), customer_orders(order_status)').eq('customer_orders.order_status', 'Open');
+    const assignedByOrderLine = {};
+    (allJacketLines || []).forEach(l => {
+      if (l.jackets?.jacket_status === 'Cancelled' || !l.order_line_id) return;
+      assignedByOrderLine[l.order_line_id] = (assignedByOrderLine[l.order_line_id] || 0) + Number(l.cases_to_load || 0);
+    });
+    const needGroups = {};
+    (allOLForNeeds || []).forEach(l => {
+      if (!l.customer_orders || l.customer_orders.order_status !== 'Open') return;
+      const key = l.product_id;
+      if (!needGroups[key]) needGroups[key] = { commodity: l.products?.commodity, packSize: l.products?.pack_size, needed: 0 };
+      const assigned = assignedByOrderLine[l.order_line_id] || 0;
+      const remaining = Number(l.cases_ordered || 0) - assigned;
+      if (remaining > 0) needGroups[key].needed += remaining;
+    });
+    setNeeds(Object.values(needGroups).filter(g => g.needed > 0).sort((a, b) => b.needed - a.needed));
   }
 
   function availableOnPurchased(p) {
@@ -725,6 +746,27 @@ export default function JacketWorkspace() {
       <div style={{ marginBottom: 16 }}>
         <a href="/app/jackets" style={{ fontSize: 13, color: 'var(--fo-text-dim)', textDecoration: 'none' }}>← All Jackets</a>
       </div>
+
+      {needs.length > 0 && (
+        <div className="fo-card fo-card-tight" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fo-text-dim)' }}>Cases Still Needed — across all open orders</div>
+            <div>
+              <a href="/app/ordering-needs" style={{ fontSize: 12, color: 'var(--fo-info)', marginRight: 12, textDecoration: 'none' }}>See which orders →</a>
+              <button onClick={() => setShowNeeds(!showNeeds)} className="fo-btn fo-btn-secondary fo-btn-sm">{showNeeds ? 'Hide' : 'Show'}</button>
+            </div>
+          </div>
+          {showNeeds && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+              {needs.map((n, i) => (
+                <div key={i} className="fo-badge fo-badge-amber" style={{ fontSize: 12.5, padding: '5px 12px' }}>
+                  <strong>{n.needed.toLocaleString()}</strong>&nbsp;{n.commodity} — {n.packSize}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ---- Header ---- */}
       <div className="fo-card" style={{ marginBottom: 16 }}>
