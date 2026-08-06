@@ -22,7 +22,7 @@ export default function Document() {
       <body>
         <script dangerouslySetInnerHTML={{ __html: `
           try {
-            if (localStorage.getItem('fo-theme-preview') === 'dark') {
+            if (localStorage.getItem('fo-theme-cache') === 'dark') {
               document.documentElement.classList.add('theme-dark');
             }
           } catch (e) {}
