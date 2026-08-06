@@ -108,4 +108,4 @@ function KPI({ label, value }) {
   );
 }
 
-const grid3 = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 };
+const grid3 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 };

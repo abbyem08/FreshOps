@@ -79,7 +79,7 @@ export default function JacketsListPage() {
 
   return (
     <AppShell title="InLoads / Jackets">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KPI label="Active Jackets" value={summary.active} />
         <KPI label="Loading / Preparing" value={summary.loading} />
         <KPI label="In Transit" value={summary.inTransit} />
