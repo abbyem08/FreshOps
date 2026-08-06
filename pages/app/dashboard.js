@@ -2,17 +2,20 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
+import { BarChart } from '../../components/charts';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [issues, setIssues] = useState([]);
+  const [jacketProfitChart, setJacketProfitChart] = useState([]);
+  const [statusChart, setStatusChart] = useState([]);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     const [ol, jl, freight, jackets, claims] = await Promise.all([
       supabase.from('order_lines').select('order_line_id, cases_ordered, sell_price_per_case, fob_cost_per_case, customer_orders(order_status)'),
-      supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_status)'),
+      supabase.from('jacket_lines').select('order_line_id, cases_to_load, allocated_cost_per_case, jacket_id, order_lines(sell_price_per_case), jackets(jacket_status, jacket_number)'),
       supabase.from('freight_records').select('booked_rate, extra_fees, jacket_id, jackets(jacket_status)'),
       supabase.from('jackets').select('jacket_id, jacket_number, jacket_status'),
       supabase.from('claims').select('claim_id, status, snapshot_jacket_number, snapshot_customer').eq('status', 'Open'),
@@ -40,6 +43,28 @@ export default function DashboardPage() {
     });
 
     setStats({ openRevenue, grossMargin, committedFreight, activeJackets: activeJackets.length, casesNeeded, openLineCount: openLines.length });
+
+    // ---- Profit by Jacket (active jackets only, top 8 by |profit|) ----
+    const profitByJacket = {};
+    (jl.data || []).forEach(row => {
+      if (row.jackets?.jacket_status === 'Cancelled' || !row.jacket_id) return;
+      if (!profitByJacket[row.jacket_id]) profitByJacket[row.jacket_id] = { label: row.jackets?.jacket_number || `#${row.jacket_id}`, value: 0, status: row.jackets?.jacket_status };
+      const revenue = Number(row.cases_to_load || 0) * Number(row.order_lines?.sell_price_per_case || 0);
+      const cost = Number(row.cases_to_load || 0) * Number(row.allocated_cost_per_case || 0);
+      profitByJacket[row.jacket_id].value += revenue - cost;
+    });
+    setJacketProfitChart(
+      Object.values(profitByJacket)
+        .filter(j => !['Closed', 'Cancelled'].includes(j.status))
+        .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+        .slice(0, 8)
+    );
+
+    // ---- Jacket Status Distribution ----
+    const statusCounts = {};
+    (jackets.data || []).forEach(j => { statusCounts[j.jacket_status] = (statusCounts[j.jacket_status] || 0) + 1; });
+    const statusColors = { Planning: 'var(--fo-text-faint)', Booked: 'var(--fo-info)', Loading: 'var(--fo-warn)', Dispatched: 'var(--fo-warn)', 'In Transit': 'var(--fo-info)', Delivered: 'var(--fo-success)', Closed: 'var(--fo-text-dim)', Cancelled: 'var(--fo-error)' };
+    setStatusChart(Object.entries(statusCounts).map(([label, value]) => ({ label, value, color: statusColors[label] })));
 
     // ---- Open Issues: computed from real data, nothing fabricated ----
     const issueList = [];
@@ -71,6 +96,17 @@ export default function DashboardPage() {
         <KPI label="Active Jackets" value={stats.activeJackets} />
         <KPI label="Open Order Lines" value={stats.openLineCount} />
         <KPI label="Cases Still Needed" value={stats.casesNeeded.toLocaleString()} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginTop: 24 }}>
+        <div className="fo-card">
+          <h2 className="fo-h2">Profit by Jacket</h2>
+          <BarChart data={jacketProfitChart} formatValue={v => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} emptyText="No active Jackets with allocated product yet." />
+        </div>
+        <div className="fo-card">
+          <h2 className="fo-h2">Jacket Status Distribution</h2>
+          <BarChart data={statusChart} emptyText="No Jackets yet." />
+        </div>
       </div>
 
       <div style={{ marginTop: 32 }}>

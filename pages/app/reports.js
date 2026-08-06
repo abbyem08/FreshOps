@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
+import { BarChart } from '../../components/charts';
+
 const REPORT_TYPES = [
   { key: 'by_customer', label: 'Sales & Margin by Customer' },
   { key: 'by_supplier', label: 'Sales & Margin by Supplier' },
@@ -82,6 +84,12 @@ export default function ReportsPage() {
   }
 
   function fmt$(n) { return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function parseDollar(str) {
+    if (!str || str === '—') return 0;
+    const negative = String(str).includes('-');
+    const n = Number(String(str).replace(/[^0-9.]/g, ''));
+    return Number.isNaN(n) ? 0 : (negative ? -n : n);
+  }
 
   function exportCSV() {
     const csv = [columns.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
@@ -117,14 +125,23 @@ export default function ReportsPage() {
       {loading ? <p style={{ color: 'var(--fo-text-faint)' }}>Running…</p> : rows.length === 0 ? (
         <p style={{ color: 'var(--fo-text-faint)' }}>No data for this report / date range yet.</p>
       ) : (
-        <div className="fo-table-wrap">
-        <table style={table} className="fo-table">
-          <thead><tr style={trHead}>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
-          <tbody>{rows.map((r, i) => (
-            <tr key={i} style={tr}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>
-          ))}</tbody>
-        </table>
-        </div>
+        <>
+          <div className="fo-card" style={{ marginBottom: 16 }}>
+            <h2 className="fo-h2">{reportType === 'freight_summary' ? 'Booked Rate by Jacket' : 'Margin by ' + columns[0]}</h2>
+            <BarChart
+              data={rows.slice(0, 10).map(r => ({ label: r[0], value: parseDollar(r[4]) }))}
+              formatValue={v => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+            />
+          </div>
+          <div className="fo-table-wrap">
+          <table style={table} className="fo-table">
+            <thead><tr style={trHead}>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>{rows.map((r, i) => (
+              <tr key={i} style={tr}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>
+            ))}</tbody>
+          </table>
+          </div>
+        </>
       )}
 
       <div style={{ marginTop: 24, fontSize: 12, color: 'var(--fo-text-faint)' }}>
