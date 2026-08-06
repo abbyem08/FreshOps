@@ -185,6 +185,11 @@ export default function JacketWorkspace() {
     if (editingPurchasedId) {
       const { error } = await supabase.from('jacket_product_lines').update(payload).eq('jacket_product_line_id', editingPurchasedId);
       if (error) { alert('Save failed: ' + error.message); return; }
+      // keep already-allocated lines' cost in sync with the edited purchase
+      // cost/fee, so Financials reflects your latest numbers rather than a
+      // frozen snapshot from whenever the allocation was first made
+      const newAllocatedCost = payload.purchase_cost_per_case + payload.fee_total_per_case;
+      await supabase.from('jacket_lines').update({ allocated_cost_per_case: newAllocatedCost }).eq('jacket_product_line_id', editingPurchasedId);
       await logEvent('product_amended', `Purchased product amended — ${productLabel?.commodity}`, null, null, `${payload.purchased_cases} cases @ $${payload.purchase_cost_per_case}/cs`);
     } else {
       const { error } = await supabase.from('jacket_product_lines').insert(payload);
@@ -301,7 +306,29 @@ export default function JacketWorkspace() {
     const { error } = await supabase.from('jackets').update({ jacket_status: 'Closed' }).eq('jacket_id', jacketId);
     if (error) { alert('Failed: ' + error.message); return; }
     await logEvent('closed', 'Jacket closed' + (openIssues.length ? ` with open items: ${openIssues.join(', ')}` : ''));
+    alert('Jacket closed. It won\'t show under the "Active" filter on the Jackets list anymore — switch to "Closed" or "All" to find it.');
     loadAll();
+  }
+
+  async function deleteJacketEntirely() {
+    if (!confirm(`Permanently delete Jacket ${jacket.jacket_number}? This removes everything on it — purchased product, allocations, stops, freight, claims, and its Timeline. This cannot be undone.`)) return;
+    if (!confirm('Really sure? Type OK to confirm one more time — this is permanent.')) return;
+    const { data: jl } = await supabase.from('jacket_lines').select('jacket_line_id').eq('jacket_id', jacketId);
+    const jlIds = (jl || []).map(x => x.jacket_line_id);
+    if (jlIds.length) await supabase.from('stop_lines').delete().in('jacket_line_id', jlIds);
+    const { data: stopRows } = await supabase.from('stops').select('stop_id').eq('jacket_id', jacketId);
+    const stopIds = (stopRows || []).map(x => x.stop_id);
+    if (stopIds.length) await supabase.from('stop_lines').delete().in('stop_id', stopIds);
+    await supabase.from('stops').delete().eq('jacket_id', jacketId);
+    await supabase.from('jacket_lines').delete().eq('jacket_id', jacketId);
+    await supabase.from('jacket_product_lines').delete().eq('jacket_id', jacketId);
+    await supabase.from('freight_records').delete().eq('jacket_id', jacketId);
+    await supabase.from('claims').delete().in('jacket_line_id', jlIds.length ? jlIds : [-1]);
+    await supabase.from('jacket_documents').delete().eq('jacket_id', jacketId);
+    await supabase.from('jacket_events').delete().eq('jacket_id', jacketId);
+    const { error } = await supabase.from('jackets').delete().eq('jacket_id', jacketId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    router.push('/app/jackets');
   }
 
   function openEditPayment() {
@@ -600,6 +627,7 @@ export default function JacketWorkspace() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <button onClick={() => setShowAmend(true)} className="fo-btn fo-btn-secondary fo-btn-sm">+ Amendment</button>
             <button onClick={closeJacket} className="fo-btn fo-btn-secondary fo-btn-sm">Close Jacket</button>
+            <button onClick={deleteJacketEntirely} className="fo-btn fo-btn-danger fo-btn-sm">Delete Jacket</button>
           </div>
         </div>
       </div>
@@ -607,7 +635,7 @@ export default function JacketWorkspace() {
       {showAmend && (
         <div className="fo-card" style={{ marginBottom: 16 }}>
           <div className="fo-h2">New Amendment</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
             {textField('Amendment Name', amendForm.name, v => setAmendForm({ ...amendForm, name: v }))}
             {textField('Target Field', amendForm.target, v => setAmendForm({ ...amendForm, target: v }))}
             {textField('Reason', amendForm.reason, v => setAmendForm({ ...amendForm, reason: v }))}
@@ -622,7 +650,7 @@ export default function JacketWorkspace() {
       )}
 
       {/* ---- Tabs + Timeline layout ---- */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 0.85fr', gap: 16, alignItems: 'start' }}>
         <div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
             {TABS.map(t => (
@@ -676,7 +704,7 @@ export default function JacketWorkspace() {
               })}
               <button onClick={openAddPurchased} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>+ Add Purchased Product</button>
               {showAddPurchased && (
-                <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                   <label style={{ fontSize: 13 }}>Supplier
                     <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                       <option value="">— none —</option>
@@ -712,7 +740,7 @@ export default function JacketWorkspace() {
                   <button onClick={() => setShowNewOrder(!showNewOrder)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ New Order</button>
                 </div>
                 {showNewOrder && (
-                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                     <label style={{ fontSize: 13 }}>Customer
                       <select value={newOrderForm.customer_id} onChange={e => setNewOrderForm({ ...newOrderForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                         <option value="">— select —</option>
@@ -807,7 +835,7 @@ export default function JacketWorkspace() {
                 </div>
                 {editingFreight ? (
                   <div style={{ marginTop: 10 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                       <label style={{ fontSize: 13 }}><span className="fo-field-label">Carrier</span>
                         <select value={freightForm.carrier} onChange={e => setFreightForm({ ...freightForm, carrier: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                           <option value="">— select —</option>
@@ -841,7 +869,7 @@ export default function JacketWorkspace() {
                     <button onClick={() => setEditingFreight(false)} className="fo-btn fo-btn-secondary" style={{ marginTop: 12 }}>Cancel</button>
                   </div>
                 ) : freight ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, fontSize: 13, marginTop: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, fontSize: 13, marginTop: 10 }}>
                     <div><div className="fo-label">Carrier</div>{freight.carrier}</div>
                     <div><div className="fo-label">Trip Type</div>{freight.trip_type}</div>
                     <div><div className="fo-label">Miles</div>{freight.miles || '—'}</div>
@@ -994,7 +1022,7 @@ export default function JacketWorkspace() {
                   <button onClick={() => setShowClaimForm(!showClaimForm)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ Log Claim</button>
                 </div>
                 {showClaimForm && (
-                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
                     <label style={{ fontSize: 13 }}><span className="fo-field-label">Jacket Line</span>
                       <select value={claimForm.jacket_line_id} onChange={e => setClaimForm({ ...claimForm, jacket_line_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                         <option value="">— select —</option>
@@ -1030,7 +1058,7 @@ export default function JacketWorkspace() {
                         </div>
                       </div>
                       {resolvingId === c.claim_id && (
-                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                           <label style={{ fontSize: 13 }}><span className="fo-field-label">Status</span>
                             <select value={resolveForm.status} onChange={e => setResolveForm({ ...resolveForm, status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                               <option>Open</option><option>Under Review</option><option>Resolved</option>
@@ -1077,7 +1105,7 @@ export default function JacketWorkspace() {
           {activeTab === 'Financials' && (
             <div className="fo-card">
               <div className="fo-h2">Profit Summary</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16 }}>
                 <FinRow label="Product Revenue" value={estRevenue} />
                 <FinRow label="Product Cost" value={-estCost} />
                 <FinRow label="Freight Cost" value={-freightCost} />
@@ -1092,7 +1120,7 @@ export default function JacketWorkspace() {
                   {!editingPayment && <button onClick={openEditPayment} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>}
                 </div>
                 {editingPayment ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 10 }}>
                     <label style={{ fontSize: 13 }}>
                       <span className="fo-field-label">Status</span>
                       <select value={paymentForm.supplier_payment_status} onChange={e => setPaymentForm({ ...paymentForm, supplier_payment_status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
@@ -1128,7 +1156,7 @@ export default function JacketWorkspace() {
                 <button onClick={() => setShowAddDoc(!showAddDoc)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ Add Document</button>
               </div>
               {showAddDoc && (
-                <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                   {textField('Document Type (e.g. BOL, POD)', docForm.document_type, v => setDocForm({ ...docForm, document_type: v }))}
                   {textField('File Name / Title', docForm.file_name, v => setDocForm({ ...docForm, file_name: v }))}
                   {textField('Link / URL', docForm.url, v => setDocForm({ ...docForm, url: v }))}
@@ -1157,8 +1185,8 @@ export default function JacketWorkspace() {
         </div>
 
         {/* ---- Timeline ---- */}
-        <div className="fo-card" style={{ position: 'sticky', top: 20 }}>
-          <div className="fo-h2">Timeline / Activity</div>
+        <div className="fo-card fo-card-tight" style={{ position: 'sticky', top: 20 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
           {editingDetails && (
             <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
@@ -1175,10 +1203,10 @@ export default function JacketWorkspace() {
             </div>
           )}
           {!editingDetails && <button onClick={openEditDetails} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginBottom: 12 }}>Edit Jacket Details</button>}
-          <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-            {events.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No activity logged yet.</div> : events.map(ev => (
-              <div key={ev.event_id} style={{ padding: '8px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{ev.description}</div>
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {events.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 12 }}>No activity logged yet.</div> : events.map(ev => (
+              <div key={ev.event_id} style={{ padding: '6px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{ev.description}</div>
                 {(ev.original_value || ev.adjustment || ev.new_value) && (
                   <div style={{ fontSize: 11.5, color: 'var(--fo-text-dim)', marginTop: 2 }}>
                     {ev.original_value && <>orig: {ev.original_value} </>}
@@ -1222,24 +1250,25 @@ function textField(label, value, onChange, type = 'text') {
 }
 
 function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased }) {
+  const hasProduct = purchasedLines.length > 0;
   const stillAvailable = purchasedLines.reduce((s, p) => s + availableOnPurchased(p).available, 0);
   const attention = [];
   if (stillAvailable > 0) attention.push(`${stillAvailable} cases still available to sell`);
   if (claims.length > 0) attention.push(`${claims.length} open claim(s)`);
-  if (!freight) attention.push('Carrier not booked');
+  if (hasProduct && !freight) attention.push('Carrier not booked');
   if (freight && !freight.carrier_paid) attention.push('Carrier not yet paid');
-  if (jacket.supplier_payment_status !== 'Paid') attention.push(`Supplier payment: ${jacket.supplier_payment_status || 'Unpaid'}`);
+  if (hasProduct && jacket.supplier_payment_status && jacket.supplier_payment_status !== 'Paid') attention.push(`Supplier payment: ${jacket.supplier_payment_status}`);
 
   return (
     <div className="fo-card">
       <div className="fo-h2">Jacket Health</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20 }}>
-        <HealthRow label="Supplier" value={purchasedLines.length > 0 ? 'Confirmed' : 'Waiting'} good={purchasedLines.length > 0} />
-        <HealthRow label="Product" value={stillAvailable > 0 ? `${stillAvailable} cs Available` : 'Fully Allocated'} good={stillAvailable === 0} />
-        <HealthRow label="Logistics" value={jacket.jacket_status} good={['In Transit', 'Delivered', 'Closed'].includes(jacket.jacket_status)} />
-        <HealthRow label="Freight" value={freight ? freight.status : 'Unbooked'} good={!!freight} />
-        <HealthRow label="Financials" value={jacket.jacket_status === 'Closed' ? 'Closed' : 'Open'} good={jacket.jacket_status === 'Closed'} />
-        <HealthRow label="Claims" value={claims.length > 0 ? `${claims.length} Open` : 'None'} good={claims.length === 0} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <HealthRow label="Supplier" value={!hasProduct ? 'Not Purchased Yet' : 'Confirmed'} tone={!hasProduct ? 'gray' : 'green'} />
+        <HealthRow label="Product" value={!hasProduct ? 'Not Purchased Yet' : stillAvailable > 0 ? `${stillAvailable} cs Available` : 'Fully Allocated'} tone={!hasProduct ? 'gray' : stillAvailable === 0 ? 'green' : 'amber'} />
+        <HealthRow label="Logistics" value={jacket.jacket_status} tone={['In Transit', 'Delivered', 'Closed'].includes(jacket.jacket_status) ? 'green' : jacket.jacket_status === 'Planning' ? 'gray' : 'amber'} />
+        <HealthRow label="Freight" value={freight ? freight.status : hasProduct ? 'Unbooked' : 'N/A'} tone={freight ? 'green' : hasProduct ? 'amber' : 'gray'} />
+        <HealthRow label="Financials" value={jacket.jacket_status === 'Closed' ? 'Closed' : 'Open'} tone={jacket.jacket_status === 'Closed' ? 'green' : 'gray'} />
+        <HealthRow label="Claims" value={claims.length > 0 ? `${claims.length} Open` : 'None'} tone={claims.length > 0 ? 'amber' : 'green'} />
       </div>
       <div className="fo-h2">What Needs Attention</div>
       {attention.length === 0 ? (
@@ -1252,11 +1281,11 @@ function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, ava
     </div>
   );
 }
-function HealthRow({ label, value, good }) {
+function HealthRow({ label, value, tone }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--fo-section-bg)', borderRadius: 'var(--fo-radius-sm)' }}>
       <span style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{label}</span>
-      <span className={good ? 'fo-badge fo-badge-green' : 'fo-badge fo-badge-amber'}>{value}</span>
+      <span className={`fo-badge fo-badge-${tone === 'green' ? 'green' : tone === 'amber' ? 'amber' : 'gray'}`}>{value}</span>
     </div>
   );
 }
