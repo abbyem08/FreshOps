@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import Logo from './Logo';
 import {
   IconDashboard, IconOrders, IconJacket, IconNeeds, IconCalls, IconPricing,
-  IconReports, IconCustomers, IconSuppliers, IconCarriers, IconProduct, IconRequests,
+  IconReports, IconCustomers, IconRequests,
 } from './icons';
 
 const NAV_SECTIONS = [
@@ -33,10 +33,7 @@ const NAV_SECTIONS = [
     label: 'Reference',
     items: [
       { href: '/app/reports', label: 'Reports', Icon: IconReports },
-      { href: '/app/customers', label: 'Customers', Icon: IconCustomers },
-      { href: '/app/suppliers', label: 'Suppliers', Icon: IconSuppliers },
-      { href: '/app/carriers', label: 'Carriers', Icon: IconCarriers },
-      { href: '/app/products', label: 'Product Master', Icon: IconProduct },
+      { href: '/app/masters', label: 'Masters', Icon: IconCustomers },
       { href: '/admin/requests', label: 'Order Requests', Icon: IconRequests },
     ],
   },
