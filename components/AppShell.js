@@ -23,13 +23,6 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Move It',
-    items: [
-      { href: '/app/dispatch', label: 'Dispatch & Freight', Icon: IconJacket },
-      { href: '/app/ops', label: 'Load Tracking', Icon: IconNeeds },
-    ],
-  },
-  {
     label: 'Pricing',
     items: [
       { href: '/app/calls', label: 'Market Calls', Icon: IconCalls },
