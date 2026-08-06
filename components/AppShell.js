@@ -53,20 +53,20 @@ export default function AppShell({ title, subtitle, children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [darkPreview, setDarkPreview] = useState(false);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    // read the saved preference once on mount — before Phase 7's real
-    // per-account setting exists, this at least survives navigating
-    // between pages instead of resetting on every click
-    const saved = window.localStorage.getItem('fo-theme-preview');
-    if (saved === 'dark') setDarkPreview(true);
+    // fast local cache so there's no flash of light theme before the
+    // real account setting loads from Supabase below
+    const cached = window.localStorage.getItem('fo-theme-cache');
+    if (cached === 'dark') setDarkPreview(true);
   }, []);
 
   useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle('theme-dark', darkPreview);
-    window.localStorage.setItem('fo-theme-preview', darkPreview ? 'dark' : 'light');
+    window.localStorage.setItem('fo-theme-cache', darkPreview ? 'dark' : 'light');
   }, [darkPreview]);
 
   async function checkAuth() {
@@ -74,7 +74,17 @@ export default function AppShell({ title, subtitle, children }) {
     if (!user) { router.push('/login'); return; }
     const { data: staffRow } = await supabase.from('users').select('*').eq('user_id', user.id).single();
     if (!staffRow) { router.push('/login'); return; }
+    setUserId(user.id);
+    setDarkPreview(staffRow.appearance_theme === 'command_center_dark');
     setReady(true);
+  }
+
+  async function toggleTheme() {
+    const next = !darkPreview;
+    setDarkPreview(next);
+    if (userId) {
+      await supabase.from('users').update({ appearance_theme: next ? 'command_center_dark' : 'freshops_light' }).eq('user_id', userId);
+    }
   }
 
   if (!ready) return <div style={{ padding: 40, color: 'var(--fo-text-dim)' }}>Loading…</div>;
@@ -123,7 +133,7 @@ export default function AppShell({ title, subtitle, children }) {
             <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
               {today.toLocaleDateString(undefined, { weekday: 'long' })}<br/>{today.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
-            <button onClick={() => setDarkPreview(!darkPreview)} className="fo-btn fo-btn-secondary fo-btn-sm" title="Preview only — not yet saved to your account (Phase 7)">
+            <button onClick={toggleTheme} className="fo-btn fo-btn-secondary fo-btn-sm" title="Saved to your account">
               {darkPreview ? '☀ Light' : '● Command Center'}
             </button>
           </div>
