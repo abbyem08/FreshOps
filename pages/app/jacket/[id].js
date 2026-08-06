@@ -36,6 +36,9 @@ export default function JacketWorkspace() {
   const [allocatingLineId, setAllocatingLineId] = useState(null);
   const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [showNewFreightOnly, setShowNewFreightOnly] = useState(false);
+  const [freightOnlyForm, setFreightOnlyForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+  const [freightOnlyLines, setFreightOnlyLines] = useState([]);
   const [newOrderForm, setNewOrderForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', cases: '' });
   const [demandAllocateFor, setDemandAllocateFor] = useState(null);
   const [demandAllocateForm, setDemandAllocateForm] = useState({ purchased_line_id: '', cases: '' });
@@ -145,6 +148,8 @@ export default function JacketWorkspace() {
     setAmendments(am || []);
     const { data: docs } = await supabase.from('jacket_documents').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setDocuments(docs || []);
+    const { data: fol } = await supabase.from('freight_only_lines').select('*, customer_orders(acumatica_order_no, customer_po, customers(company))').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    setFreightOnlyLines(fol || []);
   }
 
   function availableOnPurchased(p) {
@@ -284,6 +289,34 @@ export default function JacketWorkspace() {
     loadAll();
   }
 
+  async function createFreightOnlyOrder() {
+    if (!freightOnlyForm.customer_id || !freightOnlyForm.commodity_description || !freightOnlyForm.cases) { alert('Customer, Commodity Description, and Cases are all required.'); return; }
+    const { data: order, error: orderErr } = await supabase.from('customer_orders').insert({
+      acumatica_order_no: freightOnlyForm.acumatica_no || null, customer_id: Number(freightOnlyForm.customer_id),
+      customer_po: freightOnlyForm.customer_po || null, order_date: new Date().toISOString().slice(0, 10),
+      order_status: 'Open', source: 'Internal', order_type: 'Freight Only',
+    }).select().single();
+    if (orderErr) { alert('Could not create order: ' + orderErr.message); return; }
+    const { error: lineErr } = await supabase.from('freight_only_lines').insert({
+      customer_order_id: order.customer_order_id, jacket_id: jacketId, commodity_description: freightOnlyForm.commodity_description,
+      cases: Number(freightOnlyForm.cases), pallets: freightOnlyForm.pallets ? Number(freightOnlyForm.pallets) : null, weight: freightOnlyForm.weight ? Number(freightOnlyForm.weight) : null,
+      customer_freight_charge: freightOnlyForm.customer_freight_charge ? Number(freightOnlyForm.customer_freight_charge) : 0,
+      allocated_freight_cost: freightOnlyForm.allocated_freight_cost ? Number(freightOnlyForm.allocated_freight_cost) : 0,
+      pickup_location: freightOnlyForm.pickup_location || null, delivery_location: freightOnlyForm.delivery_location || null,
+      notes: freightOnlyForm.notes || null, status: 'Planned',
+    });
+    if (lineErr) { alert('Order created, but the freight-only line failed: ' + lineErr.message); return; }
+    await logEvent('freight_only_added', `Freight-only: ${freightOnlyForm.cases} cases of ${freightOnlyForm.commodity_description} for ${customers.find(c => c.customer_id === Number(freightOnlyForm.customer_id))?.company} — $${freightOnlyForm.customer_freight_charge || 0} freight charge`);
+    setShowNewFreightOnly(false);
+    setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+    loadAll();
+  }
+  async function deleteFreightOnlyLine(line) {
+    if (!confirm('Delete this freight-only order? This removes it and its customer order entirely.')) return;
+    await supabase.from('freight_only_lines').delete().eq('freight_only_line_id', line.freight_only_line_id);
+    await supabase.from('customer_orders').delete().eq('customer_order_id', line.customer_order_id);
+    loadAll();
+  }
   // ---- Header actions ----
   function openEditDetails() {
     setDetailsForm({ jacket_number: jacket.jacket_number, jacket_date: jacket.jacket_date || '', carrier: jacket.carrier || '', driver: jacket.driver || '', driver_phone: jacket.driver_phone || '', truck: jacket.truck || '', trailer: jacket.trailer || '', route: jacket.route || '', jacket_status: jacket.jacket_status, weight_capacity: jacket.weight_capacity || '', pallet_capacity: jacket.pallet_capacity || '' });
@@ -650,13 +683,18 @@ export default function JacketWorkspace() {
 
   if (!jacket) return <AppShell title="Jacket"><p style={{ color: 'var(--fo-text-faint)' }}>Loading…</p></AppShell>;
 
-  const totalPallets = purchasedLines.reduce((s, p) => s + (p.products?.cases_per_pallet ? Math.ceil((p.actual_cases_received ?? p.purchased_cases) / p.products.cases_per_pallet) : 0), 0);
-  const totalWeight = purchasedLines.reduce((s, p) => s + (p.products?.gross_weight_per_case || 0) * (p.actual_cases_received ?? (p.purchased_cases || 0)), 0);
+  const totalPallets = purchasedLines.reduce((s, p) => s + (p.products?.cases_per_pallet ? Math.ceil((p.actual_cases_received ?? p.purchased_cases) / p.products.cases_per_pallet) : 0), 0)
+    + freightOnlyLines.reduce((s, f) => s + Number(f.pallets || 0), 0);
+  const totalWeight = purchasedLines.reduce((s, p) => s + (p.products?.gross_weight_per_case || 0) * (p.actual_cases_received ?? (p.purchased_cases || 0)), 0)
+    + freightOnlyLines.reduce((s, f) => s + Number(f.weight || 0), 0);
   const orderCount = new Set(jacketLines.map(l => l.order_lines?.customer_orders?.acumatica_order_no).filter(Boolean)).size;
   const estRevenue = jacketLines.reduce((s, l) => s + Number(l.cases_to_load || 0) * Number(l.order_lines?.sell_price_per_case || 0), 0);
   const estCost = jacketLines.reduce((s, l) => s + Number(l.cases_to_load || 0) * Number(l.allocated_cost_per_case || 0), 0);
   const freightCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
   const estProfit = estRevenue - estCost - freightCost;
+  const freightOnlyRevenue = freightOnlyLines.reduce((s, f) => s + Number(f.customer_freight_charge || 0), 0);
+  const freightOnlyCost = freightOnlyLines.reduce((s, f) => s + Number(f.allocated_freight_cost || 0), 0);
+  const freightOnlyProfit = freightOnlyRevenue - freightOnlyCost;
 
   // ---- Load Tracking: group by commodity + shipper (this jacket only) ----
   const commodityGroups = {};
@@ -795,8 +833,51 @@ export default function JacketWorkspace() {
               <div className="fo-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Demand — Open Orders Needing This Jacket's Product</div>
-                  <button onClick={() => setShowNewOrder(!showNewOrder)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ New Order</button>
+                  <div>
+                    <button onClick={() => setShowNewOrder(!showNewOrder)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ New Order</button>{' '}
+                    <button onClick={() => setShowNewFreightOnly(!showNewFreightOnly)} className="fo-btn fo-btn-secondary fo-btn-sm">+ Freight Only</button>
+                  </div>
                 </div>
+                {showNewFreightOnly && (
+                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Customer</span>
+                      <select value={freightOnlyForm.customer_id} onChange={e => setFreightOnlyForm({ ...freightOnlyForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option value="">— select —</option>
+                        {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
+                      </select>
+                    </label>
+                    {textField('Acumatica Order # (optional)', freightOnlyForm.acumatica_no, v => setFreightOnlyForm({ ...freightOnlyForm, acumatica_no: v }))}
+                    {textField('Customer PO', freightOnlyForm.customer_po, v => setFreightOnlyForm({ ...freightOnlyForm, customer_po: v }))}
+                    {textField('Commodity Description', freightOnlyForm.commodity_description, v => setFreightOnlyForm({ ...freightOnlyForm, commodity_description: v }))}
+                    {textField('Cases', freightOnlyForm.cases, v => setFreightOnlyForm({ ...freightOnlyForm, cases: v }), 'number')}
+                    {textField('Pallets', freightOnlyForm.pallets, v => setFreightOnlyForm({ ...freightOnlyForm, pallets: v }), 'number')}
+                    {textField('Weight (lb)', freightOnlyForm.weight, v => setFreightOnlyForm({ ...freightOnlyForm, weight: v }), 'number')}
+                    {textField('Customer Freight Charge ($)', freightOnlyForm.customer_freight_charge, v => setFreightOnlyForm({ ...freightOnlyForm, customer_freight_charge: v }), 'number')}
+                    {textField('Allocated Freight Cost ($)', freightOnlyForm.allocated_freight_cost, v => setFreightOnlyForm({ ...freightOnlyForm, allocated_freight_cost: v }), 'number')}
+                    {textField('Pickup Location', freightOnlyForm.pickup_location, v => setFreightOnlyForm({ ...freightOnlyForm, pickup_location: v }))}
+                    {textField('Delivery Location', freightOnlyForm.delivery_location, v => setFreightOnlyForm({ ...freightOnlyForm, delivery_location: v }))}
+                    <div style={{ gridColumn: '1 / -1' }}>{textField('Notes', freightOnlyForm.notes, v => setFreightOnlyForm({ ...freightOnlyForm, notes: v }))}</div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <button onClick={createFreightOnlyOrder} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save Freight-Only Order</button>
+                      <button onClick={() => setShowNewFreightOnly(false)} className="fo-btn fo-btn-secondary">Cancel</button>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--fo-text-faint)' }}>This is customer-owned product riding on your truck for a fee — it doesn't touch your purchased product or count as a produce sale anywhere.</div>
+                  </div>
+                )}
+                {freightOnlyLines.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    {freightOnlyLines.map(f => (
+                      <div key={f.freight_only_line_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 10, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 13.5 }}>
+                          <span className="fo-badge fo-badge-blue" style={{ marginRight: 6 }}>Freight Only</span>
+                          <strong>{f.customer_orders?.customers?.company}</strong> — {f.cases} cases of {f.commodity_description}
+                          <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{f.pallets ? `${f.pallets} pallets · ` : ''}{f.weight ? `${f.weight} lb · ` : ''}${Number(f.customer_freight_charge || 0).toLocaleString()} freight charge</div>
+                        </div>
+                        <button onClick={() => deleteFreightOnlyLine(f)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {showNewOrder && (
                   <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                     <label style={{ fontSize: 13 }}>Customer
@@ -973,6 +1054,18 @@ export default function JacketWorkspace() {
                     </table>
                   </div>
                 ))}
+                {freightOnlyLines.length > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border-soft)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Freight-Only Product on This Truck</div>
+                    {freightOnlyLines.map(f => (
+                      <div key={f.freight_only_line_id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
+                        <span className="fo-badge fo-badge-blue" style={{ marginRight: 6 }}>Freight Only</span>
+                        {f.cases} cases {f.commodity_description} — {f.customer_orders?.customers?.company}
+                        {(f.pickup_location || f.delivery_location) && <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{f.pickup_location} → {f.delivery_location}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ---- Load Tracking ---- */}
@@ -1171,7 +1264,21 @@ export default function JacketWorkspace() {
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
                 <div className="fo-kpi-label">Estimated Profit</div>
                 <div className="fo-kpi-value" style={{ color: estProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${estProfit.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 4 }}>Produce sale only — freight-only revenue is tracked separately below and never mixed into this number.</div>
               </div>
+              {freightOnlyLines.length > 0 && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
+                  <div className="fo-h2">Freight-Only</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16 }}>
+                    <FinRow label="Freight-Only Revenue" value={freightOnlyRevenue} />
+                    <FinRow label="Freight-Only Cost" value={-freightOnlyCost} />
+                    <div>
+                      <div className="fo-kpi-label">Freight-Only Profit</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: freightOnlyProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${freightOnlyProfit.toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Supplier Payment</div>
