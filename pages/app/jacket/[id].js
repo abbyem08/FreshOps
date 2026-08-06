@@ -41,6 +41,9 @@ export default function JacketWorkspace() {
   const [showNewFreightOnly, setShowNewFreightOnly] = useState(false);
   const [freightOnlyForm, setFreightOnlyForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
   const [freightOnlyLines, setFreightOnlyLines] = useState([]);
+  const [editingFreightOnlyId, setEditingFreightOnlyId] = useState(null);
+  const [editingDemandLineId, setEditingDemandLineId] = useState(null);
+  const [editDemandCasesValue, setEditDemandCasesValue] = useState('');
   const [newOrderForm, setNewOrderForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', cases: '' });
   const [demandAllocateFor, setDemandAllocateFor] = useState(null);
   const [demandAllocateForm, setDemandAllocateForm] = useState({ purchased_line_id: '', cases: '' });
@@ -226,7 +229,7 @@ export default function JacketWorkspace() {
         { field: 'purchase_cost_per_case', before: Number(o.purchase_cost_per_case ?? 0), after: payload.purchase_cost_per_case },
         { field: 'fee_total_per_case', before: Number(o.fee_total_per_case ?? 0), after: payload.fee_total_per_case },
         { field: 'shipper_po', before: o.shipper_po || '', after: payload.shipper_po || '' },
-      ], { jacket_product_line_id: editingPurchasedId });
+      ], 'jacket_product_lines', editingPurchasedId);
       await logEvent('product_amended', `Purchased product amended — ${productLabel?.commodity}`, null, null, `${payload.purchased_cases} cases @ $${payload.purchase_cost_per_case}/cs`);
     } else {
       const { error } = await supabase.from('jacket_product_lines').insert(payload);
@@ -310,8 +313,45 @@ export default function JacketWorkspace() {
     loadAll();
   }
 
+  function openEditFreightOnly(f) {
+    setFreightOnlyForm({
+      customer_id: '', acumatica_no: f.customer_orders?.acumatica_order_no || '', customer_po: f.customer_orders?.customer_po || '',
+      commodity_description: f.commodity_description || '', cases: f.cases ?? '', pallets: f.pallets ?? '', weight: f.weight ?? '',
+      customer_freight_charge: f.customer_freight_charge ?? '', allocated_freight_cost: f.allocated_freight_cost ?? '',
+      pickup_location: f.pickup_location || '', delivery_location: f.delivery_location || '', notes: f.notes || '',
+    });
+    setEditingFreightOnlyId(f.freight_only_line_id);
+    setShowNewFreightOnly(true);
+  }
   async function createFreightOnlyOrder() {
-    if (!freightOnlyForm.customer_id || !freightOnlyForm.commodity_description || !freightOnlyForm.cases) { alert('Customer, Commodity Description, and Cases are all required.'); return; }
+    if (!freightOnlyForm.customer_id && !editingFreightOnlyId) { alert('Customer, Commodity Description, and Cases are all required.'); return; }
+    if (!freightOnlyForm.commodity_description || !freightOnlyForm.cases) { alert('Commodity Description and Cases are required.'); return; }
+
+    if (editingFreightOnlyId) {
+      const original = freightOnlyLines.find(f => f.freight_only_line_id === editingFreightOnlyId);
+      const payload = {
+        commodity_description: freightOnlyForm.commodity_description, cases: Number(freightOnlyForm.cases),
+        pallets: freightOnlyForm.pallets ? Number(freightOnlyForm.pallets) : null, weight: freightOnlyForm.weight ? Number(freightOnlyForm.weight) : null,
+        customer_freight_charge: freightOnlyForm.customer_freight_charge ? Number(freightOnlyForm.customer_freight_charge) : 0,
+        allocated_freight_cost: freightOnlyForm.allocated_freight_cost ? Number(freightOnlyForm.allocated_freight_cost) : 0,
+        pickup_location: freightOnlyForm.pickup_location || null, delivery_location: freightOnlyForm.delivery_location || null,
+        notes: freightOnlyForm.notes || null,
+      };
+      const { error } = await supabase.from('freight_only_lines').update(payload).eq('freight_only_line_id', editingFreightOnlyId);
+      if (error) { alert('Save failed: ' + error.message); return; }
+      if (original) {
+        await logAmendments('Freight-only order amended', 'Freight Change', [
+          { field: 'cases', before: Number(original.cases || 0), after: payload.cases },
+          { field: 'customer_freight_charge', before: Number(original.customer_freight_charge || 0), after: payload.customer_freight_charge },
+          { field: 'allocated_freight_cost', before: Number(original.allocated_freight_cost || 0), after: payload.allocated_freight_cost },
+        ], 'freight_only_lines', editingFreightOnlyId);
+      }
+      setShowNewFreightOnly(false); setEditingFreightOnlyId(null);
+      setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+      loadAll();
+      return;
+    }
+
     const { data: order, error: orderErr } = await supabase.from('customer_orders').insert({
       acumatica_order_no: freightOnlyForm.acumatica_no || null, customer_id: Number(freightOnlyForm.customer_id),
       customer_po: freightOnlyForm.customer_po || null, order_date: new Date().toISOString().slice(0, 10),
@@ -338,6 +378,26 @@ export default function JacketWorkspace() {
     await supabase.from('customer_orders').delete().eq('customer_order_id', line.customer_order_id);
     loadAll();
   }
+  function openEditDemand(ol) { setEditingDemandLineId(ol.order_line_id); setEditDemandCasesValue(ol.cases_ordered ?? ''); }
+  async function saveEditDemand(ol) {
+    const newCases = Number(editDemandCasesValue);
+    if (!newCases || newCases <= 0) { alert('Enter a valid number of cases.'); return; }
+    const { error } = await supabase.from('order_lines').update({ cases_ordered: newCases, amended_at: new Date().toISOString() }).eq('order_line_id', ol.order_line_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logAmendments('Order quantity amended', newCases >= ol.cases_ordered ? 'Quantity Increase' : 'Quantity Decrease', [{ field: 'cases_ordered', before: Number(ol.cases_ordered || 0), after: newCases }], 'order_lines', ol.order_line_id);
+    setEditingDemandLineId(null);
+    loadAll();
+  }
+  async function deleteDemandOrderLine(ol) {
+    if (!confirm(`Delete this order line (${ol.products?.commodity} for ${ol.customer_orders?.customers?.company})? This cannot be undone.`)) return;
+    const { data: siblingLines } = await supabase.from('order_lines').select('order_line_id').eq('customer_order_id', ol.customer_order_id);
+    const { error } = await supabase.from('order_lines').delete().eq('order_line_id', ol.order_line_id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    if ((siblingLines || []).length <= 1) {
+      await supabase.from('customer_orders').delete().eq('customer_order_id', ol.customer_order_id);
+    }
+    loadAll();
+  }
   // ---- Header actions ----
   function openEditDetails() {
     setDetailsForm({ jacket_number: jacket.jacket_number, jacket_date: jacket.jacket_date || '', carrier: jacket.carrier || '', driver: jacket.driver || '', driver_phone: jacket.driver_phone || '', truck: jacket.truck || '', trailer: jacket.trailer || '', route: jacket.route || '', jacket_status: jacket.jacket_status, weight_capacity: jacket.weight_capacity || '', pallet_capacity: jacket.pallet_capacity || '' });
@@ -353,8 +413,7 @@ export default function JacketWorkspace() {
       { field: 'jacket_status', before: jacket.jacket_status || '', after: payload.jacket_status || '' },
       { field: 'truck', before: jacket.truck || '', after: payload.truck || '' },
       { field: 'trailer', before: jacket.trailer || '', after: payload.trailer || '' },
-    ]);
-    await logEvent('details_edited', `Jacket details updated (status: ${payload.jacket_status})`);
+    ], 'jackets', jacketId);
     setEditingDetails(false);
     loadAll();
   }
@@ -362,13 +421,24 @@ export default function JacketWorkspace() {
   // function below, right after a real edit succeeds. Compares each
   // before/after pair and only writes a row for fields that actually
   // changed. No separate "amendment area" — amending IS editing.
-  async function logAmendments(amendmentName, amendmentType, diffs, contextIds = {}) {
+  // PK column name per table — needed so Reverse knows exactly how to
+  // write the original value back to the real record.
+  const PK_COLUMN = {
+    jackets: 'jacket_id', jacket_product_lines: 'jacket_product_line_id', freight_records: 'freight_id',
+    order_lines: 'order_line_id', jacket_lines: 'jacket_line_id', stops: 'stop_id', jacket_commodity_loads: 'id',
+  };
+  function coerceValue(raw, sampleAfter) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    if (typeof sampleAfter === 'number') { const n = Number(raw); return Number.isNaN(n) ? raw : n; }
+    return raw;
+  }
+  async function logAmendments(amendmentName, amendmentType, diffs, targetTable, targetRecordId) {
     const rows = diffs
       .filter(d => String(d.before ?? '') !== String(d.after ?? ''))
       .map(d => {
         const numeric = typeof d.before === 'number' && typeof d.after === 'number';
         return {
-          jacket_id: jacketId, ...contextIds,
+          jacket_id: jacketId, target_table: targetTable, target_record_id: targetRecordId != null ? String(targetRecordId) : null,
           amendment_name: amendmentName, amendment_type: amendmentType, target_field: d.field,
           original_value: d.before != null && d.before !== '' ? String(d.before) : null,
           new_effective_value: d.after != null && d.after !== '' ? String(d.after) : null,
@@ -379,9 +449,16 @@ export default function JacketWorkspace() {
     if (rows.length) await supabase.from('amendments').insert(rows);
   }
   async function reverseAmendment(a) {
-    if (!confirm(`Reverse "${a.amendment_name}"? This creates a new amendment that undoes it — the original stays on record, nothing gets deleted.`)) return;
+    if (!confirm(`Reverse "${a.amendment_name}"? This writes the original value back and creates a new amendment recording the reversal — nothing gets deleted.`)) return;
+    if (a.target_table && a.target_record_id && PK_COLUMN[a.target_table]) {
+      const value = coerceValue(a.original_value, a.new_effective_value);
+      const { error: writeErr } = await supabase.from(a.target_table).update({ [a.target_field]: value }).eq(PK_COLUMN[a.target_table], a.target_record_id);
+      if (writeErr) { alert('Reversal failed to update the real record: ' + writeErr.message); return; }
+    } else {
+      alert('This is an older amendment logged before reversal could write back to the real record — the ledger entry below will still be created, but you\'ll need to fix the value manually.');
+    }
     const { data: reversal, error } = await supabase.from('amendments').insert({
-      jacket_id: jacketId, amendment_name: `Reversal — ${a.amendment_name}`, amendment_type: a.amendment_type, target_field: a.target_field,
+      jacket_id: jacketId, target_table: a.target_table, target_record_id: a.target_record_id, amendment_name: `Reversal — ${a.amendment_name}`, amendment_type: a.amendment_type, target_field: a.target_field,
       original_value: a.new_effective_value, adjustment_value: a.adjustment_value, new_effective_value: a.original_value,
       reason: `Reversing amendment #${a.amendment_id}`, created_by: userEmail, status: 'Active',
     }).select().single();
@@ -445,8 +522,7 @@ export default function JacketWorkspace() {
     await logAmendments('Supplier payment amended', 'Credit', [
       { field: 'supplier_payment_status', before: jacket.supplier_payment_status || 'Unpaid', after: payload.supplier_payment_status },
       { field: 'supplier_amount_paid', before: jacket.supplier_amount_paid != null ? Number(jacket.supplier_amount_paid) : 0, after: payload.supplier_amount_paid },
-    ]);
-    await logEvent('supplier_payment_updated', `Supplier payment updated — ${payload.supplier_payment_status}${payload.supplier_amount_paid ? `, $${payload.supplier_amount_paid.toLocaleString()} paid` : ''}`, jacket.supplier_payment_status, null, payload.supplier_payment_status);
+    ], 'jackets', jacketId);
     setEditingPayment(false);
     loadAll();
   }
@@ -497,7 +573,7 @@ export default function JacketWorkspace() {
         { field: 'booked_rate', before: freight.booked_rate != null ? Number(freight.booked_rate) : null, after: payload.booked_rate },
         { field: 'extra_fees', before: freight.extra_fees != null ? Number(freight.extra_fees) : 0, after: payload.extra_fees },
         { field: 'status', before: freight.status || '', after: payload.status },
-      ], { freight_record_id: freight.freight_id });
+      ], 'freight_records', freight.freight_id);
     } else {
       const { error } = await supabase.from('freight_records').insert({ ...payload, quote_date: new Date().toISOString().slice(0, 10) });
       if (error) { alert('Save failed: ' + error.message); return; }
@@ -512,7 +588,7 @@ export default function JacketWorkspace() {
     const old = stops.find(s => s.stop_id === stopId);
     const { error } = await supabase.from('stops').update({ stop_number: Number(newNumber) }).eq('stop_id', stopId);
     if (error) { alert('Update failed: ' + error.message); return; }
-    await logAmendments('Stop number changed', 'Stop Change', [{ field: 'stop_number', before: old?.stop_number ?? null, after: Number(newNumber) }]);
+    await logAmendments('Stop number changed', 'Stop Change', [{ field: 'stop_number', before: old?.stop_number ?? null, after: Number(newNumber) }], 'stops', stopId);
     loadAll();
   }
   async function updateAppointment(stopId, value) {
@@ -520,21 +596,23 @@ export default function JacketWorkspace() {
     const newVal = value ? new Date(value).toISOString() : null;
     const { error } = await supabase.from('stops').update({ appointment: newVal }).eq('stop_id', stopId);
     if (error) { alert('Update failed: ' + error.message); return; }
-    await logAmendments('Appointment changed', 'Delivery Date Change', [{ field: 'appointment', before: old?.appointment || null, after: newVal }]);
+    await logAmendments('Appointment changed', 'Delivery Date Change', [{ field: 'appointment', before: old?.appointment || null, after: newVal }], 'stops', stopId);
     loadAll();
   }
 
   // ---- Load Tracking: jacket-level actual loaded, by commodity/shipper ----
   async function updateCommodityLoad(productId, supplierId, value) {
     const existing = commodityLoads.find(c => c.product_id === productId && c.supplier_id === supplierId);
-    let error;
+    let error, recordId = existing?.id;
     if (existing) {
       ({ error } = await supabase.from('jacket_commodity_loads').update({ actual_cases_loaded: value }).eq('id', existing.id));
     } else {
-      ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, supplier_id: supplierId, actual_cases_loaded: value }));
+      const { data: created, error: insertErr } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, supplier_id: supplierId, actual_cases_loaded: value }).select().single();
+      error = insertErr;
+      recordId = created?.id;
     }
     if (error) { alert('Update failed: ' + error.message); return; }
-    await logAmendments('Actual cases loaded changed', 'Quantity Increase', [{ field: 'actual_cases_loaded', before: existing?.actual_cases_loaded != null ? Number(existing.actual_cases_loaded) : null, after: value }]);
+    await logAmendments('Actual cases loaded changed', 'Quantity Increase', [{ field: 'actual_cases_loaded', before: existing?.actual_cases_loaded != null ? Number(existing.actual_cases_loaded) : null, after: value }], 'jacket_commodity_loads', recordId);
     loadAll();
   }
   async function updateJacketLineField(id, fieldName, value) {
@@ -542,7 +620,7 @@ export default function JacketWorkspace() {
     const { error } = await supabase.from('jacket_lines').update({ [fieldName]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
     const typeMap = { load_status: 'Stop Change', bol_number: 'Note' };
-    await logAmendments(`${fieldName === 'bol_number' ? 'BOL #' : 'Load status'} changed`, typeMap[fieldName] || 'Other', [{ field: fieldName, before: old?.[fieldName] ?? null, after: value }], { order_line_id: old?.order_line_id || null });
+    await logAmendments(`${fieldName === 'bol_number' ? 'BOL #' : 'Load status'} changed`, typeMap[fieldName] || 'Other', [{ field: fieldName, before: old?.[fieldName] ?? null, after: value }], 'jacket_lines', id);
     loadAll();
   }
   function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
@@ -575,7 +653,7 @@ export default function JacketWorkspace() {
     const old = jacketLines.find(l => l.jacket_line_id === id);
     const { error } = await supabase.from('jacket_lines').update({ actual_cases_delivered: value, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
-    await logAmendments('Delivered quantity changed', old && Number(value) >= Number(old.actual_cases_delivered || 0) ? 'Overage' : 'Shortage', [{ field: 'actual_cases_delivered', before: old?.actual_cases_delivered != null ? Number(old.actual_cases_delivered) : 0, after: Number(value) }], { order_line_id: old?.order_line_id || null });
+    await logAmendments('Delivered quantity changed', old && Number(value) >= Number(old.actual_cases_delivered || 0) ? 'Overage' : 'Shortage', [{ field: 'actual_cases_delivered', before: old?.actual_cases_delivered != null ? Number(old.actual_cases_delivered) : 0, after: Number(value) }], 'jacket_lines', id);
     loadAll();
   }
   async function openReassignLine(line) {
@@ -591,7 +669,9 @@ export default function JacketWorkspace() {
     const newOrder = reassignOptions.find(ol => ol.order_line_id === Number(reassignTarget));
     const { error } = await supabase.from('jacket_lines').update({ order_line_id: Number(reassignTarget), quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', line.jacket_line_id);
     if (error) { alert('Reassign failed: ' + error.message); return; }
-    await logAmendments('Reassigned to a different order', 'Customer Change', [{ field: 'order_line_id', before: line.order_lines?.customer_orders?.acumatica_order_no || `line ${line.order_line_id}`, after: newOrder?.customer_orders?.acumatica_order_no || `line ${reassignTarget}` }], { order_line_id: Number(reassignTarget) });
+    const fromLabel = line.order_lines?.customer_orders?.acumatica_order_no || `line ${line.order_line_id}`;
+    const toLabel = newOrder?.customer_orders?.acumatica_order_no || `line ${reassignTarget}`;
+    await logAmendments(`Reassigned from ${fromLabel} to ${toLabel}`, 'Customer Change', [{ field: 'order_line_id', before: line.order_line_id, after: Number(reassignTarget) }], 'jacket_lines', line.jacket_line_id);
     setReassigningLineId(null);
     loadAll();
   }
@@ -693,7 +773,7 @@ export default function JacketWorkspace() {
         if (orderLineId) {
           const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
           if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
-          else await logAmendments('Claim price adjustment', 'Price Decrease', [{ field: 'sell_price_per_case', before: Number(ol.sell_price_per_case), after: newPrice }], { order_line_id: orderLineId });
+          else await logAmendments('Claim price adjustment', 'Price Decrease', [{ field: 'sell_price_per_case', before: Number(ol.sell_price_per_case), after: newPrice }], 'order_lines', orderLineId);
         }
       }
     }
@@ -713,6 +793,10 @@ export default function JacketWorkspace() {
   const estCost = jacketLines.reduce((s, l) => s + Number(l.cases_to_load || 0) * Number(l.allocated_cost_per_case || 0), 0);
   const freightCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
   const estProfit = estRevenue - estCost - freightCost;
+  const weightCapacity = jacket.weight_capacity || 42500;
+  const palletCapacity = jacket.pallet_capacity || 24;
+  const overWeight = totalWeight > weightCapacity;
+  const overPallets = totalPallets > palletCapacity;
   const freightOnlyRevenue = freightOnlyLines.reduce((s, f) => s + Number(f.customer_freight_charge || 0), 0);
   const freightOnlyCost = freightOnlyLines.reduce((s, f) => s + Number(f.allocated_freight_cost || 0), 0);
   const freightOnlyProfit = freightOnlyRevenue - freightOnlyCost;
@@ -772,8 +856,8 @@ export default function JacketWorkspace() {
       <div className="fo-card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <Stat label="Pallets" value={totalPallets} />
-            <Stat label="Weight" value={`${totalWeight.toLocaleString()} lb`} />
+            <Stat label="Pallets" value={`${totalPallets} / ${palletCapacity}`} tone={overPallets ? 'red' : undefined} />
+            <Stat label="Weight" value={`${totalWeight.toLocaleString()} / ${weightCapacity.toLocaleString()} lb`} tone={overWeight ? 'red' : undefined} />
             <Stat label="Products" value={purchasedLines.length} />
             <Stat label="Orders" value={orderCount} />
             <Stat label="Est. Revenue" value={`$${estRevenue.toLocaleString()}`} />
@@ -800,7 +884,7 @@ export default function JacketWorkspace() {
           </div>
 
           {activeTab === 'Overview' && (
-            <OverviewTab jacket={jacket} purchasedLines={purchasedLines} allJacketLinesGlobal={allJacketLinesGlobal} jacketLines={jacketLines} claims={claims} freight={freight} availableOnPurchased={availableOnPurchased} />
+            <OverviewTab jacket={jacket} purchasedLines={purchasedLines} allJacketLinesGlobal={allJacketLinesGlobal} jacketLines={jacketLines} claims={claims} freight={freight} availableOnPurchased={availableOnPurchased} totalWeight={totalWeight} totalPallets={totalPallets} weightCapacity={weightCapacity} palletCapacity={palletCapacity} />
           )}
 
           {activeTab === 'Products' && (
@@ -877,17 +961,21 @@ export default function JacketWorkspace() {
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Demand — Open Orders Needing This Jacket's Product</div>
                   <div>
                     <button onClick={() => setShowNewOrder(!showNewOrder)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ New Order</button>{' '}
-                    <button onClick={() => setShowNewFreightOnly(!showNewFreightOnly)} className="fo-btn fo-btn-secondary fo-btn-sm">+ Freight Only</button>
+                    <button onClick={() => { setEditingFreightOnlyId(null); setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' }); setShowNewFreightOnly(!showNewFreightOnly); }} className="fo-btn fo-btn-secondary fo-btn-sm">+ Freight Only</button>
                   </div>
                 </div>
                 {showNewFreightOnly && (
                   <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Customer</span>
-                      <select value={freightOnlyForm.customer_id} onChange={e => setFreightOnlyForm({ ...freightOnlyForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
-                        <option value="">— select —</option>
-                        {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
-                      </select>
-                    </label>
+                    {editingFreightOnlyId ? (
+                      <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--fo-text-dim)' }}>Editing existing freight-only order — customer can't be changed here; delete and re-add if that's what's wrong.</div>
+                    ) : (
+                      <label style={{ fontSize: 13 }}><span className="fo-field-label">Customer</span>
+                        <select value={freightOnlyForm.customer_id} onChange={e => setFreightOnlyForm({ ...freightOnlyForm, customer_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                          <option value="">— select —</option>
+                          {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
+                        </select>
+                      </label>
+                    )}
                     {textField('Acumatica Order # (optional)', freightOnlyForm.acumatica_no, v => setFreightOnlyForm({ ...freightOnlyForm, acumatica_no: v }))}
                     {textField('Customer PO', freightOnlyForm.customer_po, v => setFreightOnlyForm({ ...freightOnlyForm, customer_po: v }))}
                     {textField('Commodity Description', freightOnlyForm.commodity_description, v => setFreightOnlyForm({ ...freightOnlyForm, commodity_description: v }))}
@@ -900,8 +988,8 @@ export default function JacketWorkspace() {
                     {textField('Delivery Location', freightOnlyForm.delivery_location, v => setFreightOnlyForm({ ...freightOnlyForm, delivery_location: v }))}
                     <div style={{ gridColumn: '1 / -1' }}>{textField('Notes', freightOnlyForm.notes, v => setFreightOnlyForm({ ...freightOnlyForm, notes: v }))}</div>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <button onClick={createFreightOnlyOrder} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save Freight-Only Order</button>
-                      <button onClick={() => setShowNewFreightOnly(false)} className="fo-btn fo-btn-secondary">Cancel</button>
+                      <button onClick={createFreightOnlyOrder} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>{editingFreightOnlyId ? 'Update Freight-Only Order' : 'Save Freight-Only Order'}</button>
+                      <button onClick={() => { setShowNewFreightOnly(false); setEditingFreightOnlyId(null); }} className="fo-btn fo-btn-secondary">Cancel</button>
                     </div>
                     <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--fo-text-faint)' }}>This is customer-owned product riding on your truck for a fee — it doesn't touch your purchased product or count as a produce sale anywhere.</div>
                   </div>
@@ -915,7 +1003,10 @@ export default function JacketWorkspace() {
                           <strong>{f.customer_orders?.customers?.company}</strong> — {f.cases} cases of {f.commodity_description}
                           <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{f.pallets ? `${f.pallets} pallets · ` : ''}{f.weight ? `${f.weight} lb · ` : ''}${Number(f.customer_freight_charge || 0).toLocaleString()} freight charge</div>
                         </div>
-                        <button onClick={() => deleteFreightOnlyLine(f)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                        <div style={{ flexShrink: 0 }}>
+                          <button onClick={() => openEditFreightOnly(f)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
+                          <button onClick={() => deleteFreightOnlyLine(f)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -957,8 +1048,19 @@ export default function JacketWorkspace() {
                               <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no || 'no Acumatica #'}
                               <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
                             </div>
-                            <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Allocate</button>
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Allocate</button>
+                              <button onClick={() => openEditDemand(ol)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>
+                              <button onClick={() => deleteDemandOrderLine(ol)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                            </div>
                           </div>
+                          {editingDemandLineId === ol.order_line_id && (
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                              <label style={{ fontSize: 12 }}>Cases Ordered<input type="number" value={editDemandCasesValue} onChange={e => setEditDemandCasesValue(e.target.value)} style={{ display: 'block', width: 90, marginTop: 2 }} /></label>
+                              <button onClick={() => saveEditDemand(ol)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Save</button>
+                              <button onClick={() => setEditingDemandLineId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                            </div>
+                          )}
                           {demandAllocateFor === ol.order_line_id && (
                             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                               {matchingPurchased.length > 1 && (
@@ -1477,10 +1579,12 @@ function textField(label, value, onChange, type = 'text') {
   );
 }
 
-function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased }) {
+function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased, totalWeight, totalPallets, weightCapacity, palletCapacity }) {
   const hasProduct = purchasedLines.length > 0;
   const stillAvailable = purchasedLines.reduce((s, p) => s + availableOnPurchased(p).available, 0);
   const attention = [];
+  if (totalWeight > weightCapacity) attention.push(`Over weight capacity — ${totalWeight.toLocaleString()} / ${weightCapacity.toLocaleString()} lb`);
+  if (totalPallets > palletCapacity) attention.push(`Over pallet capacity — ${totalPallets} / ${palletCapacity} pallets`);
   if (stillAvailable > 0) attention.push(`${stillAvailable} cases still available to sell`);
   if (claims.length > 0) attention.push(`${claims.length} open claim(s)`);
   if (hasProduct && !freight) attention.push('Carrier not booked');
@@ -1503,7 +1607,7 @@ function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, ava
         <span className="fo-badge fo-badge-green">All clear</span>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {attention.map((a, i) => <div key={i}><span className="fo-badge fo-badge-amber">{a}</span></div>)}
+          {attention.map((a, i) => <div key={i}><span className={`fo-badge ${a.startsWith('Over') ? 'fo-badge-red' : 'fo-badge-amber'}`}>{a}</span></div>)}
         </div>
       )}
     </div>
