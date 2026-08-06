@@ -43,6 +43,8 @@ export default function JacketWorkspace() {
   const [amendForm, setAmendForm] = useState({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '' });
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({});
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data?.user?.email) setUserEmail(data.user.email); });
@@ -258,6 +260,25 @@ export default function JacketWorkspace() {
     const { error } = await supabase.from('jackets').update({ jacket_status: 'Closed' }).eq('jacket_id', jacketId);
     if (error) { alert('Failed: ' + error.message); return; }
     await logEvent('closed', 'Jacket closed' + (openIssues.length ? ` with open items: ${openIssues.join(', ')}` : ''));
+    loadAll();
+  }
+
+  function openEditPayment() {
+    setPaymentForm({
+      supplier_payment_status: jacket.supplier_payment_status || 'Unpaid',
+      supplier_amount_paid: jacket.supplier_amount_paid || '',
+      supplier_payment_arrangement: jacket.supplier_payment_arrangement || '',
+      supplier_payment_due_date: jacket.supplier_payment_due_date || '',
+      supplier_payment_notes: jacket.supplier_payment_notes || '',
+    });
+    setEditingPayment(true);
+  }
+  async function saveSupplierPayment() {
+    const payload = { ...paymentForm, supplier_amount_paid: paymentForm.supplier_amount_paid ? Number(paymentForm.supplier_amount_paid) : 0 };
+    const { error } = await supabase.from('jackets').update(payload).eq('jacket_id', jacketId);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logEvent('supplier_payment_updated', `Supplier payment updated — ${payload.supplier_payment_status}${payload.supplier_amount_paid ? `, $${payload.supplier_amount_paid.toLocaleString()} paid` : ''}`, jacket.supplier_payment_status, null, payload.supplier_payment_status);
+    setEditingPayment(false);
     loadAll();
   }
 
@@ -545,8 +566,37 @@ export default function JacketWorkspace() {
                 <div className="fo-kpi-label">Estimated Profit</div>
                 <div className="fo-kpi-value" style={{ color: estProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${estProfit.toLocaleString()}</div>
               </div>
-              <div style={{ marginTop: 16, fontSize: 12, color: 'var(--fo-text-faint)' }}>
-                Supplier payment: {jacket.supplier_payment_status || 'Unpaid'} {jacket.supplier_amount_paid ? `· $${Number(jacket.supplier_amount_paid).toLocaleString()} paid` : ''}
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Supplier Payment</div>
+                  {!editingPayment && <button onClick={openEditPayment} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>}
+                </div>
+                {editingPayment ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 10 }}>
+                    <label style={{ fontSize: 13 }}>
+                      <span className="fo-field-label">Status</span>
+                      <select value={paymentForm.supplier_payment_status} onChange={e => setPaymentForm({ ...paymentForm, supplier_payment_status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        {['Unpaid', 'Partially Paid', 'Paid'].map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </label>
+                    {textField('Amount Paid', paymentForm.supplier_amount_paid, v => setPaymentForm({ ...paymentForm, supplier_amount_paid: v }), 'number')}
+                    {textField('Payment Arrangement', paymentForm.supplier_payment_arrangement, v => setPaymentForm({ ...paymentForm, supplier_payment_arrangement: v }))}
+                    {textField('Due Date', paymentForm.supplier_payment_due_date, v => setPaymentForm({ ...paymentForm, supplier_payment_due_date: v }), 'date')}
+                    <div style={{ gridColumn: 'span 2' }}>{textField('Notes', paymentForm.supplier_payment_notes, v => setPaymentForm({ ...paymentForm, supplier_payment_notes: v }))}</div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <button onClick={saveSupplierPayment} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
+                      <button onClick={() => setEditingPayment(false)} className="fo-btn fo-btn-secondary">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13.5, marginTop: 8 }}>
+                    <span className={jacket.supplier_payment_status === 'Paid' ? 'fo-badge fo-badge-green' : jacket.supplier_payment_status === 'Partially Paid' ? 'fo-badge fo-badge-amber' : 'fo-badge fo-badge-red'}>{jacket.supplier_payment_status || 'Unpaid'}</span>
+                    {jacket.supplier_amount_paid ? <span style={{ marginLeft: 10, color: 'var(--fo-text-dim)' }}>${Number(jacket.supplier_amount_paid).toLocaleString()} paid</span> : null}
+                    {jacket.supplier_payment_due_date && <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginTop: 4 }}>Due {jacket.supplier_payment_due_date}</div>}
+                    {jacket.supplier_payment_arrangement && <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginTop: 4 }}>{jacket.supplier_payment_arrangement}</div>}
+                    {jacket.supplier_payment_notes && <div style={{ fontSize: 12, color: 'var(--fo-text-faint)', marginTop: 4 }}>{jacket.supplier_payment_notes}</div>}
+                  </div>
+                )}
               </div>
             </div>
           )}
