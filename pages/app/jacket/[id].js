@@ -25,6 +25,7 @@ export default function JacketWorkspace() {
   const [freight, setFreight] = useState(null);
   const [claims, setClaims] = useState([]);
   const [events, setEvents] = useState([]);
+  const [amendments, setAmendments] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [userEmail, setUserEmail] = useState('Staff');
 
@@ -40,7 +41,7 @@ export default function JacketWorkspace() {
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState({});
   const [showAmend, setShowAmend] = useState(false);
-  const [amendForm, setAmendForm] = useState({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '' });
+  const [amendForm, setAmendForm] = useState({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '', type: 'Other' });
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
   const [editingPayment, setEditingPayment] = useState(false);
@@ -141,6 +142,8 @@ export default function JacketWorkspace() {
 
     const { data: ev } = await supabase.from('jacket_events').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setEvents(ev || []);
+    const { data: am } = await supabase.from('amendments').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    setAmendments(am || []);
     const { data: docs } = await supabase.from('jacket_documents').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setDocuments(docs || []);
   }
@@ -288,9 +291,27 @@ export default function JacketWorkspace() {
   }
   async function saveAmendment() {
     if (!amendForm.name || !amendForm.target) { alert('Give the amendment a name and target field.'); return; }
+    const { error } = await supabase.from('amendments').insert({
+      jacket_id: jacketId, amendment_name: amendForm.name, amendment_type: amendForm.type || 'Other', target_field: amendForm.target,
+      original_value: amendForm.original || null, adjustment_value: amendForm.adjustment || null, new_effective_value: amendForm.newValue || null,
+      reason: amendForm.reason || null, created_by: userEmail, status: 'Active',
+    });
+    if (error) { alert('Save failed: ' + error.message); return; }
     await logEvent('amendment', `${amendForm.name} — ${amendForm.target}${amendForm.reason ? ' (' + amendForm.reason + ')' : ''}`, amendForm.original || null, amendForm.adjustment || null, amendForm.newValue || null);
     setShowAmend(false);
-    setAmendForm({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '' });
+    setAmendForm({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '', type: 'Other' });
+    loadAll();
+  }
+  async function reverseAmendment(a) {
+    if (!confirm(`Reverse "${a.amendment_name}"? This creates a new amendment that undoes it — the original stays on record, nothing gets deleted.`)) return;
+    const { data: reversal, error } = await supabase.from('amendments').insert({
+      jacket_id: jacketId, amendment_name: `Reversal — ${a.amendment_name}`, amendment_type: a.amendment_type, target_field: a.target_field,
+      original_value: a.new_effective_value, adjustment_value: a.adjustment_value, new_effective_value: a.original_value,
+      reason: `Reversing amendment #${a.amendment_id}`, created_by: userEmail, status: 'Active',
+    }).select().single();
+    if (error) { alert('Reversal failed: ' + error.message); return; }
+    await supabase.from('amendments').update({ status: 'Reversed', reversed_by_amendment_id: reversal.amendment_id }).eq('amendment_id', a.amendment_id);
+    await logEvent('amendment_reversed', `Reversed — ${a.amendment_name}`, a.new_effective_value, null, a.original_value);
     loadAll();
   }
   async function closeJacket() {
@@ -431,8 +452,17 @@ export default function JacketWorkspace() {
   }
   function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
   async function saveAmendOrdered(line) {
-    const { error } = await supabase.from('order_lines').update({ cases_ordered: Number(amendOrderedValue), amended_at: new Date().toISOString() }).eq('order_line_id', line.order_line_id);
+    const originalCases = Number(line.order_lines?.cases_ordered ?? 0);
+    const newCases = Number(amendOrderedValue);
+    const diff = newCases - originalCases;
+    const { error } = await supabase.from('order_lines').update({ cases_ordered: newCases, amended_at: new Date().toISOString() }).eq('order_line_id', line.order_line_id);
     if (error) { alert('Amend failed: ' + error.message); return; }
+    await supabase.from('amendments').insert({
+      jacket_id: jacketId, order_line_id: line.order_line_id, amendment_name: 'Quantity Amendment', amendment_type: diff >= 0 ? 'Quantity Increase' : 'Quantity Decrease',
+      target_field: 'cases_ordered', original_value: String(originalCases), adjustment_value: (diff >= 0 ? '+' : '') + diff, new_effective_value: String(newCases),
+      created_by: userEmail, status: 'Active',
+    });
+    await logEvent('order_amended', `${line.order_lines?.products?.commodity} — cases ordered ${originalCases} → ${newCases}`, String(originalCases), (diff >= 0 ? '+' : '') + diff, String(newCases));
     setAmendingOrderedLineId(null);
     loadAll();
   }
@@ -637,6 +667,11 @@ export default function JacketWorkspace() {
           <div className="fo-h2">New Amendment</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
             {textField('Amendment Name', amendForm.name, v => setAmendForm({ ...amendForm, name: v }))}
+            <label style={{ fontSize: 13 }}><span className="fo-field-label">Type</span>
+              <select value={amendForm.type} onChange={e => setAmendForm({ ...amendForm, type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                {['Quantity Increase', 'Quantity Decrease', 'Price Increase', 'Price Decrease', 'Product Change', 'Pack Change', 'Supplier Change', 'Customer Change', 'Freight Change', 'Carrier Change', 'Stop Change', 'Delivery Date Change', 'Cost Change', 'Fee Change', 'Claim Adjustment', 'Credit', 'Damage', 'Shortage', 'Overage', 'Note', 'Other'].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </label>
             {textField('Target Field', amendForm.target, v => setAmendForm({ ...amendForm, target: v }))}
             {textField('Reason', amendForm.reason, v => setAmendForm({ ...amendForm, reason: v }))}
             {textField('Original Value', amendForm.original, v => setAmendForm({ ...amendForm, original: v }))}
@@ -645,7 +680,7 @@ export default function JacketWorkspace() {
           </div>
           <button onClick={saveAmendment} className="fo-btn fo-btn-primary" style={{ marginTop: 10, marginRight: 8 }}>Save Amendment</button>
           <button onClick={() => setShowAmend(false)} className="fo-btn fo-btn-secondary">Cancel</button>
-          <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>This logs a note to the Timeline. A full linked amendment ledger (auto-updating values everywhere) is planned for Phase 4.</div>
+          <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>This creates a permanent, reversible record — you'll see it in the Timeline below, with a Reverse option.</div>
         </div>
       )}
 
@@ -1187,6 +1222,27 @@ export default function JacketWorkspace() {
         {/* ---- Timeline ---- */}
         <div className="fo-card fo-card-tight" style={{ position: 'sticky', top: 20 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
+          {amendments.length > 0 && (
+            <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Amendments</div>
+              {amendments.map(a => (
+                <div key={a.amendment_id} style={{ fontSize: 11.5, padding: '5px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <div>
+                      <strong>{a.amendment_name}</strong> {a.status === 'Reversed' && <span className="fo-badge fo-badge-gray" style={{ fontSize: 9 }}>Reversed</span>}
+                      <div style={{ color: 'var(--fo-text-dim)' }}>
+                        {a.original_value && <>orig: {a.original_value} </>}
+                        {a.adjustment_value && <>· adj: {a.adjustment_value} </>}
+                        {a.new_effective_value && <>· now: {a.new_effective_value}</>}
+                      </div>
+                      {a.reason && <div style={{ color: 'var(--fo-text-faint)' }}>{a.reason}</div>}
+                    </div>
+                    {a.status === 'Active' && <button onClick={() => reverseAmendment(a)} className="fo-btn fo-btn-sm" style={{ flexShrink: 0 }}>Reverse</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {editingDetails && (
             <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
