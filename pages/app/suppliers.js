@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 const BLANK = { company: '', contact: '', phone: '', email: '', pickup_address: '', city: '', state: '', zip: '', payment_terms: '', paca_license: '', per_case_fee: '', per_case_fee_notes: '' };
 const BLANK_LOC = { label: '', address: '', city: '', state: '', zip: '', contact: '', phone: '', notes: '' };
 
-export default function SuppliersPage() {
+export function SuppliersContent() {
   const [rows, setRows] = useState([]);
   const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -66,7 +66,7 @@ export default function SuppliersPage() {
   }
 
   return (
-    <AppShell title="Suppliers">
+    <>
       <button onClick={openAdd} style={btn}>+ Add Supplier</button>
       {showForm && (
         <div style={card}>
@@ -150,8 +150,12 @@ export default function SuppliersPage() {
           </div>
         );
       })}
-    </AppShell>
+    </>
   );
+}
+
+export default function SuppliersPage() {
+  return <AppShell title="Suppliers"><SuppliersContent /></AppShell>;
 }
 
 function field(label, value, onChange) {

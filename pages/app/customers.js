@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 const BLANK = { company: '', buyer_contact: '', phone: '', email: '', delivery_address: '', city: '', state: '', zip: '', payment_terms: '' };
 const BLANK_LOC = { label: '', address: '', city: '', state: '', zip: '', contact: '', phone: '', notes: '' };
 
-export default function CustomersPage() {
+export function CustomersContent() {
   const [rows, setRows] = useState([]);
   const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -65,7 +65,7 @@ export default function CustomersPage() {
   }
 
   return (
-    <AppShell title="Customers">
+    <>
       <button onClick={openAdd} style={btn}>+ Add Customer</button>
       {showForm && (
         <div style={card}>
@@ -148,8 +148,12 @@ export default function CustomersPage() {
           </div>
         );
       })}
-    </AppShell>
+    </>
   );
+}
+
+export default function CustomersPage() {
+  return <AppShell title="Customers"><CustomersContent /></AppShell>;
 }
 
 function field(label, value, onChange) {

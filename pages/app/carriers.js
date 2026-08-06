@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 const BLANK = { name: '', mc_number: '', dot_number: '', insurance_expiry: '', contact: '', phone: '' };
 
-export default function CarriersPage() {
+export function CarriersContent() {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -37,7 +37,7 @@ export default function CarriersPage() {
   }
 
   return (
-    <AppShell title="Carriers">
+    <>
       <button onClick={openAdd} style={btn}>+ Add Carrier</button>
       {showForm && (
         <div style={card}>
@@ -69,8 +69,12 @@ export default function CarriersPage() {
           );
         })}</tbody>
       </table>
-    </AppShell>
+    </>
   );
+}
+
+export default function CarriersPage() {
+  return <AppShell title="Carriers"><CarriersContent /></AppShell>;
 }
 
 function field(label, value, onChange) {

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 const BLANK = { commodity: '', pack_size: '', gross_weight_per_case: '', cases_per_pallet: '', default_origin: '' };
 
-export default function ProductsPage() {
+export function ProductsContent() {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -37,7 +37,7 @@ export default function ProductsPage() {
   }
 
   return (
-    <AppShell title="Product Master">
+    <>
       <button onClick={openAdd} style={btn}>+ Add Product</button>
       {showForm && (
         <div style={card}>
@@ -61,8 +61,12 @@ export default function ProductsPage() {
           </tr>
         ))}</tbody>
       </table>
-    </AppShell>
+    </>
   );
+}
+
+export default function ProductsPage() {
+  return <AppShell title="Product Master"><ProductsContent /></AppShell>;
 }
 
 function field(label, value, onChange) {
