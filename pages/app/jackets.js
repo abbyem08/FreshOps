@@ -7,16 +7,19 @@ export default function JacketsListPage() {
   const [rows, setRows] = useState([]);
   const [statusFilter, setStatusFilter] = useState('Active');
   const [searchText, setSearchText] = useState('');
+  const [needs, setNeeds] = useState([]);
+  const [showNeeds, setShowNeeds] = useState(true);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [j, jpl, jl, fr, cl] = await Promise.all([
+    const [j, jpl, jl, fr, cl, ol] = await Promise.all([
       supabase.from('jackets').select('*').order('jacket_id', { ascending: false }),
       supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity)'),
       supabase.from('jacket_lines').select('*, order_lines(sell_price_per_case, customer_orders(acumatica_order_no)), jackets(jacket_status)'),
       supabase.from('freight_records').select('jacket_id, status'),
       supabase.from('claims').select('claim_id, jacket_lines(jacket_id)').eq('status', 'Open'),
+      supabase.from('order_lines').select('order_line_id, cases_ordered, product_id, products(commodity, pack_size), customer_orders(order_status)').eq('customer_orders.order_status', 'Open'),
     ]);
 
     const purchasedByJacket = {};
@@ -46,6 +49,25 @@ export default function JacketsListPage() {
       return { ...jacket, productCount: purchased.length, orderCount, available, estRevenue, estProfit, openClaims, freightStatus: freightRecord?.status, attention };
     });
     setRows(computed);
+
+    // Cases Still Needed — same "ordered minus assigned to a non-cancelled
+    // jacket" logic as the Ordering Needs page, grouped by commodity so
+    // it's a quick glance for sourcing/truck planning
+    const assignedByOrderLine = {};
+    (jl.data || []).forEach(l => {
+      if (l.jackets?.jacket_status === 'Cancelled' || !l.order_line_id) return;
+      assignedByOrderLine[l.order_line_id] = (assignedByOrderLine[l.order_line_id] || 0) + Number(l.cases_to_load || 0);
+    });
+    const needGroups = {};
+    (ol.data || []).forEach(l => {
+      if (!l.customer_orders || l.customer_orders.order_status !== 'Open') return;
+      const key = l.product_id;
+      if (!needGroups[key]) needGroups[key] = { commodity: l.products?.commodity, packSize: l.products?.pack_size, needed: 0 };
+      const assigned = assignedByOrderLine[l.order_line_id] || 0;
+      const remaining = Number(l.cases_ordered || 0) - assigned;
+      if (remaining > 0) needGroups[key].needed += remaining;
+    });
+    setNeeds(Object.values(needGroups).filter(g => g.needed > 0).sort((a, b) => b.needed - a.needed));
   }
 
   async function createNewJacket() {
@@ -79,6 +101,27 @@ export default function JacketsListPage() {
 
   return (
     <AppShell title="InLoads / Jackets">
+      {needs.length > 0 && (
+        <div className="fo-card" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="fo-h2" style={{ marginBottom: 0 }}>Cases Still Needed — across all open orders</div>
+            <div>
+              <a href="/app/ordering-needs" style={{ fontSize: 12.5, color: 'var(--fo-info)', marginRight: 12, textDecoration: 'none' }}>See which orders →</a>
+              <button onClick={() => setShowNeeds(!showNeeds)} className="fo-btn fo-btn-secondary fo-btn-sm">{showNeeds ? 'Hide' : 'Show'}</button>
+            </div>
+          </div>
+          {showNeeds && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
+              {needs.map((n, i) => (
+                <div key={i} className="fo-badge fo-badge-amber" style={{ fontSize: 13, padding: '6px 14px' }}>
+                  <strong>{n.needed.toLocaleString()}</strong>&nbsp;{n.commodity} — {n.packSize}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KPI label="Active Jackets" value={summary.active} />
         <KPI label="Loading / Preparing" value={summary.loading} />
