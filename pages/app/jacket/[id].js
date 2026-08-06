@@ -32,6 +32,7 @@ export default function JacketWorkspace() {
   const [showAddPurchased, setShowAddPurchased] = useState(false);
   const [purchasedForm, setPurchasedForm] = useState(BLANK_PURCHASED);
   const [editingPurchasedId, setEditingPurchasedId] = useState(null);
+  const [editingPurchasedOriginal, setEditingPurchasedOriginal] = useState(null);
   const [allocatingLineId, setAllocatingLineId] = useState(null);
   const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -40,8 +41,6 @@ export default function JacketWorkspace() {
   const [demandAllocateForm, setDemandAllocateForm] = useState({ purchased_line_id: '', cases: '' });
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState({});
-  const [showAmend, setShowAmend] = useState(false);
-  const [amendForm, setAmendForm] = useState({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '', type: 'Other' });
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
   const [editingPayment, setEditingPayment] = useState(false);
@@ -172,6 +171,7 @@ export default function JacketWorkspace() {
   function openEditPurchased(p) {
     setPurchasedForm({ supplier_id: p.supplier_id || '', product_id: p.product_id, shipper_po: p.shipper_po || '', purchased_cases: p.purchased_cases, actual_cases_received: p.actual_cases_received ?? '', purchase_cost_per_case: p.purchase_cost_per_case, fee_total_per_case: p.fee_total_per_case, notes: p.notes || '' });
     setEditingPurchasedId(p.jacket_product_line_id);
+    setEditingPurchasedOriginal(p);
     setShowAddPurchased(true);
   }
   async function savePurchased() {
@@ -193,13 +193,21 @@ export default function JacketWorkspace() {
       // frozen snapshot from whenever the allocation was first made
       const newAllocatedCost = payload.purchase_cost_per_case + payload.fee_total_per_case;
       await supabase.from('jacket_lines').update({ allocated_cost_per_case: newAllocatedCost }).eq('jacket_product_line_id', editingPurchasedId);
+      const o = editingPurchasedOriginal || {};
+      await logAmendments(`${productLabel?.commodity || 'Product'} amended`, 'Cost Change', [
+        { field: 'purchased_cases', before: Number(o.purchased_cases ?? 0), after: payload.purchased_cases },
+        { field: 'actual_cases_received', before: o.actual_cases_received != null ? Number(o.actual_cases_received) : null, after: payload.actual_cases_received },
+        { field: 'purchase_cost_per_case', before: Number(o.purchase_cost_per_case ?? 0), after: payload.purchase_cost_per_case },
+        { field: 'fee_total_per_case', before: Number(o.fee_total_per_case ?? 0), after: payload.fee_total_per_case },
+        { field: 'shipper_po', before: o.shipper_po || '', after: payload.shipper_po || '' },
+      ], { jacket_product_line_id: editingPurchasedId });
       await logEvent('product_amended', `Purchased product amended — ${productLabel?.commodity}`, null, null, `${payload.purchased_cases} cases @ $${payload.purchase_cost_per_case}/cs`);
     } else {
       const { error } = await supabase.from('jacket_product_lines').insert(payload);
       if (error) { alert('Save failed: ' + error.message); return; }
       await logEvent('product_added', `Purchased ${payload.purchased_cases} cases of ${productLabel?.commodity} from ${suppliers.find(x => x.supplier_id === payload.supplier_id)?.company || 'no supplier'}`);
     }
-    setShowAddPurchased(false); setEditingPurchasedId(null); setPurchasedForm(BLANK_PURCHASED);
+    setShowAddPurchased(false); setEditingPurchasedId(null); setEditingPurchasedOriginal(null); setPurchasedForm(BLANK_PURCHASED);
     loadAll();
   }
   async function deletePurchased(id) {
@@ -285,22 +293,36 @@ export default function JacketWorkspace() {
     const payload = { ...detailsForm, weight_capacity: detailsForm.weight_capacity ? Number(detailsForm.weight_capacity) : null, pallet_capacity: detailsForm.pallet_capacity ? Number(detailsForm.pallet_capacity) : null };
     const { error } = await supabase.from('jackets').update(payload).eq('jacket_id', jacketId);
     if (error) { alert('Save failed: ' + error.message); return; }
+    await logAmendments('Jacket details amended', 'Other', [
+      { field: 'carrier', before: jacket.carrier || '', after: payload.carrier || '' },
+      { field: 'driver', before: jacket.driver || '', after: payload.driver || '' },
+      { field: 'jacket_status', before: jacket.jacket_status || '', after: payload.jacket_status || '' },
+      { field: 'truck', before: jacket.truck || '', after: payload.truck || '' },
+      { field: 'trailer', before: jacket.trailer || '', after: payload.trailer || '' },
+    ]);
     await logEvent('details_edited', `Jacket details updated (status: ${payload.jacket_status})`);
     setEditingDetails(false);
     loadAll();
   }
-  async function saveAmendment() {
-    if (!amendForm.name || !amendForm.target) { alert('Give the amendment a name and target field.'); return; }
-    const { error } = await supabase.from('amendments').insert({
-      jacket_id: jacketId, amendment_name: amendForm.name, amendment_type: amendForm.type || 'Other', target_field: amendForm.target,
-      original_value: amendForm.original || null, adjustment_value: amendForm.adjustment || null, new_effective_value: amendForm.newValue || null,
-      reason: amendForm.reason || null, created_by: userEmail, status: 'Active',
-    });
-    if (error) { alert('Save failed: ' + error.message); return; }
-    await logEvent('amendment', `${amendForm.name} — ${amendForm.target}${amendForm.reason ? ' (' + amendForm.reason + ')' : ''}`, amendForm.original || null, amendForm.adjustment || null, amendForm.newValue || null);
-    setShowAmend(false);
-    setAmendForm({ name: '', target: '', original: '', adjustment: '', newValue: '', reason: '', type: 'Other' });
-    loadAll();
+  // Generic amendment logger — called automatically from every save
+  // function below, right after a real edit succeeds. Compares each
+  // before/after pair and only writes a row for fields that actually
+  // changed. No separate "amendment area" — amending IS editing.
+  async function logAmendments(amendmentName, amendmentType, diffs, contextIds = {}) {
+    const rows = diffs
+      .filter(d => String(d.before ?? '') !== String(d.after ?? ''))
+      .map(d => {
+        const numeric = typeof d.before === 'number' && typeof d.after === 'number';
+        return {
+          jacket_id: jacketId, ...contextIds,
+          amendment_name: amendmentName, amendment_type: amendmentType, target_field: d.field,
+          original_value: d.before != null && d.before !== '' ? String(d.before) : null,
+          new_effective_value: d.after != null && d.after !== '' ? String(d.after) : null,
+          adjustment_value: numeric ? (d.after - d.before >= 0 ? '+' : '') + (d.after - d.before) : null,
+          created_by: userEmail, status: 'Active',
+        };
+      });
+    if (rows.length) await supabase.from('amendments').insert(rows);
   }
   async function reverseAmendment(a) {
     if (!confirm(`Reverse "${a.amendment_name}"? This creates a new amendment that undoes it — the original stays on record, nothing gets deleted.`)) return;
@@ -366,6 +388,10 @@ export default function JacketWorkspace() {
     const payload = { ...paymentForm, supplier_amount_paid: paymentForm.supplier_amount_paid ? Number(paymentForm.supplier_amount_paid) : 0 };
     const { error } = await supabase.from('jackets').update(payload).eq('jacket_id', jacketId);
     if (error) { alert('Save failed: ' + error.message); return; }
+    await logAmendments('Supplier payment amended', 'Credit', [
+      { field: 'supplier_payment_status', before: jacket.supplier_payment_status || 'Unpaid', after: payload.supplier_payment_status },
+      { field: 'supplier_amount_paid', before: jacket.supplier_amount_paid != null ? Number(jacket.supplier_amount_paid) : 0, after: payload.supplier_amount_paid },
+    ]);
     await logEvent('supplier_payment_updated', `Supplier payment updated — ${payload.supplier_payment_status}${payload.supplier_amount_paid ? `, $${payload.supplier_amount_paid.toLocaleString()} paid` : ''}`, jacket.supplier_payment_status, null, payload.supplier_payment_status);
     setEditingPayment(false);
     loadAll();
@@ -412,6 +438,12 @@ export default function JacketWorkspace() {
     if (freight) {
       const { error } = await supabase.from('freight_records').update(payload).eq('freight_id', freight.freight_id);
       if (error) { alert('Save failed: ' + error.message); return; }
+      await logAmendments('Freight amended', 'Freight Change', [
+        { field: 'carrier', before: freight.carrier || '', after: payload.carrier },
+        { field: 'booked_rate', before: freight.booked_rate != null ? Number(freight.booked_rate) : null, after: payload.booked_rate },
+        { field: 'extra_fees', before: freight.extra_fees != null ? Number(freight.extra_fees) : 0, after: payload.extra_fees },
+        { field: 'status', before: freight.status || '', after: payload.status },
+      ], { freight_record_id: freight.freight_id });
     } else {
       const { error } = await supabase.from('freight_records').insert({ ...payload, quote_date: new Date().toISOString().slice(0, 10) });
       if (error) { alert('Save failed: ' + error.message); return; }
@@ -423,13 +455,18 @@ export default function JacketWorkspace() {
 
   // ---- Stops ----
   async function updateStopNumber(stopId, newNumber) {
+    const old = stops.find(s => s.stop_id === stopId);
     const { error } = await supabase.from('stops').update({ stop_number: Number(newNumber) }).eq('stop_id', stopId);
     if (error) { alert('Update failed: ' + error.message); return; }
+    await logAmendments('Stop number changed', 'Stop Change', [{ field: 'stop_number', before: old?.stop_number ?? null, after: Number(newNumber) }]);
     loadAll();
   }
   async function updateAppointment(stopId, value) {
-    const { error } = await supabase.from('stops').update({ appointment: value ? new Date(value).toISOString() : null }).eq('stop_id', stopId);
+    const old = stops.find(s => s.stop_id === stopId);
+    const newVal = value ? new Date(value).toISOString() : null;
+    const { error } = await supabase.from('stops').update({ appointment: newVal }).eq('stop_id', stopId);
     if (error) { alert('Update failed: ' + error.message); return; }
+    await logAmendments('Appointment changed', 'Delivery Date Change', [{ field: 'appointment', before: old?.appointment || null, after: newVal }]);
     loadAll();
   }
 
@@ -443,11 +480,15 @@ export default function JacketWorkspace() {
       ({ error } = await supabase.from('jacket_commodity_loads').insert({ jacket_id: jacketId, product_id: productId, supplier_id: supplierId, actual_cases_loaded: value }));
     }
     if (error) { alert('Update failed: ' + error.message); return; }
+    await logAmendments('Actual cases loaded changed', 'Quantity Increase', [{ field: 'actual_cases_loaded', before: existing?.actual_cases_loaded != null ? Number(existing.actual_cases_loaded) : null, after: value }]);
     loadAll();
   }
   async function updateJacketLineField(id, fieldName, value) {
+    const old = jacketLines.find(l => l.jacket_line_id === id);
     const { error } = await supabase.from('jacket_lines').update({ [fieldName]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
+    const typeMap = { load_status: 'Stop Change', bol_number: 'Note' };
+    await logAmendments(`${fieldName === 'bol_number' ? 'BOL #' : 'Load status'} changed`, typeMap[fieldName] || 'Other', [{ field: fieldName, before: old?.[fieldName] ?? null, after: value }], { order_line_id: old?.order_line_id || null });
     loadAll();
   }
   function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
@@ -477,8 +518,10 @@ export default function JacketWorkspace() {
     loadAll();
   }
   async function updateDelivered(id, value) {
+    const old = jacketLines.find(l => l.jacket_line_id === id);
     const { error } = await supabase.from('jacket_lines').update({ actual_cases_delivered: value, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
+    await logAmendments('Delivered quantity changed', old && Number(value) >= Number(old.actual_cases_delivered || 0) ? 'Overage' : 'Shortage', [{ field: 'actual_cases_delivered', before: old?.actual_cases_delivered != null ? Number(old.actual_cases_delivered) : 0, after: Number(value) }], { order_line_id: old?.order_line_id || null });
     loadAll();
   }
   async function openReassignLine(line) {
@@ -491,8 +534,10 @@ export default function JacketWorkspace() {
   }
   async function saveReassignLine(line) {
     if (!reassignTarget) { alert('Pick which order to move this to.'); return; }
+    const newOrder = reassignOptions.find(ol => ol.order_line_id === Number(reassignTarget));
     const { error } = await supabase.from('jacket_lines').update({ order_line_id: Number(reassignTarget), quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', line.jacket_line_id);
     if (error) { alert('Reassign failed: ' + error.message); return; }
+    await logAmendments('Reassigned to a different order', 'Customer Change', [{ field: 'order_line_id', before: line.order_lines?.customer_orders?.acumatica_order_no || `line ${line.order_line_id}`, after: newOrder?.customer_orders?.acumatica_order_no || `line ${reassignTarget}` }], { order_line_id: Number(reassignTarget) });
     setReassigningLineId(null);
     loadAll();
   }
@@ -594,6 +639,7 @@ export default function JacketWorkspace() {
         if (orderLineId) {
           const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
           if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
+          else await logAmendments('Claim price adjustment', 'Price Decrease', [{ field: 'sell_price_per_case', before: Number(ol.sell_price_per_case), after: newPrice }], { order_line_id: orderLineId });
         }
       }
     }
@@ -655,34 +701,11 @@ export default function JacketWorkspace() {
             {claims.length > 0 && <Stat label="Open Claims" value={claims.length} tone="red" />}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <button onClick={() => setShowAmend(true)} className="fo-btn fo-btn-secondary fo-btn-sm">+ Amendment</button>
             <button onClick={closeJacket} className="fo-btn fo-btn-secondary fo-btn-sm">Close Jacket</button>
             <button onClick={deleteJacketEntirely} className="fo-btn fo-btn-danger fo-btn-sm">Delete Jacket</button>
           </div>
         </div>
       </div>
-
-      {showAmend && (
-        <div className="fo-card" style={{ marginBottom: 16 }}>
-          <div className="fo-h2">New Amendment</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-            {textField('Amendment Name', amendForm.name, v => setAmendForm({ ...amendForm, name: v }))}
-            <label style={{ fontSize: 13 }}><span className="fo-field-label">Type</span>
-              <select value={amendForm.type} onChange={e => setAmendForm({ ...amendForm, type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
-                {['Quantity Increase', 'Quantity Decrease', 'Price Increase', 'Price Decrease', 'Product Change', 'Pack Change', 'Supplier Change', 'Customer Change', 'Freight Change', 'Carrier Change', 'Stop Change', 'Delivery Date Change', 'Cost Change', 'Fee Change', 'Claim Adjustment', 'Credit', 'Damage', 'Shortage', 'Overage', 'Note', 'Other'].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </label>
-            {textField('Target Field', amendForm.target, v => setAmendForm({ ...amendForm, target: v }))}
-            {textField('Reason', amendForm.reason, v => setAmendForm({ ...amendForm, reason: v }))}
-            {textField('Original Value', amendForm.original, v => setAmendForm({ ...amendForm, original: v }))}
-            {textField('Adjustment', amendForm.adjustment, v => setAmendForm({ ...amendForm, adjustment: v }))}
-            {textField('New Effective Value', amendForm.newValue, v => setAmendForm({ ...amendForm, newValue: v }))}
-          </div>
-          <button onClick={saveAmendment} className="fo-btn fo-btn-primary" style={{ marginTop: 10, marginRight: 8 }}>Save Amendment</button>
-          <button onClick={() => setShowAmend(false)} className="fo-btn fo-btn-secondary">Cancel</button>
-          <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>This creates a permanent, reversible record — you'll see it in the Timeline below, with a Reverse option.</div>
-        </div>
-      )}
 
       {/* ---- Tabs + Timeline layout ---- */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 0.85fr', gap: 16, alignItems: 'start' }}>
