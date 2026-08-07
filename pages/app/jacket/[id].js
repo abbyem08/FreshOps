@@ -39,7 +39,7 @@ export default function JacketWorkspace() {
   const [allocateForm, setAllocateForm] = useState({ order_line_id: '', cases: '' });
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewFreightOnly, setShowNewFreightOnly] = useState(false);
-  const [freightOnlyForm, setFreightOnlyForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+  const [freightOnlyForm, setFreightOnlyForm] = useState({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
   const [freightOnlyLines, setFreightOnlyLines] = useState([]);
   const [editingFreightOnlyId, setEditingFreightOnlyId] = useState(null);
   const [editingDemandLineId, setEditingDemandLineId] = useState(null);
@@ -222,6 +222,11 @@ export default function JacketWorkspace() {
       // frozen snapshot from whenever the allocation was first made
       const newAllocatedCost = payload.purchase_cost_per_case + payload.fee_total_per_case;
       await supabase.from('jacket_lines').update({ allocated_cost_per_case: newAllocatedCost }).eq('jacket_product_line_id', editingPurchasedId);
+      const { data: affectedLines } = await supabase.from('jacket_lines').select('order_line_id').eq('jacket_product_line_id', editingPurchasedId);
+      const affectedOrderLineIds = (affectedLines || []).map(l => l.order_line_id).filter(Boolean);
+      if (affectedOrderLineIds.length) {
+        await supabase.from('order_lines').update({ fob_cost_per_case: newAllocatedCost }).in('order_line_id', affectedOrderLineIds);
+      }
       const o = editingPurchasedOriginal || {};
       await logAmendments(`${productLabel?.commodity || 'Product'} amended`, 'Cost Change', [
         { field: 'purchased_cases', before: Number(o.purchased_cases ?? 0), after: payload.purchased_cases },
@@ -272,6 +277,10 @@ export default function JacketWorkspace() {
     if (!orderLine.supplier_id && purchased.supplier_id) {
       await supabase.from('order_lines').update({ supplier_id: purchased.supplier_id }).eq('order_line_id', orderLine.order_line_id);
     }
+    // sync the real purchase cost onto the order line — this is the
+    // authoritative cost once an allocation exists, so you never have to
+    // enter it separately on Customer Orders and Purchased Product
+    await supabase.from('order_lines').update({ fob_cost_per_case: allocatedCost }).eq('order_line_id', orderLine.order_line_id);
     const pickupStop = await findOrCreateStop('Pickup', purchased.supplier_id, purchased.supplier_location_id || null, null, null);
     const deliveryStop = await findOrCreateStop('Delivery', null, null, orderLine.customer_orders.customer_id, orderLine.customer_orders.customer_location_id || null);
     await supabase.from('stop_lines').insert([
@@ -281,6 +290,33 @@ export default function JacketWorkspace() {
     await logEvent('order_allocated', `Allocated ${cases} cases of ${p.commodity} to ${orderLine.customer_orders?.customers?.company} (${orderLine.customer_orders?.acumatica_order_no || 'no Acumatica #'})`);
     return true;
   }
+  const [editingAllocationId, setEditingAllocationId] = useState(null);
+  const [editAllocationValue, setEditAllocationValue] = useState('');
+  function openEditAllocation(jl) { setEditingAllocationId(jl.jacket_line_id); setEditAllocationValue(jl.cases_to_load ?? ''); }
+  async function saveEditAllocation(jl) {
+    const newCases = Number(editAllocationValue);
+    if (!newCases || newCases <= 0) { alert('Enter a valid number of cases.'); return; }
+    const purchased = purchasedLines.find(p => p.jacket_product_line_id === jl.jacket_product_line_id);
+    if (purchased) {
+      const { available } = availableOnPurchased(purchased);
+      const capacityWithThisLineFreed = available + Number(jl.cases_to_load || 0);
+      if (newCases > capacityWithThisLineFreed) { alert(`Only ${capacityWithThisLineFreed} cases available on this purchased line.`); return; }
+    }
+    const { error } = await supabase.from('jacket_lines').update({ cases_to_load: newCases, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', jl.jacket_line_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logAmendments('Allocation cases changed', newCases >= jl.cases_to_load ? 'Quantity Increase' : 'Quantity Decrease', [{ field: 'cases_to_load', before: Number(jl.cases_to_load || 0), after: newCases }], 'jacket_lines', jl.jacket_line_id);
+    setEditingAllocationId(null);
+    loadAll();
+  }
+  async function removeAllocation(jl) {
+    if (!confirm(`Remove this allocation (${jl.cases_to_load} cases of ${jl.order_lines?.products?.commodity} for ${jl.order_lines?.customer_orders?.customers?.company})? Those cases go back to Available on the purchased line.`)) return;
+    await supabase.from('stop_lines').delete().eq('jacket_line_id', jl.jacket_line_id);
+    const { error } = await supabase.from('jacket_lines').delete().eq('jacket_line_id', jl.jacket_line_id);
+    if (error) { alert('Remove failed: ' + error.message); return; }
+    await logEvent('allocation_removed', `Allocation removed — ${jl.cases_to_load} cases of ${jl.order_lines?.products?.commodity} for ${jl.order_lines?.customer_orders?.customers?.company}`);
+    loadAll();
+  }
+
   async function saveAllocate(purchased) {
     const ok = await performAllocation(purchased, allocateForm.order_line_id, allocateForm.cases);
     if (ok) { setAllocatingLineId(null); loadAll(); }
@@ -316,12 +352,25 @@ export default function JacketWorkspace() {
   function openEditFreightOnly(f) {
     setFreightOnlyForm({
       customer_id: '', acumatica_no: f.customer_orders?.acumatica_order_no || '', customer_po: f.customer_orders?.customer_po || '',
-      commodity_description: f.commodity_description || '', cases: f.cases ?? '', pallets: f.pallets ?? '', weight: f.weight ?? '',
+      product_id: f.product_id ? String(f.product_id) : '', commodity_description: f.commodity_description || '', cases: f.cases ?? '', pallets: f.pallets ?? '', weight: f.weight ?? '',
       customer_freight_charge: f.customer_freight_charge ?? '', allocated_freight_cost: f.allocated_freight_cost ?? '',
       pickup_location: f.pickup_location || '', delivery_location: f.delivery_location || '', notes: f.notes || '',
     });
     setEditingFreightOnlyId(f.freight_only_line_id);
     setShowNewFreightOnly(true);
+  }
+  function updateFreightOnlyForm(changes) {
+    const next = { ...freightOnlyForm, ...changes };
+    // auto-populate pallets/weight from Product Master whenever a product
+    // and case count are both known — still fully editable afterward
+    const product = products.find(p => p.product_id === Number(next.product_id));
+    if (product && next.cases) {
+      const cases = Number(next.cases);
+      if (product.cases_per_pallet) next.pallets = String(Math.ceil(cases / product.cases_per_pallet));
+      if (product.gross_weight_per_case) next.weight = String(cases * product.gross_weight_per_case);
+      if (!next.commodity_description) next.commodity_description = `${product.commodity} — ${product.pack_size}`;
+    }
+    setFreightOnlyForm(next);
   }
   async function createFreightOnlyOrder() {
     if (!freightOnlyForm.customer_id && !editingFreightOnlyId) { alert('Customer, Commodity Description, and Cases are all required.'); return; }
@@ -330,7 +379,7 @@ export default function JacketWorkspace() {
     if (editingFreightOnlyId) {
       const original = freightOnlyLines.find(f => f.freight_only_line_id === editingFreightOnlyId);
       const payload = {
-        commodity_description: freightOnlyForm.commodity_description, cases: Number(freightOnlyForm.cases),
+        product_id: freightOnlyForm.product_id ? Number(freightOnlyForm.product_id) : null, commodity_description: freightOnlyForm.commodity_description, cases: Number(freightOnlyForm.cases),
         pallets: freightOnlyForm.pallets ? Number(freightOnlyForm.pallets) : null, weight: freightOnlyForm.weight ? Number(freightOnlyForm.weight) : null,
         customer_freight_charge: freightOnlyForm.customer_freight_charge ? Number(freightOnlyForm.customer_freight_charge) : 0,
         allocated_freight_cost: freightOnlyForm.allocated_freight_cost ? Number(freightOnlyForm.allocated_freight_cost) : 0,
@@ -347,7 +396,7 @@ export default function JacketWorkspace() {
         ], 'freight_only_lines', editingFreightOnlyId);
       }
       setShowNewFreightOnly(false); setEditingFreightOnlyId(null);
-      setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+      setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
       loadAll();
       return;
     }
@@ -359,7 +408,7 @@ export default function JacketWorkspace() {
     }).select().single();
     if (orderErr) { alert('Could not create order: ' + orderErr.message); return; }
     const { error: lineErr } = await supabase.from('freight_only_lines').insert({
-      customer_order_id: order.customer_order_id, jacket_id: jacketId, commodity_description: freightOnlyForm.commodity_description,
+      customer_order_id: order.customer_order_id, jacket_id: jacketId, product_id: freightOnlyForm.product_id ? Number(freightOnlyForm.product_id) : null, commodity_description: freightOnlyForm.commodity_description,
       cases: Number(freightOnlyForm.cases), pallets: freightOnlyForm.pallets ? Number(freightOnlyForm.pallets) : null, weight: freightOnlyForm.weight ? Number(freightOnlyForm.weight) : null,
       customer_freight_charge: freightOnlyForm.customer_freight_charge ? Number(freightOnlyForm.customer_freight_charge) : 0,
       allocated_freight_cost: freightOnlyForm.allocated_freight_cost ? Number(freightOnlyForm.allocated_freight_cost) : 0,
@@ -369,7 +418,7 @@ export default function JacketWorkspace() {
     if (lineErr) { alert('Order created, but the freight-only line failed: ' + lineErr.message); return; }
     await logEvent('freight_only_added', `Freight-only: ${freightOnlyForm.cases} cases of ${freightOnlyForm.commodity_description} for ${customers.find(c => c.customer_id === Number(freightOnlyForm.customer_id))?.company} — $${freightOnlyForm.customer_freight_charge || 0} freight charge`);
     setShowNewFreightOnly(false);
-    setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
+    setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' });
     loadAll();
   }
   async function deleteFreightOnlyLine(line) {
@@ -552,6 +601,14 @@ export default function JacketWorkspace() {
   function openFreightEdit() {
     setFreightForm(freight || { carrier: jacket?.carrier || '', trip_type: 'One Pick/One Drop', quoted_rate: '', booked_rate: '', extra_fees: '', extra_fees_notes: '', miles: '', status: 'Quoted', carrier_invoice_number: '', invoice_received: false, carrier_paid: false });
     setEditingFreight(true);
+  }
+  async function deleteFreight() {
+    if (!freight) return;
+    if (!confirm('Delete this freight record? This removes the carrier/rate info entirely — you can re-add it later.')) return;
+    const { error } = await supabase.from('freight_records').delete().eq('freight_id', freight.freight_id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    await logEvent('freight_deleted', `Freight record deleted — was ${freight.carrier}, $${Number(freight.booked_rate || 0).toLocaleString()}`);
+    loadAll();
   }
   async function saveFreight() {
     if (!freightForm.carrier) { alert('Carrier is required.'); return; }
@@ -961,7 +1018,7 @@ export default function JacketWorkspace() {
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Demand — Open Orders Needing This Jacket's Product</div>
                   <div>
                     <button onClick={() => setShowNewOrder(!showNewOrder)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ New Order</button>{' '}
-                    <button onClick={() => { setEditingFreightOnlyId(null); setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' }); setShowNewFreightOnly(!showNewFreightOnly); }} className="fo-btn fo-btn-secondary fo-btn-sm">+ Freight Only</button>
+                    <button onClick={() => { setEditingFreightOnlyId(null); setFreightOnlyForm({ customer_id: '', acumatica_no: '', customer_po: '', product_id: '', commodity_description: '', cases: '', pallets: '', weight: '', customer_freight_charge: '', allocated_freight_cost: '', pickup_location: '', delivery_location: '', notes: '' }); setShowNewFreightOnly(!showNewFreightOnly); }} className="fo-btn fo-btn-secondary fo-btn-sm">+ Freight Only</button>
                   </div>
                 </div>
                 {showNewFreightOnly && (
@@ -978,8 +1035,14 @@ export default function JacketWorkspace() {
                     )}
                     {textField('Acumatica Order # (optional)', freightOnlyForm.acumatica_no, v => setFreightOnlyForm({ ...freightOnlyForm, acumatica_no: v }))}
                     {textField('Customer PO', freightOnlyForm.customer_po, v => setFreightOnlyForm({ ...freightOnlyForm, customer_po: v }))}
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Product (optional — auto-fills pallets/weight)</span>
+                      <select value={freightOnlyForm.product_id} onChange={e => updateFreightOnlyForm({ product_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option value="">— not tracked as a product —</option>
+                        {products.map(pr => <option key={pr.product_id} value={pr.product_id}>{pr.commodity} — {pr.pack_size}</option>)}
+                      </select>
+                    </label>
                     {textField('Commodity Description', freightOnlyForm.commodity_description, v => setFreightOnlyForm({ ...freightOnlyForm, commodity_description: v }))}
-                    {textField('Cases', freightOnlyForm.cases, v => setFreightOnlyForm({ ...freightOnlyForm, cases: v }), 'number')}
+                    {textField('Cases', freightOnlyForm.cases, v => updateFreightOnlyForm({ cases: v }), 'number')}
                     {textField('Pallets', freightOnlyForm.pallets, v => setFreightOnlyForm({ ...freightOnlyForm, pallets: v }), 'number')}
                     {textField('Weight (lb)', freightOnlyForm.weight, v => setFreightOnlyForm({ ...freightOnlyForm, weight: v }), 'number')}
                     {textField('Customer Freight Charge ($)', freightOnlyForm.customer_freight_charge, v => setFreightOnlyForm({ ...freightOnlyForm, customer_freight_charge: v }), 'number')}
@@ -1090,15 +1153,31 @@ export default function JacketWorkspace() {
                 ) : (
                   <div className="fo-table-wrap">
                   <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-                    <thead><tr><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th></th></tr></thead>
                     <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
                       <tr key={jl.jacket_line_id}>
                         <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
                         <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
                         <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
-                        <td style={{ textAlign: 'right' }}>{jl.cases_to_load}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {editingAllocationId === jl.jacket_line_id ? (
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                              <input type="number" value={editAllocationValue} onChange={e => setEditAllocationValue(e.target.value)} style={{ width: 70 }} />
+                              <button onClick={() => saveEditAllocation(jl)} className="fo-btn fo-btn-sm">Save</button>
+                              <button onClick={() => setEditingAllocationId(null)} className="fo-btn fo-btn-sm">X</button>
+                            </div>
+                          ) : jl.cases_to_load}
+                        </td>
                         <td>{jl.load_status}</td>
+                        <td>
+                          {editingAllocationId !== jl.jacket_line_id && (
+                            <>
+                              <button onClick={() => openEditAllocation(jl)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
+                              <button onClick={() => removeAllocation(jl)} className="fo-btn fo-btn-danger fo-btn-sm">Remove</button>
+                            </>
+                          )}
+                        </td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -1114,7 +1193,12 @@ export default function JacketWorkspace() {
               <div className="fo-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Freight</div>
-                  {!editingFreight && <button onClick={openFreightEdit} className="fo-btn fo-btn-secondary fo-btn-sm">{freight ? 'Edit' : '+ Add Freight Record'}</button>}
+                  {!editingFreight && (
+                    <div>
+                      <button onClick={openFreightEdit} className="fo-btn fo-btn-secondary fo-btn-sm">{freight ? 'Edit' : '+ Add Freight Record'}</button>
+                      {freight && <button onClick={deleteFreight} className="fo-btn fo-btn-danger fo-btn-sm" style={{ marginLeft: 6 }}>Delete</button>}
+                    </div>
+                  )}
                 </div>
                 {editingFreight ? (
                   <div style={{ marginTop: 10 }}>
