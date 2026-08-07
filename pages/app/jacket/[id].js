@@ -138,7 +138,7 @@ export default function JacketWorkspace() {
     setCommodityLoads(cLoads || []);
     const lineIds = (lines || []).map(l => l.jacket_line_id);
     if (lineIds.length) {
-      const { data: notifs } = await supabase.from('customer_notifications').select('*').in('jacket_line_id', lineIds).order('notified_at', { ascending: true });
+      const { data: notifs } = await supabase.from('customer_notifications').select('*').in('jacket_line_id', lineIds).order('notified_at', { ascending: true }).order('notification_id', { ascending: true });
       const grouped = {};
       (notifs || []).forEach(n => { grouped[n.jacket_line_id] = grouped[n.jacket_line_id] || []; grouped[n.jacket_line_id].push(n); });
       setNotificationsByLine(grouped);
@@ -149,19 +149,20 @@ export default function JacketWorkspace() {
     const { data: cl } = await supabase
       .from('claims')
       .select('*, jacket_lines(jacket_id, order_line_id, order_lines(order_line_id, sell_price_per_case, products(commodity, pack_size), customer_orders(acumatica_order_no, customers(company))))')
-      .order('date_opened', { ascending: false });
+      .order('date_opened', { ascending: false })
+      .order('claim_id', { ascending: false });
     setClaims((cl || []).filter(c => c.jacket_lines?.jacket_id === jacketId));
 
-    const { data: ev } = await supabase.from('jacket_events').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    const { data: ev } = await supabase.from('jacket_events').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false }).order('event_id', { ascending: false });
     setEvents(ev || []);
-    const { data: am } = await supabase.from('amendments').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    const { data: am } = await supabase.from('amendments').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false }).order('amendment_id', { ascending: false });
     setAmendments(am || []);
-    const { data: docs } = await supabase.from('jacket_documents').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    const { data: docs } = await supabase.from('jacket_documents').select('*').eq('jacket_id', jacketId).order('created_at', { ascending: false }).order('document_id', { ascending: false });
     setDocuments(docs || []);
-    const { data: fol } = await supabase.from('freight_only_lines').select('*, customer_orders(acumatica_order_no, customer_po, customers(company))').eq('jacket_id', jacketId).order('created_at', { ascending: false });
+    const { data: fol } = await supabase.from('freight_only_lines').select('*, customer_orders(acumatica_order_no, customer_po, customers(company))').eq('jacket_id', jacketId).order('created_at', { ascending: false }).order('freight_only_line_id', { ascending: false });
     setFreightOnlyLines(fol || []);
 
-    const { data: fa } = await supabase.from('financial_adjustments').select('*').eq('jacket_id', jacketId).order('adjustment_date', { ascending: false });
+    const { data: fa } = await supabase.from('financial_adjustments').select('*').eq('jacket_id', jacketId).order('adjustment_date', { ascending: false }).order('adjustment_id', { ascending: false });
     setFinancialAdjustments(fa || []);
 
     // Cases Still Needed — across ALL open orders, not just this jacket's,
