@@ -102,9 +102,9 @@ export default function JacketWorkspace() {
     const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jacket_product_line_id, jackets(jacket_status)');
     setAllJacketLinesGlobal(allJacketLines || []);
 
-    const { data: purchased } = await supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity, pack_size, cases_per_pallet)').eq('jacket_id', jacketId).order('jacket_product_line_id');
+    const { data: purchased } = await supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)').eq('jacket_id', jacketId).order('jacket_product_line_id');
     setPurchasedLines(purchased || []);
-    const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet)').order('jacket_product_line_id');
+    const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)').order('jacket_product_line_id');
     setAllPurchasedLines((allPurchased || []).filter(x => x.jackets?.jacket_status !== 'Cancelled'));
 
     const { data: allOL } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, order_status, customers(company)), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
