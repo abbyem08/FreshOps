@@ -4,7 +4,7 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_location_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
-const BLANK_LINE = { supplier_id: '', supplier_location_id: '', product_id: '', shipper_po: '', cases_ordered: '', sell_price_per_case: '', fob_cost_per_case: '', pricing_type: 'FOB' };
+const BLANK_LINE = { product_id: '', cases_ordered: '', sell_price_per_case: '', pricing_type: 'FOB' };
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -16,11 +16,14 @@ export default function OrdersPage() {
   const [custLocations, setCustLocations] = useState([]);
   const [supLocations, setSupLocations] = useState([]);
   const [jacketByOrder, setJacketByOrder] = useState({});
+  const [allocByLine, setAllocByLine] = useState({});
   const [openOrderId, setOpenOrderId] = useState(null);
 
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderForm, setOrderForm] = useState(BLANK_ORDER);
+  const [draftLines, setDraftLines] = useState([]);
+  const [draftLineForm, setDraftLineForm] = useState(BLANK_LINE);
 
   const [lineTarget, setLineTarget] = useState(null);
   const [lineForm, setLineForm] = useState(BLANK_LINE);
@@ -29,13 +32,13 @@ export default function OrdersPage() {
 
   async function loadAll() {
     const [o, c, s, p, cl, sl, jl] = await Promise.all([
-      supabase.from('customer_orders').select('*, customers(company), order_lines(*, suppliers(company), products(commodity, pack_size))').order('order_date', { ascending: false }),
+      supabase.from('customer_orders').select('*, customers(company), order_lines(*, suppliers(company), products(commodity, pack_size))').order('order_date', { ascending: false }).order('customer_order_id', { ascending: false }).order('order_line_id', { ascending: true, foreignTable: 'order_lines' }),
       supabase.from('customers').select('customer_id, company').order('company'),
       supabase.from('suppliers').select('supplier_id, company').order('company'),
       supabase.from('products').select('product_id, commodity, pack_size').order('commodity'),
       supabase.from('customer_locations').select('*').order('label'),
       supabase.from('supplier_locations').select('*').order('label'),
-      supabase.from('jacket_lines').select('order_line_id, jackets(jacket_number)'),
+      supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_number, jacket_status)'),
     ]);
     setOrders(o.data || []);
     setCustomers(c.data || []);
@@ -44,28 +47,37 @@ export default function OrdersPage() {
     setCustLocations(cl.data || []);
     setSupLocations(sl.data || []);
 
-    // map order_line_id -> jacket number(s), then roll up to order-level
-    const jacketsByLine = {};
+    // per-line: active allocated cases + which jacket(s), then roll up to order-level
+    const allocByLine = {};
     (jl.data || []).forEach(row => {
-      if (!row.jackets) return;
-      jacketsByLine[row.order_line_id] = jacketsByLine[row.order_line_id] || [];
-      jacketsByLine[row.order_line_id].push(row.jackets.jacket_number);
+      if (!row.jackets || row.jackets.jacket_status === 'Cancelled') return;
+      if (!allocByLine[row.order_line_id]) allocByLine[row.order_line_id] = { cases: 0, jackets: [] };
+      allocByLine[row.order_line_id].cases += Number(row.cases_to_load || 0);
+      allocByLine[row.order_line_id].jackets.push(row.jackets.jacket_number);
     });
+    setAllocByLine(allocByLine);
     const byOrder = {};
     (o.data || []).forEach(ord => {
       const nums = new Set();
-      (ord.order_lines || []).forEach(l => (jacketsByLine[l.order_line_id] || []).forEach(n => nums.add(n)));
+      (ord.order_lines || []).forEach(l => (allocByLine[l.order_line_id]?.jackets || []).forEach(n => nums.add(n)));
       byOrder[ord.customer_order_id] = [...nums];
     });
     setJacketByOrder(byOrder);
   }
 
-  function openNewOrder() { setOrderForm(BLANK_ORDER); setEditingOrderId(null); setShowNewOrder(true); }
+  function openNewOrder() { setOrderForm(BLANK_ORDER); setEditingOrderId(null); setDraftLines([]); setDraftLineForm(BLANK_LINE); setShowNewOrder(true); }
   function openEditOrder(o) {
     setOrderForm({ acumatica_order_no: o.acumatica_order_no, customer_id: o.customer_id, customer_location_id: o.customer_location_id || '', customer_po: o.customer_po || '', order_date: o.order_date || '', requested_delivery: o.requested_delivery || '', salesperson: o.salesperson || '', order_status: o.order_status });
     setEditingOrderId(o.customer_order_id);
     setShowNewOrder(true);
   }
+  function addDraftLine() {
+    if (!draftLineForm.product_id || !draftLineForm.cases_ordered) { alert('Product and Cases Ordered are required.'); return; }
+    setDraftLines([...draftLines, draftLineForm]);
+    setDraftLineForm(BLANK_LINE);
+  }
+  function removeDraftLine(index) { setDraftLines(draftLines.filter((_, i) => i !== index)); }
+
   async function saveOrder() {
     if (!orderForm.customer_id) { alert('Customer is required.'); return; }
     const payload = {
@@ -82,35 +94,46 @@ export default function OrdersPage() {
       const { error } = await supabase.from('customer_orders').update(payload).eq('customer_order_id', editingOrderId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
-      const { error } = await supabase.from('customer_orders').insert({ ...payload, source: 'Internal' });
+      const { data: newOrder, error } = await supabase.from('customer_orders').insert({ ...payload, source: 'Internal' }).select().single();
       if (error) { alert('Save failed: ' + error.message); return; }
+      if (draftLines.length) {
+        const lineRows = draftLines.map(l => {
+          const cases = Number(l.cases_ordered);
+          const sell = l.sell_price_per_case ? Number(l.sell_price_per_case) : null;
+          return {
+            customer_order_id: newOrder.customer_order_id, product_id: Number(l.product_id), cases_ordered: cases,
+            original_cases_ordered: cases, sell_price_per_case: sell, original_sell_price_per_case: sell,
+            pricing_type: l.pricing_type, line_status: 'Open',
+          };
+        });
+        const { error: lineErr } = await supabase.from('order_lines').insert(lineRows);
+        if (lineErr) { alert('Order created, but the product lines failed: ' + lineErr.message); return; }
+      }
     }
-    setShowNewOrder(false); setEditingOrderId(null); setOrderForm(BLANK_ORDER);
+    setShowNewOrder(false); setEditingOrderId(null); setOrderForm(BLANK_ORDER); setDraftLines([]); setDraftLineForm(BLANK_LINE);
     loadAll();
   }
 
   function openAddLine(orderId) { setLineForm(BLANK_LINE); setLineTarget({ orderId, lineId: null }); }
   function openEditLine(orderId, l) {
-    setLineForm({ supplier_id: l.supplier_id, supplier_location_id: l.supplier_location_id || '', product_id: l.product_id, shipper_po: l.shipper_po || '', cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, fob_cost_per_case: l.fob_cost_per_case, pricing_type: l.pricing_type || 'FOB' });
+    setLineForm({ product_id: l.product_id, cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, pricing_type: l.pricing_type || 'FOB' });
     setLineTarget({ orderId, lineId: l.order_line_id });
   }
   async function saveLine() {
-    if (!lineForm.supplier_id || !lineForm.product_id || !lineForm.cases_ordered) { alert('Supplier, Product, and Cases Ordered are required.'); return; }
+    if (!lineForm.product_id || !lineForm.cases_ordered) { alert('Product and Cases Ordered are required.'); return; }
     const payload = {
-      supplier_id: Number(lineForm.supplier_id),
-      supplier_location_id: lineForm.supplier_location_id ? Number(lineForm.supplier_location_id) : null,
       product_id: Number(lineForm.product_id),
-      shipper_po: lineForm.shipper_po || null,
       cases_ordered: Number(lineForm.cases_ordered),
       sell_price_per_case: lineForm.sell_price_per_case ? Number(lineForm.sell_price_per_case) : null,
-      fob_cost_per_case: lineForm.fob_cost_per_case ? Number(lineForm.fob_cost_per_case) : null,
       pricing_type: lineForm.pricing_type,
     };
     if (lineTarget.lineId) {
+      // supplier_id / shipper_po / fob_cost_per_case are intentionally left
+      // untouched here — those come from Jacket allocation now, not manual entry
       const { error } = await supabase.from('order_lines').update(payload).eq('order_line_id', lineTarget.lineId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
-      const original = { original_cases_ordered: payload.cases_ordered, original_sell_price_per_case: payload.sell_price_per_case, original_fob_cost_per_case: payload.fob_cost_per_case };
+      const original = { original_cases_ordered: payload.cases_ordered, original_sell_price_per_case: payload.sell_price_per_case };
       const { error } = await supabase.from('order_lines').insert({ ...payload, ...original, customer_order_id: lineTarget.orderId, line_status: 'Open' });
       if (error) { alert('Save failed: ' + error.message); return; }
     }
@@ -148,7 +171,7 @@ export default function OrdersPage() {
   return (
     <AppShell title="Customer Orders">
       <button onClick={openNewOrder} style={btn}>+ New Order</button>
-      {showNewOrder && (
+      {showNewOrder && !editingOrderId && (
         <div style={card}>
           <div style={grid}>
             {field('Acumatica Order # (optional — add later if you don\'t have it yet)', orderForm.acumatica_order_no, v => setOrderForm({ ...orderForm, acumatica_order_no: v }))}
@@ -174,8 +197,48 @@ export default function OrdersPage() {
               </select>
             </label>
           </div>
+          {!editingOrderId && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border)' }}>
+              <div className="fo-h2">Product Lines</div>
+              {draftLines.length > 0 && (
+                <div className="fo-table-wrap" style={{ marginBottom: 12 }}>
+                  <table style={table} className="fo-table">
+                    <thead><tr style={trHead}><th>Product</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right' }}>Sell $/cs</th><th>Pricing</th><th></th></tr></thead>
+                    <tbody>{draftLines.map((l, i) => {
+                      const p = products.find(pr => pr.product_id === Number(l.product_id));
+                      return (
+                        <tr key={i} style={tr}>
+                          <td>{p?.commodity} — {p?.pack_size}</td>
+                          <td style={{ textAlign: 'right' }}>{l.cases_ordered}</td>
+                          <td style={{ textAlign: 'right' }}>{l.sell_price_per_case ? `$${Number(l.sell_price_per_case).toFixed(2)}` : '—'}</td>
+                          <td>{l.pricing_type}</td>
+                          <td><button onClick={() => removeDraftLine(i)} style={{ background: 'none', border: 'none', color: 'var(--fo-error)', cursor: 'pointer' }}>✕</button></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              )}
+              <div style={grid}>
+                <label style={{ fontSize: 13 }}>Product
+                  <select value={draftLineForm.product_id} onChange={e => setDraftLineForm({ ...draftLineForm, product_id: e.target.value })} style={input}>
+                    <option value="">— select —</option>
+                    {products.map(p => <option key={p.product_id} value={p.product_id}>{p.commodity} — {p.pack_size}</option>)}
+                  </select>
+                </label>
+                {field('Cases Ordered', draftLineForm.cases_ordered, v => setDraftLineForm({ ...draftLineForm, cases_ordered: v }), 'number')}
+                {field('Sell Price / cs', draftLineForm.sell_price_per_case, v => setDraftLineForm({ ...draftLineForm, sell_price_per_case: v }), 'number')}
+                <label style={{ fontSize: 13 }}>Pricing Type
+                  <select value={draftLineForm.pricing_type} onChange={e => setDraftLineForm({ ...draftLineForm, pricing_type: e.target.value })} style={input}>
+                    <option>FOB</option><option>Delivered</option>
+                  </select>
+                </label>
+              </div>
+              <button onClick={addDraftLine} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Product Line</button>
+            </div>
+          )}
           <button onClick={saveOrder} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingOrderId ? 'Update Order' : 'Save Order'}</button>
-          <button onClick={() => { setShowNewOrder(false); setEditingOrderId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+          <button onClick={() => { setShowNewOrder(false); setEditingOrderId(null); setDraftLines([]); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
 
@@ -201,72 +264,96 @@ export default function OrdersPage() {
         .map(o => {
         const isOpen = openOrderId === o.customer_order_id;
         const jackets = jacketByOrder[o.customer_order_id] || [];
+        const orderNeedsSupply = (o.order_lines || []).reduce((s, l) => {
+          const allocated = allocByLine[l.order_line_id]?.cases || 0;
+          return s + Math.max(0, Number(l.cases_ordered || 0) - allocated);
+        }, 0);
         return (
           <div key={o.customer_order_id} style={card}>
             <div style={btnRow}>
               <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, flex: 1, textAlign: 'left' }}>
                 <span>{isOpen ? '⌄' : '›'} {o.acumatica_order_no ? <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> : <span style={{ ...unassignedPill, background: 'var(--fo-warn-bg)', color: 'var(--fo-warn)' }}>No Acumatica #</span>} {o.customers?.company} <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>PO {o.customer_po}</span></span>
               </button>
+              {orderNeedsSupply > 0 && <span className="fo-badge fo-badge-amber" style={{ marginRight: 8 }}>Needs Supply: {orderNeedsSupply}</span>}
               <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
               <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
               <button onClick={() => openEditOrder(o)} style={{ ...editBtn, marginLeft: 8 }}>Edit Order</button>
               <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, marginLeft: 8, color: 'var(--fo-error)' }}>Delete Order</button>
             </div>
+            {editingOrderId === o.customer_order_id && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
+                <div style={grid}>
+                  {field('Acumatica Order # (optional)', orderForm.acumatica_order_no, v => setOrderForm({ ...orderForm, acumatica_order_no: v }))}
+                  <label style={{ fontSize: 13 }}>Customer
+                    <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value, customer_location_id: '' })} style={input}>
+                      <option value="">— select —</option>
+                      {customers.map(c => <option key={c.customer_id} value={c.customer_id}>{c.company}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 13 }}>Delivery Location
+                    <select value={orderForm.customer_location_id} onChange={e => setOrderForm({ ...orderForm, customer_location_id: e.target.value })} style={input}>
+                      <option value="">Main profile address</option>
+                      {custLocations.filter(l => l.customer_id === Number(orderForm.customer_id)).map(l => <option key={l.location_id} value={l.location_id}>{l.label}</option>)}
+                    </select>
+                  </label>
+                  {field('Customer PO', orderForm.customer_po, v => setOrderForm({ ...orderForm, customer_po: v }))}
+                  {field('Order Date', orderForm.order_date, v => setOrderForm({ ...orderForm, order_date: v }), 'date')}
+                  {field('Requested Delivery', orderForm.requested_delivery, v => setOrderForm({ ...orderForm, requested_delivery: v }), 'date')}
+                  {field('Salesperson', orderForm.salesperson, v => setOrderForm({ ...orderForm, salesperson: v }))}
+                  <label style={{ fontSize: 13 }}>Status
+                    <select value={orderForm.order_status} onChange={e => setOrderForm({ ...orderForm, order_status: e.target.value })} style={input}>
+                      <option>Open</option><option>Closed</option><option>Cancelled</option>
+                    </select>
+                  </label>
+                </div>
+                <button onClick={saveOrder} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>Update Order</button>
+                <button onClick={() => { setEditingOrderId(null); setOrderForm(BLANK_ORDER); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+              </div>
+            )}
             {isOpen && (
               <div style={{ marginTop: 12 }}>
                 <div className="fo-table-wrap">
                 <table style={table} className="fo-table">
-                  <thead><tr style={trHead}><th>Commodity</th><th>Supplier</th><th>Shipper PO</th><th style={{ textAlign: 'right' }}>Cases</th><th>Sell $/cs</th><th>Cost $/cs</th><th>Revenue</th><th>Margin</th><th></th></tr></thead>
+                  <thead><tr style={trHead}><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th style={{ textAlign: 'right' }}>Allocated</th><th style={{ textAlign: 'right' }}>Needs Supply</th><th>Status</th><th>Jacket(s)</th><th>Sell $/cs</th><th>Revenue</th><th></th></tr></thead>
                   <tbody>{(o.order_lines || []).map(l => {
                     const revenue = l.cases_ordered * l.sell_price_per_case;
-                    const margin = revenue - (l.cases_ordered * l.fob_cost_per_case);
                     const amended = l.original_cases_ordered != null && Number(l.original_cases_ordered) !== Number(l.cases_ordered);
+                    const alloc = allocByLine[l.order_line_id] || { cases: 0, jackets: [] };
+                    const needsSupply = Math.max(0, Number(l.cases_ordered || 0) - alloc.cases);
+                    const lineStatus = alloc.cases === 0 ? 'Unassigned' : needsSupply > 0 ? 'Partially Allocated' : 'Fully Allocated';
+                    const statusTone = lineStatus === 'Fully Allocated' ? 'fo-badge-green' : lineStatus === 'Partially Allocated' ? 'fo-badge-amber' : 'fo-badge-gray';
                     return (
                       <tr key={l.order_line_id} style={tr}>
                         <td>{l.products?.commodity} — {l.products?.pack_size}</td>
-                        <td>{l.suppliers?.company}</td>
-                        <td>{l.shipper_po}</td>
                         <td style={{ textAlign: 'right' }}>
                           {l.cases_ordered}
                           {amended && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>orig: {l.original_cases_ordered}</div>}
                         </td>
+                        <td style={{ textAlign: 'right' }}>{alloc.cases}</td>
+                        <td style={{ textAlign: 'right', color: needsSupply > 0 ? 'var(--fo-warn)' : 'var(--fo-text-dim)', fontWeight: needsSupply > 0 ? 600 : 400 }}>{needsSupply}</td>
+                        <td><span className={`fo-badge ${statusTone}`}>{lineStatus}</span></td>
+                        <td style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{alloc.jackets.length ? alloc.jackets.join(', ') : '—'}</td>
                         <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
-                        <td><input type="number" defaultValue={l.fob_cost_per_case} onBlur={e => updateLineField(l.order_line_id, 'fob_cost_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
-                        <td style={{ color: margin >= 0 ? 'var(--fo-success)' : 'var(--fo-error)', fontWeight: 700 }}>${margin.toLocaleString()}</td>
                         <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button> <button onClick={() => deleteLine(l.order_line_id)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete</button></td>
                       </tr>
                     );
                   })}</tbody>
                 </table>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>To amend an already-loaded order's quantity or price, use Load Tracking instead — that keeps the original number on file.</div>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>Supplier and cost come from Jacket allocation — assign this line to a Jacket to see them there.</div>
 
                 {lineTarget && lineTarget.orderId === o.customer_order_id ? (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
                     <div style={grid}>
-                      <label style={{ fontSize: 13 }}>Supplier
-                        <select value={lineForm.supplier_id} onChange={e => setLineForm({ ...lineForm, supplier_id: e.target.value, supplier_location_id: '' })} style={input}>
-                          <option value="">— select —</option>
-                          {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
-                        </select>
-                      </label>
-                      <label style={{ fontSize: 13 }}>Pickup Location
-                        <select value={lineForm.supplier_location_id} onChange={e => setLineForm({ ...lineForm, supplier_location_id: e.target.value })} style={input}>
-                          <option value="">Main profile address</option>
-                          {supLocations.filter(l => l.supplier_id === Number(lineForm.supplier_id)).map(l => <option key={l.location_id} value={l.location_id}>{l.label}</option>)}
-                        </select>
-                      </label>
                       <label style={{ fontSize: 13 }}>Product
                         <select value={lineForm.product_id} onChange={e => setLineForm({ ...lineForm, product_id: e.target.value })} style={input}>
                           <option value="">— select —</option>
                           {products.map(p => <option key={p.product_id} value={p.product_id}>{p.commodity} — {p.pack_size}</option>)}
                         </select>
                       </label>
-                      {field('Shipper PO', lineForm.shipper_po, v => setLineForm({ ...lineForm, shipper_po: v }))}
                       {field('Cases Ordered', lineForm.cases_ordered, v => setLineForm({ ...lineForm, cases_ordered: v }), 'number')}
                       {field('Sell Price / cs', lineForm.sell_price_per_case, v => setLineForm({ ...lineForm, sell_price_per_case: v }), 'number')}
-                      {field('FOB Cost / cs', lineForm.fob_cost_per_case, v => setLineForm({ ...lineForm, fob_cost_per_case: v }), 'number')}
                       <label style={{ fontSize: 13 }}>Pricing Type
                         <select value={lineForm.pricing_type} onChange={e => setLineForm({ ...lineForm, pricing_type: e.target.value })} style={input}>
                           <option>FOB</option><option>Delivered</option>
