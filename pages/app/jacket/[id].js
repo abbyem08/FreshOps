@@ -535,21 +535,11 @@ export default function JacketWorkspace() {
   }
 
   async function deleteJacketEntirely() {
-    if (!confirm(`Permanently delete Jacket ${jacket.jacket_number}? This removes everything on it — purchased product, allocations, stops, freight, claims, and its Timeline. This cannot be undone.`)) return;
+    if (!confirm(`Permanently delete Jacket ${jacket.jacket_number}? This removes everything tied to it — purchased product, allocations, stops, freight, and its Timeline. Any Claims logged against it are kept as history (their link to this Jacket is just cleared). This cannot be undone.`)) return;
     if (!confirm('Really sure? Type OK to confirm one more time — this is permanent.')) return;
-    const { data: jl } = await supabase.from('jacket_lines').select('jacket_line_id').eq('jacket_id', jacketId);
-    const jlIds = (jl || []).map(x => x.jacket_line_id);
-    if (jlIds.length) await supabase.from('stop_lines').delete().in('jacket_line_id', jlIds);
-    const { data: stopRows } = await supabase.from('stops').select('stop_id').eq('jacket_id', jacketId);
-    const stopIds = (stopRows || []).map(x => x.stop_id);
-    if (stopIds.length) await supabase.from('stop_lines').delete().in('stop_id', stopIds);
-    await supabase.from('stops').delete().eq('jacket_id', jacketId);
-    await supabase.from('jacket_lines').delete().eq('jacket_id', jacketId);
-    await supabase.from('jacket_product_lines').delete().eq('jacket_id', jacketId);
-    await supabase.from('freight_records').delete().eq('jacket_id', jacketId);
-    await supabase.from('claims').delete().in('jacket_line_id', jlIds.length ? jlIds : [-1]);
-    await supabase.from('jacket_documents').delete().eq('jacket_id', jacketId);
-    await supabase.from('jacket_events').delete().eq('jacket_id', jacketId);
+    // stops, jacket_lines, stop_lines, purchased product, freight, freight-only
+    // lines, amendments, events, and documents all cascade automatically now —
+    // deleting the jacket itself is enough.
     const { error } = await supabase.from('jackets').delete().eq('jacket_id', jacketId);
     if (error) { alert('Delete failed: ' + error.message); return; }
     router.push('/app/jackets');
