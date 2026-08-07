@@ -133,17 +133,7 @@ export default function OrdersPage() {
 
   async function deleteOrder(orderId, orderNo) {
     if (!confirm(`Delete order ${orderNo} entirely, including all its lines and any jacket assignments? This cannot be undone.`)) return;
-    const { data: ols } = await supabase.from('order_lines').select('order_line_id').eq('customer_order_id', orderId);
-    const lineIds = (ols || []).map(r => r.order_line_id);
-    if (lineIds.length) {
-      const { data: jls } = await supabase.from('jacket_lines').select('jacket_line_id').in('order_line_id', lineIds);
-      const jacketLineIds = (jls || []).map(r => r.jacket_line_id);
-      if (jacketLineIds.length) {
-        await supabase.from('stop_lines').delete().in('jacket_line_id', jacketLineIds);
-        await supabase.from('jacket_lines').delete().in('jacket_line_id', jacketLineIds);
-      }
-      await supabase.from('order_lines').delete().in('order_line_id', lineIds);
-    }
+    // order_lines, jacket_lines, and stop_lines all cascade automatically now
     const { error } = await supabase.from('customer_orders').delete().eq('customer_order_id', orderId);
     if (error) { alert('Delete failed: ' + error.message); return; }
     loadAll();
