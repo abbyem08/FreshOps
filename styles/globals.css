@@ -237,6 +237,8 @@ input:focus, select:focus, textarea:focus {
   .print-full-width { padding: 0 !important; margin: 0 !important; }
 }
 .print-only { display: none; }
+.print-only-block { display: none; }
 @media print {
   .print-only { display: inline; }
+  .print-only-block { display: block; }
 }
