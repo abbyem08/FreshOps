@@ -53,6 +53,9 @@ export default function JacketWorkspace() {
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
   const [editingPayment, setEditingPayment] = useState(false);
+  const [financialAdjustments, setFinancialAdjustments] = useState([]);
+  const [showAddAdjustment, setShowAddAdjustment] = useState(false);
+  const [adjustmentForm, setAdjustmentForm] = useState({ adjustment_type: 'Other', description: '', amount: '', direction: 'Cost', adjustment_date: '', notes: '' });
   const [paymentForm, setPaymentForm] = useState({});
   const [carriers, setCarriers] = useState([]);
   const [editingFreight, setEditingFreight] = useState(false);
@@ -97,7 +100,8 @@ export default function JacketWorkspace() {
     const { data: lines } = await supabase
       .from('jacket_lines')
       .select('*, order_lines(*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)), jacket_product_lines(suppliers(company))')
-      .eq('jacket_id', jacketId);
+      .eq('jacket_id', jacketId)
+      .order('jacket_line_id');
     setJacketLines(lines || []);
 
     const { data: allJacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jacket_product_line_id, jackets(jacket_status)');
@@ -156,6 +160,9 @@ export default function JacketWorkspace() {
     setDocuments(docs || []);
     const { data: fol } = await supabase.from('freight_only_lines').select('*, customer_orders(acumatica_order_no, customer_po, customers(company))').eq('jacket_id', jacketId).order('created_at', { ascending: false });
     setFreightOnlyLines(fol || []);
+
+    const { data: fa } = await supabase.from('financial_adjustments').select('*').eq('jacket_id', jacketId).order('adjustment_date', { ascending: false });
+    setFinancialAdjustments(fa || []);
 
     // Cases Still Needed — across ALL open orders, not just this jacket's,
     // so it stays useful for sourcing/truck planning while you're in here
@@ -555,6 +562,27 @@ export default function JacketWorkspace() {
     });
     setEditingPayment(true);
   }
+  async function saveAdjustment() {
+    if (!adjustmentForm.adjustment_type || !adjustmentForm.amount) { alert('Type and Amount are required.'); return; }
+    const { error } = await supabase.from('financial_adjustments').insert({
+      jacket_id: jacketId, adjustment_type: adjustmentForm.adjustment_type, description: adjustmentForm.description || null,
+      amount: Number(adjustmentForm.amount), direction: adjustmentForm.direction,
+      adjustment_date: adjustmentForm.adjustment_date || new Date().toISOString().slice(0, 10),
+      notes: adjustmentForm.notes || null, created_by: userEmail,
+    });
+    if (error) { alert('Save failed: ' + error.message); return; }
+    await logEvent('financial_adjustment_added', `${adjustmentForm.direction === 'Revenue' ? '+' : '-'}$${Number(adjustmentForm.amount).toLocaleString()} — ${adjustmentForm.adjustment_type}${adjustmentForm.description ? ': ' + adjustmentForm.description : ''}`);
+    setShowAddAdjustment(false);
+    setAdjustmentForm({ adjustment_type: 'Other', description: '', amount: '', direction: 'Cost', adjustment_date: '', notes: '' });
+    loadAll();
+  }
+  async function deleteAdjustment(a) {
+    if (!confirm(`Remove this adjustment (${a.adjustment_type}, $${Number(a.amount).toLocaleString()})? This cannot be undone.`)) return;
+    const { error } = await supabase.from('financial_adjustments').delete().eq('adjustment_id', a.adjustment_id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    loadAll();
+  }
+
   async function saveSupplierPayment() {
     const payload = { ...paymentForm, supplier_amount_paid: paymentForm.supplier_amount_paid ? Number(paymentForm.supplier_amount_paid) : 0 };
     const { error } = await supabase.from('jackets').update(payload).eq('jacket_id', jacketId);
@@ -852,6 +880,56 @@ export default function JacketWorkspace() {
   const freightOnlyRevenue = freightOnlyLines.reduce((s, f) => s + Number(f.customer_freight_charge || 0), 0);
   const freightOnlyCost = freightOnlyLines.reduce((s, f) => s + Number(f.allocated_freight_cost || 0), 0);
   const freightOnlyProfit = freightOnlyRevenue - freightOnlyCost;
+
+  // ---- Expanded Financials computations — all derived from real data,
+  // nothing fabricated. Product Sales Detail: one row per allocation on
+  // this Jacket. ----
+  const productSalesRows = jacketLines.filter(l => l.jacket_product_line_id).map(l => {
+    const cases = Number(l.cases_to_load || 0);
+    const sell = Number(l.order_lines?.sell_price_per_case || 0);
+    const cost = Number(l.allocated_cost_per_case || 0);
+    const revenue = cases * sell;
+    const lineCost = cases * cost;
+    const profit = revenue - lineCost;
+    return {
+      key: l.jacket_line_id, customer: l.order_lines?.customer_orders?.customers?.company, orderNo: l.order_lines?.customer_orders?.acumatica_order_no,
+      commodity: l.order_lines?.products?.commodity, packSize: l.order_lines?.products?.pack_size, cases, sell, revenue, cost, lineCost, profit,
+      margin: revenue ? (profit / revenue) * 100 : 0,
+    };
+  });
+
+  const supplierFeesTotal = jacketLines.filter(l => l.jacket_product_line_id).reduce((s, l) => {
+    const purchased = purchasedLines.find(p => p.jacket_product_line_id === l.jacket_product_line_id);
+    return s + Number(l.cases_to_load || 0) * Number(purchased?.fee_total_per_case || 0);
+  }, 0);
+  const baseCostTotal = estCost - supplierFeesTotal;
+
+  // Claims impact — real dollar effect of price adjustments already
+  // applied to allocations on this jacket (resolved claims only)
+  const claimsImpact = claims.reduce((s, c) => {
+    if (!c.resolution_price_adjustment) return s;
+    const line = jacketLines.find(l => l.jacket_line_id === c.jacket_line_id);
+    const cases = line ? Number(line.cases_to_load || 0) : 0;
+    return s + Number(c.resolution_price_adjustment) * cases;
+  }, 0);
+
+  const adjustmentsRevenue = financialAdjustments.filter(a => a.direction === 'Revenue').reduce((s, a) => s + Number(a.amount || 0), 0);
+  const adjustmentsCost = financialAdjustments.filter(a => a.direction === 'Cost').reduce((s, a) => s + Number(a.amount || 0), 0);
+  const adjustmentsNet = adjustmentsRevenue - adjustmentsCost;
+
+  const totalRevenue = estRevenue + freightOnlyRevenue + adjustmentsRevenue;
+  const totalCost = estCost + freightCost + adjustmentsCost;
+  const totalProfit = totalRevenue - totalCost;
+  const totalMarginPct = totalRevenue ? (totalProfit / totalRevenue) * 100 : 0;
+
+  // Financial Readiness — real status checks, informational only
+  const readinessItems = [
+    { label: 'Supplier Settled', ok: jacket.supplier_payment_status === 'Paid' },
+    { label: 'Carrier Paid', ok: !!freight?.carrier_paid },
+    { label: 'Freight Booked', ok: !!freight },
+    { label: 'Claims Resolved', ok: claims.every(c => c.status === 'Resolved') },
+    { label: 'Final Cost Entered (Received Cases)', ok: purchasedLines.every(p => p.actual_cases_received != null) },
+  ];
 
   // ---- Load Tracking: group by commodity + shipper (this jacket only) ----
   const commodityGroups = {};
@@ -1524,35 +1602,181 @@ export default function JacketWorkspace() {
           )}
 
           {activeTab === 'Financials' && (
-            <div className="fo-card">
-              <div className="fo-h2">Profit Summary</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16 }}>
-                <FinRow label="Product Revenue" value={estRevenue} />
-                <FinRow label="Product Cost" value={-estCost} />
-                <FinRow label="Freight Cost" value={-freightCost} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* ---- Section 1: Profit Summary (expanded, same card you already had) ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Profit Summary</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Revenue</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, marginBottom: 12 }}>
+                  <FinRow label="Product Revenue" value={estRevenue} />
+                  <FinRow label="Freight-Only Revenue" value={freightOnlyRevenue} />
+                  <FinRow label="Other Revenue (Adjustments)" value={adjustmentsRevenue} />
+                  <FinRow label="Total Revenue" value={totalRevenue} bold />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Cost</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, marginBottom: 12 }}>
+                  <FinRow label="Product Cost (base)" value={-baseCostTotal} />
+                  <FinRow label="Supplier Fees" value={-supplierFeesTotal} />
+                  <FinRow label="Freight Cost" value={-freightCost} />
+                  <FinRow label="Other Costs (Adjustments)" value={-adjustmentsCost} />
+                  <FinRow label="Claims / Credits Impact" value={claimsImpact} />
+                  <FinRow label="Total Cost" value={-totalCost} bold />
+                </div>
+                <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16 }}>
+                  <div>
+                    <div className="fo-kpi-label">Estimated Profit</div>
+                    <div className="fo-kpi-value" style={{ color: totalProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${totalProfit.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="fo-kpi-label">Estimated Margin</div>
+                    <div className="fo-kpi-value" style={{ color: totalMarginPct >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>{totalMarginPct.toFixed(1)}%</div>
+                  </div>
+                  {jacket.jacket_status === 'Closed' && (
+                    <>
+                      <div>
+                        <div className="fo-kpi-label">Final Profit</div>
+                        <div className="fo-kpi-value" style={{ color: totalProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${totalProfit.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="fo-kpi-label">Final Margin</div>
+                        <div className="fo-kpi-value">{totalMarginPct.toFixed(1)}%</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>Freight-Only revenue is never mixed into Product Revenue above.</div>
               </div>
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
-                <div className="fo-kpi-label">Estimated Profit</div>
-                <div className="fo-kpi-value" style={{ color: estProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${estProfit.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 4 }}>Produce sale only — freight-only revenue is tracked separately below and never mixed into this number.</div>
+
+              {/* ---- Section 2: Product Sales Detail ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Product Sales</div>
+                {productSalesRows.length === 0 ? (
+                  <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No allocations on this Jacket yet.</div>
+                ) : (
+                  <div className="fo-table-wrap">
+                    <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr><th>Customer</th><th>Order #</th><th>Product</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right' }}>Sell $/cs</th><th style={{ textAlign: 'right' }}>Revenue</th><th style={{ textAlign: 'right' }}>Cost $/cs</th><th style={{ textAlign: 'right' }}>Cost</th><th style={{ textAlign: 'right' }}>Profit</th><th style={{ textAlign: 'right' }}>Margin</th></tr></thead>
+                      <tbody>{productSalesRows.map(r => (
+                        <tr key={r.key}>
+                          <td>{r.customer}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.orderNo || '—'}</td>
+                          <td>{r.commodity} — {r.packSize}</td>
+                          <td style={{ textAlign: 'right' }}>{r.cases}</td>
+                          <td style={{ textAlign: 'right' }}>${r.sell.toFixed(2)}</td>
+                          <td style={{ textAlign: 'right' }}>${r.revenue.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>${r.cost.toFixed(2)}</td>
+                          <td style={{ textAlign: 'right' }}>${r.lineCost.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: r.profit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)', fontWeight: 600 }}>${r.profit.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{r.margin.toFixed(1)}%</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {freightOnlyLines.length > 0 && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
-                  <div className="fo-h2">Freight-Only</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16 }}>
-                    <FinRow label="Freight-Only Revenue" value={freightOnlyRevenue} />
-                    <FinRow label="Freight-Only Cost" value={-freightOnlyCost} />
-                    <div>
-                      <div className="fo-kpi-label">Freight-Only Profit</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: freightOnlyProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${freightOnlyProfit.toLocaleString()}</div>
-                    </div>
+
+              {/* ---- Section 3: Purchased Product & Supplier Cost ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Purchased Product & Supplier Cost</div>
+                {purchasedLines.length === 0 ? (
+                  <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>Nothing purchased on this Jacket yet.</div>
+                ) : (
+                  <div className="fo-table-wrap">
+                    <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr><th>Supplier</th><th>Shipper PO</th><th>Product</th><th style={{ textAlign: 'right' }}>Purchased</th><th style={{ textAlign: 'right' }}>Received</th><th style={{ textAlign: 'right' }}>Cost $/cs</th><th style={{ textAlign: 'right' }}>Fees $/cs</th><th style={{ textAlign: 'right' }}>Total Cost</th><th style={{ textAlign: 'right' }}>Allocated</th><th style={{ textAlign: 'right' }}>Available</th></tr></thead>
+                      <tbody>{purchasedLines.map(p => {
+                        const { allocated, available } = availableOnPurchased(p);
+                        const base = p.actual_cases_received != null ? Number(p.actual_cases_received) : Number(p.purchased_cases);
+                        const totalCostLine = base * (Number(p.purchase_cost_per_case || 0) + Number(p.fee_total_per_case || 0));
+                        return (
+                          <tr key={p.jacket_product_line_id}>
+                            <td>{p.suppliers?.company || '—'}</td>
+                            <td>{p.shipper_po || '—'}</td>
+                            <td>{p.products?.commodity} — {p.products?.pack_size}</td>
+                            <td style={{ textAlign: 'right' }}>{p.purchased_cases}</td>
+                            <td style={{ textAlign: 'right' }}>{p.actual_cases_received ?? '—'}</td>
+                            <td style={{ textAlign: 'right' }}>${Number(p.purchase_cost_per_case || 0).toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>${Number(p.fee_total_per_case || 0).toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>${totalCostLine.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right' }}>{allocated}</td>
+                            <td style={{ textAlign: 'right', color: available > 0 ? 'var(--fo-warn)' : 'var(--fo-text-dim)' }}>{available}</td>
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- Section 4: Freight Financials ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Freight Financials</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, marginBottom: 12 }}>
+                  <div><div className="fo-label">Carrier</div>{freight?.carrier || '—'}</div>
+                  <FinRow label="Booked Freight Cost" value={-(freight ? Number(freight.booked_rate || 0) : 0)} />
+                  <FinRow label="Other Freight Charges" value={-(freight ? Number(freight.extra_fees || 0) : 0)} />
+                  <FinRow label="Freight-Only Revenue" value={freightOnlyRevenue} />
+                  <div>
+                    <div className="fo-kpi-label">Freight Profit / Loss</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: (freightOnlyRevenue - freightCost) >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${(freightOnlyRevenue - freightCost).toLocaleString()}</div>
                   </div>
                 </div>
-              )}
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)' }}>No separate "actual vs booked" freight field exists yet — Booked Rate is used as the real cost. Per-customer Delivered freight charges only show where a Price Worksheet snapshot captured the FOB/freight split; orders priced without one show "—" rather than a guessed number.</div>
+                {jacketLines.filter(l => l.jacket_product_line_id).length > 0 && (
+                  <div className="fo-table-wrap" style={{ marginTop: 12 }}>
+                    <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr><th>Customer</th><th>Order #</th><th>Pricing Type</th><th style={{ textAlign: 'right' }}>Freight Charge</th></tr></thead>
+                      <tbody>{jacketLines.filter(l => l.jacket_product_line_id).map(l => {
+                        const snap = l.order_lines?.price_snapshot;
+                        const freightCharge = snap?.customer_freight_per_case != null ? Number(snap.customer_freight_per_case) * Number(l.cases_to_load || 0) : null;
+                        return (
+                          <tr key={l.jacket_line_id}>
+                            <td>{l.order_lines?.customer_orders?.customers?.company}</td>
+                            <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{l.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
+                            <td>{l.order_lines?.pricing_type || '—'}</td>
+                            <td style={{ textAlign: 'right' }}>{freightCharge != null ? `$${freightCharge.toLocaleString()}` : '—'}</td>
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                )}
+                {freightOnlyLines.length > 0 && (
+                  <div className="fo-table-wrap" style={{ marginTop: 12 }}>
+                    <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr><th>Customer</th><th>Pricing Type</th><th style={{ textAlign: 'right' }}>Freight Charge</th><th style={{ textAlign: 'right' }}>Allocated Cost</th><th style={{ textAlign: 'right' }}>Profit</th></tr></thead>
+                      <tbody>{freightOnlyLines.map(f => (
+                        <tr key={f.freight_only_line_id}>
+                          <td>{f.customer_orders?.customers?.company}</td>
+                          <td>Freight Only</td>
+                          <td style={{ textAlign: 'right' }}>${Number(f.customer_freight_charge || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>${Number(f.allocated_freight_cost || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: (Number(f.customer_freight_charge || 0) - Number(f.allocated_freight_cost || 0)) >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${(Number(f.customer_freight_charge || 0) - Number(f.allocated_freight_cost || 0)).toLocaleString()}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- Section 5: Supplier Settlement (expanded Supplier Payment) ---- */}
+              <div className="fo-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div className="fo-h2" style={{ marginBottom: 0 }}>Supplier Payment</div>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Supplier Settlement</div>
                   {!editingPayment && <button onClick={openEditPayment} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, margin: '10px 0' }}>
+                  <div><div className="fo-label">Supplier(s)</div>{[...new Set(purchasedLines.map(p => p.suppliers?.company).filter(Boolean))].join(', ') || '—'}</div>
+                  <FinRow label="Product Cost" value={-baseCostTotal} />
+                  <FinRow label="Supplier Fees" value={-supplierFeesTotal} />
+                  <div>
+                    <div className="fo-kpi-label">Amount Owed</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>${(baseCostTotal + supplierFeesTotal).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="fo-kpi-label">Remaining Balance</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fo-warn)' }}>${Math.max(0, baseCostTotal + supplierFeesTotal - Number(jacket.supplier_amount_paid || 0)).toLocaleString()}</div>
+                  </div>
                 </div>
                 {editingPayment ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 10 }}>
@@ -1563,9 +1787,16 @@ export default function JacketWorkspace() {
                       </select>
                     </label>
                     {textField('Amount Paid', paymentForm.supplier_amount_paid, v => setPaymentForm({ ...paymentForm, supplier_amount_paid: v }), 'number')}
-                    {textField('Payment Arrangement', paymentForm.supplier_payment_arrangement, v => setPaymentForm({ ...paymentForm, supplier_payment_arrangement: v }))}
+                    <label style={{ fontSize: 13 }}>
+                      <span className="fo-field-label">Payment Arrangement</span>
+                      <select value={paymentForm.supplier_payment_arrangement} onChange={e => setPaymentForm({ ...paymentForm, supplier_payment_arrangement: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option value="">— select —</option>
+                        <option>Paid in Full / Flat Purchase</option>
+                        <option>Other</option>
+                      </select>
+                    </label>
                     {textField('Due Date', paymentForm.supplier_payment_due_date, v => setPaymentForm({ ...paymentForm, supplier_payment_due_date: v }), 'date')}
-                    <div style={{ gridColumn: 'span 2' }}>{textField('Notes', paymentForm.supplier_payment_notes, v => setPaymentForm({ ...paymentForm, supplier_payment_notes: v }))}</div>
+                    <div style={{ gridColumn: 'span 2' }}>{textField('Notes / Payment Reference', paymentForm.supplier_payment_notes, v => setPaymentForm({ ...paymentForm, supplier_payment_notes: v }))}</div>
                     <div style={{ gridColumn: 'span 2' }}>
                       <button onClick={saveSupplierPayment} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
                       <button onClick={() => setEditingPayment(false)} className="fo-btn fo-btn-secondary">Cancel</button>
@@ -1580,6 +1811,63 @@ export default function JacketWorkspace() {
                     {jacket.supplier_payment_notes && <div style={{ fontSize: 12, color: 'var(--fo-text-faint)', marginTop: 4 }}>{jacket.supplier_payment_notes}</div>}
                   </div>
                 )}
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 10 }}>Return-Based / Minimum + Return settlement tracking isn't built yet — flag if you want that added later.</div>
+              </div>
+
+              {/* ---- Section 6: Costs & Adjustments ---- */}
+              <div className="fo-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="fo-h2" style={{ marginBottom: 0 }}>Costs & Adjustments</div>
+                  <button onClick={() => setShowAddAdjustment(!showAddAdjustment)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ Add Financial Adjustment</button>
+                </div>
+                {showAddAdjustment && (
+                  <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Type</span>
+                      <select value={adjustmentForm.adjustment_type} onChange={e => setAdjustmentForm({ ...adjustmentForm, adjustment_type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        {['Cold Storage', 'Cooler Fee', 'Repacking', 'Handling', 'Inspection', 'Additional Freight', 'Claim Credit', 'Customer Credit', 'Supplier Credit', 'Price Adjustment', 'Damage', 'Rejected Product Cost', 'Exception Recovery Cost', 'Other'].map(t => <option key={t}>{t}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 13 }}><span className="fo-field-label">Revenue or Cost</span>
+                      <select value={adjustmentForm.direction} onChange={e => setAdjustmentForm({ ...adjustmentForm, direction: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                        <option>Cost</option><option>Revenue</option>
+                      </select>
+                    </label>
+                    {textField('Amount ($)', adjustmentForm.amount, v => setAdjustmentForm({ ...adjustmentForm, amount: v }), 'number')}
+                    {textField('Date', adjustmentForm.adjustment_date, v => setAdjustmentForm({ ...adjustmentForm, adjustment_date: v }), 'date')}
+                    {textField('Description', adjustmentForm.description, v => setAdjustmentForm({ ...adjustmentForm, description: v }))}
+                    <div style={{ gridColumn: '1 / -1' }}>{textField('Notes', adjustmentForm.notes, v => setAdjustmentForm({ ...adjustmentForm, notes: v }))}</div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <button onClick={saveAdjustment} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
+                      <button onClick={() => setShowAddAdjustment(false)} className="fo-btn fo-btn-secondary">Cancel</button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ marginTop: 12 }}>
+                  {financialAdjustments.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No adjustments logged.</div> : financialAdjustments.map(a => (
+                    <div key={a.adjustment_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--fo-border-soft)', fontSize: 13.5 }}>
+                      <div>
+                        <span className={a.direction === 'Revenue' ? 'fo-badge fo-badge-green' : 'fo-badge fo-badge-red'}>{a.direction === 'Revenue' ? '+' : '-'}${Number(a.amount).toLocaleString()}</span>{' '}
+                        <strong>{a.adjustment_type}</strong>{a.description ? ` — ${a.description}` : ''}
+                        <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{a.adjustment_date}{a.notes ? ` · ${a.notes}` : ''}</div>
+                      </div>
+                      <button onClick={() => deleteAdjustment(a)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ---- Section 8: Financial Readiness ---- */}
+              <div className="fo-card">
+                <div className="fo-h2">Financial Readiness</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {readinessItems.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--fo-section-bg)', borderRadius: 'var(--fo-radius-sm)' }}>
+                      <span style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{item.label}</span>
+                      <span className={item.ok ? 'fo-badge fo-badge-green' : 'fo-badge fo-badge-amber'}>{item.ok ? 'Ready' : 'Incomplete'}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 10 }}>Informational only — nothing here finalizes or closes the Jacket automatically.</div>
               </div>
             </div>
           )}
@@ -1688,11 +1976,11 @@ function Stat({ label, value, tone }) {
     </div>
   );
 }
-function FinRow({ label, value }) {
+function FinRow({ label, value, bold }) {
   return (
     <div>
       <div className="fo-kpi-label">{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: value < 0 ? 'var(--fo-error)' : 'var(--fo-text)' }}>{value < 0 ? '-' : ''}${Math.abs(value).toLocaleString()}</div>
+      <div style={{ fontSize: bold ? 20 : 18, fontWeight: bold ? 800 : 700, color: value < 0 ? 'var(--fo-error)' : 'var(--fo-text)' }}>{value < 0 ? '-' : ''}${Math.abs(value).toLocaleString()}</div>
     </div>
   );
 }
