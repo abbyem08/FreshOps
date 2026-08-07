@@ -2,6 +2,7 @@
 import { useEffect, useState, Fragment } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../../components/AppShell';
+import Logo from '../../../components/Logo';
 import { supabase } from '../../../lib/supabaseClient';
 
 const BLANK_PURCHASED = { supplier_id: '', product_id: '', shipper_po: '', purchased_cases: '', actual_cases_received: '', purchase_cost_per_case: '', fee_total_per_case: '', notes: '' };
@@ -61,7 +62,7 @@ export default function JacketWorkspace() {
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
   const [resolvingId, setResolvingId] = useState(null);
-  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '', jacket_line_id: '' });
+  const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '', new_cases_ordered: '', jacket_line_id: '' });
   const [amendingOrderedLineId, setAmendingOrderedLineId] = useState(null);
   const [amendOrderedValue, setAmendOrderedValue] = useState('');
   const [reassigningLineId, setReassigningLineId] = useState(null);
@@ -749,7 +750,7 @@ export default function JacketWorkspace() {
     loadAll();
   }
   function openResolve(claim) {
-    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', jacket_line_id: claim.jacket_line_id || '' });
+    setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', new_cases_ordered: '', jacket_line_id: claim.jacket_line_id || '' });
     setResolvingId(claim.claim_id);
   }
   async function deleteClaim(claimId) {
@@ -820,21 +821,25 @@ export default function JacketWorkspace() {
       jacket_line_id: newJacketLineId, ...snapshotUpdate,
     }).eq('claim_id', claim.claim_id);
     if (error) { alert('Save failed: ' + error.message); return; }
-    if (adjustment) {
-      const lineId = newJacketLineId || claim.jacket_line_id;
-      const line = jacketLines.find(l => l.jacket_line_id === lineId);
-      const ol = line?.order_lines || claim.jacket_lines?.order_lines;
-      if (ol) {
-        const newPrice = Number(ol.sell_price_per_case) - adjustment;
-        const orderLineId = ol.order_line_id || claim.jacket_lines?.order_lines?.order_line_id;
-        if (orderLineId) {
-          const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
-          if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
-          else await logAmendments('Claim price adjustment', 'Price Decrease', [{ field: 'sell_price_per_case', before: Number(ol.sell_price_per_case), after: newPrice }], 'order_lines', orderLineId);
-        }
-      }
+
+    const lineId = newJacketLineId || claim.jacket_line_id;
+    const line = jacketLines.find(l => l.jacket_line_id === lineId);
+    const ol = line?.order_lines || claim.jacket_lines?.order_lines;
+    const orderLineId = ol?.order_line_id || claim.jacket_lines?.order_lines?.order_line_id;
+
+    if (adjustment && ol && orderLineId) {
+      const newPrice = Number(ol.sell_price_per_case) + adjustment;
+      const { error: priceError } = await supabase.from('order_lines').update({ sell_price_per_case: newPrice }).eq('order_line_id', orderLineId);
+      if (priceError) alert('Claim saved, but price update failed: ' + priceError.message);
+      else await logAmendments('Claim price adjustment', newPrice >= Number(ol.sell_price_per_case) ? 'Price Increase' : 'Price Decrease', [{ field: 'sell_price_per_case', before: Number(ol.sell_price_per_case), after: newPrice }], 'order_lines', orderLineId);
     }
-    await logEvent('claim_resolved', `Claim resolved — ${resolveForm.status}${adjustment ? `, price adjusted -$${adjustment}` : ''}`);
+    if (resolveForm.new_cases_ordered && ol && orderLineId) {
+      const newCases = Number(resolveForm.new_cases_ordered);
+      const { error: casesError } = await supabase.from('order_lines').update({ cases_ordered: newCases, amended_at: new Date().toISOString() }).eq('order_line_id', orderLineId);
+      if (casesError) alert('Claim saved, but cases update failed: ' + casesError.message);
+      else await logAmendments('Claim quantity adjustment', newCases >= Number(ol.cases_ordered || 0) ? 'Overage' : 'Shortage', [{ field: 'cases_ordered', before: Number(ol.cases_ordered || 0), after: newCases }], 'order_lines', orderLineId);
+    }
+    await logEvent('claim_resolved', `Claim resolved — ${resolveForm.status}${adjustment ? `, price adjusted ${adjustment >= 0 ? '+' : ''}$${adjustment}` : ''}${resolveForm.new_cases_ordered ? `, cases now ${resolveForm.new_cases_ordered}` : ''}`);
     setResolvingId(null);
     loadAll();
   }
@@ -884,12 +889,12 @@ export default function JacketWorkspace() {
 
   return (
     <AppShell title={`Jacket ${jacket.jacket_number}`} subtitle={jacket.jacket_status}>
-      <div style={{ marginBottom: 16 }}>
+      <div className="no-print" style={{ marginBottom: 16 }}>
         <a href="/app/jackets" style={{ fontSize: 13, color: 'var(--fo-text-dim)', textDecoration: 'none' }}>← All Jackets</a>
       </div>
 
       {needs.length > 0 && (
-        <div className="fo-card fo-card-tight" style={{ marginBottom: 16 }}>
+        <div className="fo-card fo-card-tight no-print" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fo-text-dim)' }}>Cases Still Needed — across all open orders</div>
             <div>
@@ -910,7 +915,7 @@ export default function JacketWorkspace() {
       )}
 
       {/* ---- Header ---- */}
-      <div className="fo-card" style={{ marginBottom: 16 }}>
+      <div className="fo-card no-print" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             <Stat label="Pallets" value={`${totalPallets} / ${palletCapacity}`} tone={overPallets ? 'red' : undefined} />
@@ -931,7 +936,7 @@ export default function JacketWorkspace() {
       {/* ---- Tabs + Timeline layout ---- */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 0.85fr', gap: 16, alignItems: 'start' }}>
         <div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="no-print" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
             {TABS.map(t => (
               <button key={t} onClick={() => setActiveTab(t)} className="fo-btn fo-btn-sm"
                 style={{ background: activeTab === t ? 'var(--fo-primary)' : 'var(--fo-card-bg)', color: activeTab === t ? '#fff' : 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>
@@ -1190,7 +1195,7 @@ export default function JacketWorkspace() {
           {activeTab === 'Logistics' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* ---- Freight ---- */}
-              <div className="fo-card">
+              <div className="fo-card no-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Freight</div>
                   {!editingFreight && (
@@ -1252,10 +1257,10 @@ export default function JacketWorkspace() {
               </div>
 
               {/* ---- Stops / Route ---- */}
-              <div className="fo-card">
+              <div className="fo-card no-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Route — {pickups.length} pickup(s) → {deliveries.length} delivery(ies)</div>
-                  <button onClick={() => window.print()} className="fo-btn fo-btn-secondary fo-btn-sm">🖨 Print</button>
+                  <button onClick={() => window.print()} className="fo-btn fo-btn-secondary fo-btn-sm">🖨 Print Freight Ticket</button>
                 </div>
                 {stops.map(s => (
                   <div key={s.stop_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', overflow: 'hidden', marginTop: 10 }}>
@@ -1296,8 +1301,49 @@ export default function JacketWorkspace() {
                 )}
               </div>
 
+              {/* ---- Print-Only Freight Ticket — clean, no buttons/inputs, logo included ---- */}
+              <div className="print-only-block" style={{ background: '#fff', color: '#1B231D', padding: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #165C3A', paddingBottom: 12, marginBottom: 16 }}>
+                  <Logo variant="horizontal" size={40} />
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#165C3A' }}>Freight Ticket — Jacket {jacket.jacket_number}</div>
+                    <div style={{ fontSize: 12, color: '#6A746D' }}>{jacket.jacket_date} · {jacket.jacket_status}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20, fontSize: 13 }}>
+                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Carrier</div>{jacket.carrier || '—'}</div>
+                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Driver</div>{jacket.driver || '—'} {jacket.driver_phone ? `· ${jacket.driver_phone}` : ''}</div>
+                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Truck / Trailer</div>{jacket.truck || '—'} / {jacket.trailer || '—'}</div>
+                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Total Weight / Pallets</div>{totalWeight.toLocaleString()} lb · {totalPallets} plt</div>
+                </div>
+                {stops.map(s => (
+                  <div key={s.stop_id} style={{ marginBottom: 18, pageBreakInside: 'avoid' }}>
+                    <div style={{ background: '#F1F0EA', padding: '8px 12px', fontWeight: 700, fontSize: 13, borderRadius: 4 }}>
+                      Stop #{s.stop_number} — {s.stop_type} — {s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6A746D', padding: '6px 12px' }}>
+                      {s.stop_type === 'Pickup'
+                        ? (s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address || ''}, ${s.suppliers?.city || ''} ${s.suppliers?.state || ''}`)
+                        : (s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address || ''}, ${s.customers?.city || ''} ${s.customers?.state || ''}`)}
+                      {s.appointment && <> · Appt: {new Date(s.appointment).toLocaleString()}</>}
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 4 }}>
+                      <thead><tr style={{ borderBottom: '1px solid #E2E7E1', textAlign: 'left', color: '#6A746D' }}><th style={{ padding: '4px 12px' }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
+                      <tbody>{(s.stop_lines || []).map(sl => (
+                        <tr key={sl.stop_line_id} style={{ borderBottom: '1px solid #EFEEE7' }}>
+                          <td style={{ padding: '4px 12px' }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
+                          <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
+                          <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                ))}
+                <div style={{ marginTop: 24, paddingTop: 12, borderTop: '1px solid #E2E7E1', fontSize: 11, color: '#9A9D93' }}>Generated {new Date().toLocaleString()}</div>
+              </div>
+
               {/* ---- Load Tracking ---- */}
-              <div className="fo-card">
+              <div className="fo-card no-print">
                 <div className="fo-h2">Load Tracking, by Commodity</div>
                 {groupList.length === 0 ? (
                   <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No allocations to track yet.</div>
@@ -1395,7 +1441,7 @@ export default function JacketWorkspace() {
               </div>
 
               {/* ---- Claims ---- */}
-              <div className="fo-card">
+              <div className="fo-card no-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="fo-h2" style={{ marginBottom: 0 }}>Claims / Quality Issues</div>
                   <button onClick={() => setShowClaimForm(!showClaimForm)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-primary)', color: '#fff' }}>+ Log Claim</button>
@@ -1443,7 +1489,13 @@ export default function JacketWorkspace() {
                               <option>Open</option><option>Under Review</option><option>Resolved</option>
                             </select>
                           </label>
-                          {textField('Price Adjustment ($/case, optional)', resolveForm.price_adjustment, v => setResolveForm({ ...resolveForm, price_adjustment: v }), 'number')}
+                          {c.jacket_lines?.order_lines?.cases_ordered != null && textField(`New Cases Ordered (currently ${c.jacket_lines.order_lines.cases_ordered} — leave blank to keep)`, resolveForm.new_cases_ordered, v => setResolveForm({ ...resolveForm, new_cases_ordered: v }), 'number')}
+                          {textField('Price Change ($/case) — use a negative number to reduce, e.g. -2 for $2 off', resolveForm.price_adjustment, v => setResolveForm({ ...resolveForm, price_adjustment: v }), 'number')}
+                          {resolveForm.price_adjustment && c.jacket_lines?.order_lines?.sell_price_per_case != null && (
+                            <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center' }}>
+                              ${Number(c.jacket_lines.order_lines.sell_price_per_case).toFixed(2)} → <strong style={{ marginLeft: 4, color: Number(resolveForm.price_adjustment) < 0 ? 'var(--fo-error)' : 'var(--fo-success)' }}>${(Number(c.jacket_lines.order_lines.sell_price_per_case) + Number(resolveForm.price_adjustment)).toFixed(2)}</strong>
+                            </div>
+                          )}
                           <div style={{ gridColumn: 'span 2' }}>{textField('Resolution Notes', resolveForm.resolution, v => setResolveForm({ ...resolveForm, resolution: v }))}</div>
                           <div style={{ gridColumn: 'span 2' }}>
                             <button onClick={() => saveResolve(c)} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
@@ -1578,7 +1630,7 @@ export default function JacketWorkspace() {
         </div>
 
         {/* ---- Timeline ---- */}
-        <div className="fo-card fo-card-tight" style={{ position: 'sticky', top: 20 }}>
+        <div className="fo-card fo-card-tight no-print" style={{ position: 'sticky', top: 20 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
           {amendments.length > 0 && (
             <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
