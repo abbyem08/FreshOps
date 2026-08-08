@@ -128,7 +128,7 @@ export default function AppShell({ title, subtitle, children }) {
             </button>
           </div>
         </div>
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 36px 48px' }}>
+        <div className="app-content-area" style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 36px 48px' }}>
           {children}
         </div>
       </div>
