@@ -397,20 +397,19 @@ export default function PriceWorksheetPage() {
             any internal Command Center Dark preference. ProFresh Sourcing
             is the primary brand here; FreshOps stays small and discreet. */}
         <div className="print-full-width" style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#165C3A', padding: '28px 32px', textAlign: 'center' }}>
+          <div style={{ background: '#fff', padding: '28px 32px', textAlign: 'center', borderBottom: '3px solid #165C3A' }}>
             {websiteUrl ? (
               <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
-                <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+                <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto' }} />
               </a>
             ) : (
-              <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+              <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto' }} />
             )}
-            <div style={{ color: '#D7ECD9', fontSize: 13, fontWeight: 700, letterSpacing: '.12em', marginTop: 14 }}>DAILY PRICE SHEET</div>
-            <div style={{ color: '#BFE0C4', fontSize: 12, marginTop: 4 }}>Fresh Produce • Reliable Supply • Delivered to You</div>
+            <div style={{ color: '#165C3A', fontSize: 13, fontWeight: 700, letterSpacing: '.12em', marginTop: 14 }}>DAILY PRICE SHEET</div>
+            <div style={{ color: '#6A746D', fontSize: 12, marginTop: 4 }}>Fresh Produce. Simplified Sourcing.</div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 32px', background: '#F4F7F3', borderBottom: '1px solid #E2E7E1', fontSize: 13 }}>
             <div><strong>Date:</strong> {activeSheet.sheet_date} &nbsp;·&nbsp; <strong>Valid Through:</strong> {activeSheet.valid_through}</div>
-            {userEmail && <div>{userEmail}</div>}
           </div>
           <div style={{ padding: '20px 32px 28px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
