@@ -1,6 +1,7 @@
 // pages/app/pricesheets.js
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
+import Logo from '../../components/Logo';
 import { supabase } from '../../lib/supabaseClient';
 
 const BASIS_OPTIONS = [
@@ -27,9 +28,17 @@ export default function PriceWorksheetPage() {
   const [newLineForm, setNewLineForm] = useState({ product_id: '', supplier_id: '', cost_price: '', margin_pct: 20, markup_type: 'percent', markup_dollar: 0 });
   const [convertingLineId, setConvertingLineId] = useState(null);
   const [convertForm, setConvertForm] = useState({ mode: 'existing', existingOrderId: '', newAcumaticaNo: '', newCustomerId: '', newCustomerPO: '', cases: '', pricingType: 'FOB' });
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [selectedOfferKeys, setSelectedOfferKeys] = useState(new Set());
+  const [userEmail, setUserEmail] = useState('');
 
-  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); loadProducts(); loadSuppliers(); loadOpenOrders(); }, []);
+  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); loadProducts(); loadSuppliers(); loadOpenOrders(); loadUser(); }, []);
   useEffect(() => { if (activeSheetId) loadDetail(activeSheetId); }, [activeSheetId]);
+
+  async function loadUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUserEmail(user?.email || '');
+  }
 
   async function loadSheets() {
     const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false });
@@ -58,7 +67,7 @@ export default function PriceWorksheetPage() {
       .select('*, suppliers(company, per_case_fee), products(commodity, pack_size)')
       .not('price', 'is', null)
       .eq('party_type', 'Supplier')
-      .order('call_date', { ascending: false });
+      .order('created_at', { ascending: false });
     setAllQuotes(data || []);
   }
   async function loadDetail(sheetId) {
@@ -302,6 +311,46 @@ export default function PriceWorksheetPage() {
 
   const activeSheet = sheets.find(s => s.price_sheet_id === activeSheetId);
 
+  // ---- Price Sheet Builder — select from current supplier offers ----
+  const currentOffers = {};
+  allQuotes.forEach(q => {
+    const key = `${q.supplier_id}-${q.product_id}`;
+    if (!currentOffers[key]) currentOffers[key] = q; // allQuotes is already newest-first
+  });
+  const currentOfferList = Object.values(currentOffers).sort((a, b) => (a.products?.commodity || '').localeCompare(b.products?.commodity || ''));
+
+  function toggleOffer(key) {
+    const next = new Set(selectedOfferKeys);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setSelectedOfferKeys(next);
+  }
+  async function addSelectedToSheet() {
+    if (selectedOfferKeys.size === 0) { alert('Select at least one offer.'); return; }
+    let sheetId = activeSheetId;
+    if (!sheetId) {
+      const validThrough = new Date(); validThrough.setDate(validThrough.getDate() + 4);
+      const { data: sheet, error: sheetErr } = await supabase.from('price_sheets').insert({
+        sheet_date: new Date().toISOString().slice(0, 10), valid_through: validThrough.toISOString().slice(0, 10),
+      }).select().single();
+      if (sheetErr) { alert('Could not create sheet: ' + sheetErr.message); return; }
+      sheetId = sheet.price_sheet_id;
+    }
+    const newLines = [...selectedOfferKeys].map(key => {
+      const q = currentOffers[key];
+      return {
+        price_sheet_id: sheetId, product_id: q.product_id, supplier_id: q.supplier_id, cost_price: q.price,
+        margin_pct: 20, markup_type: 'percent', markup_dollar: 0, est_carrier_cost_per_pallet: 0, customer_freight_per_case: 0,
+        source_call_id: q.call_id,
+      };
+    });
+    const { error } = await supabase.from('price_sheet_lines').insert(newLines);
+    if (error) { alert('Could not add lines: ' + error.message); return; }
+    setSelectedOfferKeys(new Set());
+    setShowBuilder(false);
+    await loadSheets();
+    setActiveSheetId(sheetId);
+  }
+
   if (printMode && activeSheet) {
     return (
       <AppShell title="Customer Price Sheet">
@@ -310,20 +359,41 @@ export default function PriceWorksheetPage() {
           <button onClick={() => window.print()} style={btn}>🖨 Print</button>
         </div>
         {/* Customer-facing — always light and professional, independent of
-            any internal Command Center Dark preference */}
-        <div style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 24 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#165C3A' }}>FreshOps Produce Pricing</div>
-          <div style={{ color: '#6A746D', fontSize: 13, marginBottom: 12 }}>Valid through {activeSheet.valid_through}</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-            <thead><tr style={{ textAlign: 'left', color: '#6A746D', borderBottom: '1px solid #E2E7E1' }}><th>Commodity</th><th>Pack / Size</th><th style={{ textAlign: 'right' }}>FOB $/cs</th><th style={{ textAlign: 'right' }}>Delivered $/cs</th></tr></thead>
-            <tbody>{lines.map(l => (
-              <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #E2E7E1' }}>
-                <td>{l.products?.commodity}</td><td>{l.products?.pack_size}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerFOB(l).toFixed(2)}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerDelivered(l).toFixed(2)}</td>
-              </tr>
-            ))}</tbody>
-          </table>
+            any internal Command Center Dark preference. ProFresh Sourcing
+            is the primary brand here; FreshOps stays small and discreet. */}
+        <div className="print-full-width" style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden' }}>
+          <div style={{ background: '#165C3A', padding: '28px 32px', textAlign: 'center' }}>
+            <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+            <div style={{ color: '#D7ECD9', fontSize: 13, fontWeight: 700, letterSpacing: '.12em', marginTop: 14 }}>DAILY PRICE SHEET</div>
+            <div style={{ color: '#BFE0C4', fontSize: 12, marginTop: 4 }}>Fresh Produce • Reliable Supply • Delivered to You</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 32px', background: '#F4F7F3', borderBottom: '1px solid #E2E7E1', fontSize: 13 }}>
+            <div><strong>Date:</strong> {activeSheet.sheet_date} &nbsp;·&nbsp; <strong>Valid Through:</strong> {activeSheet.valid_through}</div>
+            {userEmail && <div>{userEmail}</div>}
+          </div>
+          <div style={{ padding: '20px 32px 28px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+              <thead><tr style={{ textAlign: 'left', color: '#3F6B4F', background: '#EEF3EC' }}>
+                <th style={{ padding: '8px 10px', borderRadius: '6px 0 0 6px' }}>Commodity</th>
+                <th style={{ padding: '8px 10px' }}>Pack / Size</th>
+                <th style={{ padding: '8px 10px' }}>Shipper</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>FOB $ / CS</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', borderRadius: '0 6px 6px 0' }}>Delivered $ / CS</th>
+              </tr></thead>
+              <tbody>{lines.map(l => (
+                <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #EFEEE7' }}>
+                  <td style={{ padding: '8px 10px' }}>{l.products?.commodity}</td>
+                  <td style={{ padding: '8px 10px' }}>{l.products?.pack_size}</td>
+                  <td style={{ padding: '8px 10px', color: '#6A746D' }}>{l.suppliers?.company || '—'}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerFOB(l).toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerDelivered(l).toFixed(2)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0 18px', fontSize: 10.5, color: '#B8BBB2' }}>
+            Prepared with <Logo variant="icon" size={12} /> FreshOps Business Intelligence
+          </div>
         </div>
       </AppShell>
     );
@@ -339,7 +409,30 @@ export default function PriceWorksheetPage() {
           </button>
         ))}
         <button onClick={createFromLatestQuotes} style={btn}>+ New Sheet from Latest Quotes</button>
+        <button onClick={() => setShowBuilder(!showBuilder)} style={{ ...btn, background: 'var(--fo-accent)' }}>+ Price Sheet Builder</button>
       </div>
+      {showBuilder && (
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fo-primary)', marginBottom: 8 }}>Select current supplier offers to add {activeSheet ? `to today's sheet (${activeSheet.sheet_date})` : '— this will start a new sheet'}</div>
+          {currentOfferList.length === 0 ? (
+            <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No supplier prices logged yet — capture some in Market Calls first.</div>
+          ) : (
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {currentOfferList.map(q => {
+                const key = `${q.supplier_id}-${q.product_id}`;
+                return (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--fo-border-soft)', fontSize: 13.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selectedOfferKeys.has(key)} onChange={() => toggleOffer(key)} />
+                    <span>{q.products?.commodity} | {q.products?.pack_size} | {q.suppliers?.company} | ${Number(q.price).toFixed(2)} FOB</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <button onClick={addSelectedToSheet} style={{ ...btn, marginTop: 12, background: 'var(--fo-accent)' }}>Add Selected to Price Sheet</button>
+          <button onClick={() => { setShowBuilder(false); setSelectedOfferKeys(new Set()); }} style={{ ...btn, marginTop: 12, marginLeft: 8, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>Cancel</button>
+        </div>
+      )}
       <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>Market Calls → Price Worksheet → Customer Price Sheet → Customer Order. Add as many fee line items as you need per commodity — cooling, inspection, commission, whatever applies. Freight is tracked separately from product markup.</div>
 
       {activeSheet ? (
