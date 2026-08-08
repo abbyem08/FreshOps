@@ -31,13 +31,33 @@ export default function PriceWorksheetPage() {
   const [showBuilder, setShowBuilder] = useState(false);
   const [selectedOfferKeys, setSelectedOfferKeys] = useState(new Set());
   const [userEmail, setUserEmail] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [portalUrl, setPortalUrl] = useState('');
+  const [editingLinks, setEditingLinks] = useState(false);
+  const [linksForm, setLinksForm] = useState({ website: '', portal: '' });
 
-  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); loadProducts(); loadSuppliers(); loadOpenOrders(); loadUser(); }, []);
+  useEffect(() => { loadSheets(); loadCustomers(); loadQuotes(); loadProducts(); loadSuppliers(); loadOpenOrders(); loadUser(); loadLinks(); }, []);
   useEffect(() => { if (activeSheetId) loadDetail(activeSheetId); }, [activeSheetId]);
 
   async function loadUser() {
     const { data: { user } } = await supabase.auth.getUser();
     setUserEmail(user?.email || '');
+  }
+  async function loadLinks() {
+    const { data } = await supabase.from('app_settings').select('key, value').in('key', ['profresh_website_url', 'customer_portal_url']);
+    const map = {};
+    (data || []).forEach(r => { map[r.key] = r.value; });
+    setWebsiteUrl(map.profresh_website_url || '');
+    setPortalUrl(map.customer_portal_url || '');
+  }
+  function openEditLinks() { setLinksForm({ website: websiteUrl, portal: portalUrl }); setEditingLinks(true); }
+  async function saveLinks() {
+    await supabase.from('app_settings').upsert([
+      { key: 'profresh_website_url', value: linksForm.website || '' },
+      { key: 'customer_portal_url', value: linksForm.portal || '' },
+    ]);
+    setWebsiteUrl(linksForm.website); setPortalUrl(linksForm.portal);
+    setEditingLinks(false);
   }
 
   async function loadSheets() {
@@ -349,21 +369,42 @@ export default function PriceWorksheetPage() {
     setShowBuilder(false);
     await loadSheets();
     setActiveSheetId(sheetId);
+    await loadDetail(sheetId);
   }
 
   if (printMode && activeSheet) {
     return (
       <AppShell title="Customer Price Sheet">
         <div className="no-print" style={{ marginBottom: 16 }}>
-          <button onClick={() => setPrintMode(false)} style={{ ...btn, background: '#fff', color: '#333', border: '1px solid #DCD5C1', marginRight: 8 }}>← Back to Price Worksheet</button>
-          <button onClick={() => window.print()} style={btn}>🖨 Print</button>
+          <button onClick={() => setPrintMode(false)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginRight: 8 }}>← Back to Price Sheets</button>
+          <button onClick={() => window.print()} style={{ ...btn, marginRight: 8 }}>🖨 Print</button>
+          <button onClick={openEditLinks} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>🔗 Edit Links</button>
+          {editingLinks && (
+            <div style={{ ...card, marginTop: 12, maxWidth: 480 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fo-primary)', marginBottom: 8 }}>Price Sheet Links</div>
+              <label style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>ProFresh Sourcing Website (logo links here)
+                <input value={linksForm.website} onChange={e => setLinksForm({ ...linksForm, website: e.target.value })} placeholder="https://..." style={{ display: 'block', width: '100%', marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>Customer Portal (bottom button links here)
+                <input value={linksForm.portal} onChange={e => setLinksForm({ ...linksForm, portal: e.target.value })} placeholder="https://..." style={{ display: 'block', width: '100%', marginTop: 4 }} />
+              </label>
+              <button onClick={saveLinks} style={{ ...btn, background: 'var(--fo-accent)', marginRight: 8 }}>Save</button>
+              <button onClick={() => setEditingLinks(false)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>Cancel</button>
+            </div>
+          )}
         </div>
         {/* Customer-facing — always light and professional, independent of
             any internal Command Center Dark preference. ProFresh Sourcing
             is the primary brand here; FreshOps stays small and discreet. */}
         <div className="print-full-width" style={{ background: '#fff', border: '1px solid #DCD5C1', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden' }}>
           <div style={{ background: '#165C3A', padding: '28px 32px', textAlign: 'center' }}>
-            <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+            {websiteUrl ? (
+              <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
+                <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+              </a>
+            ) : (
+              <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 52, width: 'auto', filter: 'brightness(0) invert(1)' }} />
+            )}
             <div style={{ color: '#D7ECD9', fontSize: 13, fontWeight: 700, letterSpacing: '.12em', marginTop: 14 }}>DAILY PRICE SHEET</div>
             <div style={{ color: '#BFE0C4', fontSize: 12, marginTop: 4 }}>Fresh Produce • Reliable Supply • Delivered to You</div>
           </div>
@@ -391,6 +432,15 @@ export default function PriceWorksheetPage() {
               ))}</tbody>
             </table>
           </div>
+          {portalUrl && (
+            <div style={{ textAlign: 'center', padding: '0 32px 22px' }}>
+              <div style={{ borderTop: '1px solid #E2E7E1', paddingTop: 16 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1B231D' }}>Ready to place an order?</div>
+                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 2, marginBottom: 12 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
+                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: '#165C3A', color: '#fff', fontSize: 12.5, fontWeight: 700, letterSpacing: '.03em', padding: '9px 22px', borderRadius: 6, textDecoration: 'none' }}>ACCESS CUSTOMER PORTAL</a>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0 18px', fontSize: 10.5, color: '#B8BBB2' }}>
             Prepared with <Logo variant="icon" size={12} /> FreshOps Business Intelligence
           </div>
@@ -400,11 +450,11 @@ export default function PriceWorksheetPage() {
   }
 
   return (
-    <AppShell title="Price Worksheet">
+    <AppShell title="Price Sheets">
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         {sheets.map(s => (
           <button key={s.price_sheet_id} onClick={() => setActiveSheetId(s.price_sheet_id)}
-            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: activeSheetId === s.price_sheet_id ? 'var(--fo-primary)' : '#fff', color: activeSheetId === s.price_sheet_id ? '#fff' : '#333' }}>
+            style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid var(--fo-border)', background: activeSheetId === s.price_sheet_id ? 'var(--fo-primary)' : 'var(--fo-card-bg)', color: activeSheetId === s.price_sheet_id ? '#fff' : 'var(--fo-text)' }}>
             {s.sheet_date}
           </button>
         ))}
@@ -433,7 +483,7 @@ export default function PriceWorksheetPage() {
           <button onClick={() => { setShowBuilder(false); setSelectedOfferKeys(new Set()); }} style={{ ...btn, marginTop: 12, marginLeft: 8, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)' }}>Cancel</button>
         </div>
       )}
-      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>Market Calls → Price Worksheet → Customer Price Sheet → Customer Order. Add as many fee line items as you need per commodity — cooling, inspection, commission, whatever applies. Freight is tracked separately from product markup.</div>
+      <div style={{ color: 'var(--fo-text-dim)', fontSize: 13, marginBottom: 16 }}>Market Calls → Price Sheets → Customer Price Sheet → Customer Order. Add as many fee line items as you need per commodity — cooling, inspection, commission, whatever applies. Freight is tracked separately from product markup.</div>
 
       {activeSheet ? (
         <div style={{ display: 'grid', gridTemplateColumns: '2.8fr 1fr', gap: 16 }}>

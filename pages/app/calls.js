@@ -23,6 +23,7 @@ export default function CallsPage() {
   const [search, setSearch] = useState('');
   const [filterSupplierId, setFilterSupplierId] = useState('');
   const [historyFor, setHistoryFor] = useState(null); // { supplier_id, product_id, label }
+  const [selectedCallLines, setSelectedCallLines] = useState(new Set());
 
   useEffect(() => { loadAll(); }, []);
 
@@ -81,6 +82,35 @@ export default function CallsPage() {
     const { error } = await supabase.from('call_log').delete().eq('call_id', id);
     if (error) { alert('Delete failed: ' + error.message); return; }
     loadAll();
+  }
+
+  function toggleCallLine(callId) {
+    const next = new Set(selectedCallLines);
+    if (next.has(callId)) next.delete(callId); else next.add(callId);
+    setSelectedCallLines(next);
+  }
+  async function addSelectedToPriceSheet() {
+    if (selectedCallLines.size === 0) { alert('Select at least one price to add.'); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    let { data: sheet } = await supabase.from('price_sheets').select('*').eq('sheet_date', today).maybeSingle();
+    if (!sheet) {
+      const validThrough = new Date(); validThrough.setDate(validThrough.getDate() + 4);
+      const { data: created, error: sheetErr } = await supabase.from('price_sheets').insert({
+        sheet_date: today, valid_through: validThrough.toISOString().slice(0, 10),
+      }).select().single();
+      if (sheetErr) { alert('Could not create sheet: ' + sheetErr.message); return; }
+      sheet = created;
+    }
+    const selectedRows = calls.filter(c => selectedCallLines.has(c.call_id));
+    const newLines = selectedRows.map(c => ({
+      price_sheet_id: sheet.price_sheet_id, product_id: c.product_id, supplier_id: c.supplier_id, cost_price: c.price,
+      margin_pct: 20, markup_type: 'percent', markup_dollar: 0, est_carrier_cost_per_pallet: 0, customer_freight_per_case: 0,
+      source_call_id: c.call_id,
+    }));
+    const { error } = await supabase.from('price_sheet_lines').insert(newLines);
+    if (error) { alert('Could not add to Price Sheet: ' + error.message); return; }
+    setSelectedCallLines(new Set());
+    alert(`Added ${newLines.length} price${newLines.length !== 1 ? 's' : ''} to today's Price Sheet (${today}) — head to Price Sheets to finish building it.`);
   }
 
   // ---- group individual price rows back into "calls" ----
@@ -212,9 +242,10 @@ export default function CallsPage() {
             {isOpen && (
               <div className="fo-table-wrap" style={{ marginTop: 12 }}>
                 <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead><tr><th>Commodity</th><th style={{ textAlign: 'right' }}>FOB $/cs</th><th>Availability</th><th>Note</th><th></th></tr></thead>
+                  <thead><tr><th></th><th>Commodity</th><th style={{ textAlign: 'right' }}>FOB $/cs</th><th>Availability</th><th>Note</th><th></th></tr></thead>
                   <tbody>{g.quotes.map(q => (
                     <tr key={q.call_id}>
+                      <td><input type="checkbox" checked={selectedCallLines.has(q.call_id)} onChange={() => toggleCallLine(q.call_id)} /></td>
                       <td>{q.products?.commodity} — {q.products?.pack_size}</td>
                       <td style={{ textAlign: 'right' }}>${Number(q.price).toFixed(2)}</td>
                       <td style={{ color: 'var(--fo-text-dim)' }}>{q.availability || '—'}</td>
@@ -226,6 +257,7 @@ export default function CallsPage() {
                     </tr>
                   ))}</tbody>
                 </table>
+                <button onClick={addSelectedToPriceSheet} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff', marginTop: 10 }}>+ Add Selected to Price Sheet</button>
               </div>
             )}
           </div>
