@@ -26,7 +26,7 @@ const NAV_SECTIONS = [
     label: 'Pricing',
     items: [
       { href: '/app/calls', label: 'Market Calls', Icon: IconCalls },
-      { href: '/app/pricesheets', label: 'Price Worksheet', Icon: IconPricing },
+      { href: '/app/pricesheets', label: 'Price Sheets', Icon: IconPricing },
     ],
   },
   {
