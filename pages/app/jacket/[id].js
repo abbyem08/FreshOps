@@ -1016,7 +1016,7 @@ export default function JacketWorkspace() {
       </div>
 
       {/* ---- Tabs + Timeline layout ---- */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 0.85fr', gap: 16, alignItems: 'start' }}>
+      <div className="tabs-timeline-grid" style={{ display: 'grid', gridTemplateColumns: '3fr 0.85fr', gap: 16, alignItems: 'start' }}>
         <div>
           <div className="no-print" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
             {TABS.map(t => (
@@ -1384,7 +1384,7 @@ export default function JacketWorkspace() {
               </div>
 
               {/* ---- Print-Only Freight Ticket — clean, no buttons/inputs, logo included ---- */}
-              <div className="print-only-block" style={{ background: '#fff', color: '#1B231D', padding: '4px 6px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+              <div className="print-only-block" style={{ background: '#fff', color: '#1B231D', padding: '4px 6px', width: '100%', boxSizing: 'border-box', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
                 {/* ---- Top Branding ---- */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 10 }}>
                   <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 46, width: 'auto' }} />
