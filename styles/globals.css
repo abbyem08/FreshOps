@@ -238,6 +238,7 @@ input:focus, select:focus, textarea:focus {
 @media print {
   .no-print { display: none !important; }
   .print-full-width { padding: 0 !important; margin: 0 !important; }
+  @page { size: letter; margin: 0.4in; }
 }
 .print-only { display: none; }
 .print-only-block { display: none; }
