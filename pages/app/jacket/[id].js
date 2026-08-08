@@ -1384,44 +1384,84 @@ export default function JacketWorkspace() {
               </div>
 
               {/* ---- Print-Only Freight Ticket — clean, no buttons/inputs, logo included ---- */}
-              <div className="print-only-block" style={{ background: '#fff', color: '#1B231D', padding: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #165C3A', paddingBottom: 12, marginBottom: 16 }}>
-                  <Logo variant="horizontal" size={40} />
+              <div className="print-only-block" style={{ background: '#fff', color: '#1B231D', padding: '4px 6px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                {/* ---- Top Branding ---- */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 10 }}>
+                  <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 46, width: 'auto' }} />
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#165C3A' }}>Freight Ticket — Jacket {jacket.jacket_number}</div>
-                    <div style={{ fontSize: 12, color: '#6A746D' }}>{jacket.jacket_date} · {jacket.jacket_status}</div>
+                    <div style={{ fontSize: 10.5, color: '#9A9D93' }}>Prepared in</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                      <Logo variant="icon" size={16} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#6A746D' }}>FreshOps</span>
+                    </div>
+                    <div style={{ fontSize: 9, color: '#B8BBB2' }}>Business Intelligence</div>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20, fontSize: 13 }}>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Carrier</div>{jacket.carrier || '—'}</div>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Driver</div>{jacket.driver || '—'} {jacket.driver_phone ? `· ${jacket.driver_phone}` : ''}</div>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Truck / Trailer</div>{jacket.truck || '—'} / {jacket.trailer || '—'}</div>
-                  <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: '#6A746D' }}>Total Weight / Pallets</div>{totalWeight.toLocaleString()} lb · {totalPallets} plt</div>
-                </div>
-                {stops.map(s => (
-                  <div key={s.stop_id} style={{ marginBottom: 18, pageBreakInside: 'avoid' }}>
-                    <div style={{ background: '#F1F0EA', padding: '8px 12px', fontWeight: 700, fontSize: 13, borderRadius: 4 }}>
-                      Stop #{s.stop_number} — {s.stop_type} — {s.stop_type === 'Pickup' ? s.suppliers?.company : s.customers?.company}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#6A746D', padding: '6px 12px' }}>
-                      {s.stop_type === 'Pickup'
-                        ? (s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address || ''}, ${s.suppliers?.city || ''} ${s.suppliers?.state || ''}`)
-                        : (s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address || ''}, ${s.customers?.city || ''} ${s.customers?.state || ''}`)}
-                      {s.appointment && <> · Appt: {new Date(s.appointment).toLocaleString()}</>}
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 4 }}>
-                      <thead><tr style={{ borderBottom: '1px solid #E2E7E1', textAlign: 'left', color: '#6A746D' }}><th style={{ padding: '4px 12px' }}>Commodity</th><th style={{ textAlign: 'right' }}>Cases</th><th style={{ textAlign: 'right', paddingRight: 12 }}>Pallets</th></tr></thead>
-                      <tbody>{(s.stop_lines || []).map(sl => (
-                        <tr key={sl.stop_line_id} style={{ borderBottom: '1px solid #EFEEE7' }}>
-                          <td style={{ padding: '4px 12px' }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
-                          <td style={{ textAlign: 'right' }}>{sl.cases_at_stop}</td>
-                          <td style={{ textAlign: 'right', paddingRight: 12 }}>{sl.pallets_at_stop}</td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
+
+                {/* ---- Document Title Row ---- */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '2px solid #165C3A', borderBottom: '1px solid #DCE3DA', padding: '10px 0' }}>
+                  <div style={{ fontSize: 19, fontWeight: 700, color: '#165C3A' }}>Freight Ticket — Jacket {jacket.jacket_number}</div>
+                  <div style={{ textAlign: 'right', fontSize: 12, color: '#6A746D' }}>
+                    <div>Date: {jacket.jacket_date || '—'}</div>
+                    <div>Status: {jacket.jacket_status || '—'}</div>
                   </div>
-                ))}
-                <div style={{ marginTop: 24, paddingTop: 12, borderTop: '1px solid #E2E7E1', fontSize: 11, color: '#9A9D93' }}>Generated {new Date().toLocaleString()}</div>
+                </div>
+
+                {/* ---- Summary Bar ---- */}
+                <div style={{ display: 'flex', background: '#F4F7F3', border: '1px solid #E2E7E1', borderRadius: 8, padding: '10px 16px', margin: '12px 0', gap: 24 }}>
+                  {[
+                    ['Carrier', freight?.carrier || '—'],
+                    ['Driver', jacket.driver || '—'],
+                    ['Truck / Trailer', `${jacket.truck || '—'} / ${jacket.trailer || '—'}`],
+                    ['Total Weight', `${totalWeight.toLocaleString()} lb.`],
+                    ['Total Pallets', `${totalPallets} plt.`],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.03em', color: '#6A746D', fontWeight: 700 }}>{label}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1B231D' }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ---- Stops ---- */}
+                {stops.map(s => {
+                  const isPickup = s.stop_type === 'Pickup';
+                  const partyName = isPickup ? s.suppliers?.company : s.customers?.company;
+                  const address = isPickup
+                    ? (s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address || ''}, ${s.suppliers?.city || ''} ${s.suppliers?.state || ''}`)
+                    : (s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address || ''}, ${s.customers?.city || ''} ${s.customers?.state || ''}`);
+                  return (
+                    <div key={s.stop_id} style={{ border: '1px solid #E2E7E1', borderRadius: 10, padding: 12, marginBottom: 10, pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 16 }}>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <div style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', background: '#165C3A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{s.stop_number}</div>
+                          <div>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.02em', color: isPickup ? '#2B6CB0' : '#1E824C' }}>Stop #{s.stop_number} — {s.stop_type}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#1B231D', marginTop: 2 }}>{partyName || '—'}</div>
+                            <div style={{ fontSize: 11.5, color: '#6A746D', marginTop: 2 }}>📍 {address || '—'}</div>
+                            {s.appointment && <div style={{ fontSize: 11, color: '#6A746D', marginTop: 2 }}>Appt: {new Date(s.appointment).toLocaleString()}</div>}
+                          </div>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead><tr style={{ background: '#EEF3EC' }}>
+                            <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 700, color: '#3F6B4F', borderRadius: '4px 0 0 4px' }}>Commodity</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 700, color: '#3F6B4F' }}>Cases</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 700, color: '#3F6B4F', borderRadius: '0 4px 4px 0' }}>Pallets</th>
+                          </tr></thead>
+                          <tbody>{(s.stop_lines || []).map(sl => (
+                            <tr key={sl.stop_line_id} style={{ borderBottom: '1px solid #F0F0EB' }}>
+                              <td style={{ padding: '4px 8px' }}>{sl.jacket_lines?.order_lines?.products?.commodity} — {sl.jacket_lines?.order_lines?.products?.pack_size}</td>
+                              <td style={{ textAlign: 'right', padding: '4px 8px' }}>{sl.cases_at_stop}</td>
+                              <td style={{ textAlign: 'right', padding: '4px 8px' }}>{sl.pallets_at_stop}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div style={{ marginTop: 16, paddingTop: 8, borderTop: '1px solid #EFEEE7', fontSize: 10, color: '#B8BBB2' }}>Generated {new Date().toLocaleString()}</div>
               </div>
 
               {/* ---- Load Tracking ---- */}
