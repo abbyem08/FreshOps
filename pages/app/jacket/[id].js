@@ -254,10 +254,23 @@ export default function JacketWorkspace() {
     loadAll();
   }
   async function deletePurchased(id) {
-    if (!confirm('Remove this purchased product line? Any allocations already made from it will lose their source link (they are not deleted).')) return;
+    if (!confirm('Remove this purchased product line? Any allocations already made from it will lose their source link (they are not deleted) — but the pickup stop tied to this supplier will be cleaned up if nothing else needs it.')) return;
+    const { data: affectedLines } = await supabase.from('jacket_lines').select('jacket_line_id').eq('jacket_product_line_id', id);
+    const affectedLineIds = (affectedLines || []).map(l => l.jacket_line_id);
+    let touchedStopIds = [];
+    if (affectedLineIds.length) {
+      const { data: touchedStopLines } = await supabase.from('stop_lines').select('stop_id').in('jacket_line_id', affectedLineIds);
+      touchedStopIds = [...new Set((touchedStopLines || []).map(sl => sl.stop_id))];
+      await supabase.from('stop_lines').delete().in('jacket_line_id', affectedLineIds);
+    }
     await supabase.from('jacket_lines').update({ jacket_product_line_id: null }).eq('jacket_product_line_id', id);
     const { error } = await supabase.from('jacket_product_lines').delete().eq('jacket_product_line_id', id);
     if (error) { alert('Delete failed: ' + error.message); return; }
+    // remove any stop that no longer has any cases on it
+    for (const stopId of touchedStopIds) {
+      const { data: remaining } = await supabase.from('stop_lines').select('stop_line_id').eq('stop_id', stopId);
+      if (!remaining || remaining.length === 0) await supabase.from('stops').delete().eq('stop_id', stopId);
+    }
     loadAll();
   }
 
