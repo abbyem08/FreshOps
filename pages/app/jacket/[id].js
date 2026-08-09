@@ -49,6 +49,7 @@ export default function JacketWorkspace() {
   const [demandAllocateFor, setDemandAllocateFor] = useState(null);
   const [demandAllocateForm, setDemandAllocateForm] = useState({ purchased_line_id: '', cases: '' });
   const [editingDetails, setEditingDetails] = useState(false);
+  const [showActivityDrawer, setShowActivityDrawer] = useState(false);
   const [detailsForm, setDetailsForm] = useState({});
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', url: '', notes: '' });
@@ -83,6 +84,10 @@ export default function JacketWorkspace() {
     supabase.auth.getUser().then(({ data }) => { if (data?.user?.email) setUserEmail(data.user.email); });
   }, []);
   useEffect(() => { if (jacketId) loadAll(); }, [jacketId]);
+  useEffect(() => {
+    document.body.style.overflow = showActivityDrawer ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showActivityDrawer]);
 
   async function logEvent(event_type, description, original_value = null, adjustment = null, new_value = null) {
     await supabase.from('jacket_events').insert({ jacket_id: jacketId, event_type, description, original_value, adjustment, new_value, created_by: userEmail });
@@ -989,6 +994,64 @@ export default function JacketWorkspace() {
   const freightTotalCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
   const perMile = freight?.miles ? (Number(freight.booked_rate || 0) / freight.miles).toFixed(2) : null;
 
+  const timelinePanelContent = (
+    <>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
+      {amendments.length > 0 && (
+        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Amendments</div>
+          {amendments.map(a => (
+            <div key={a.amendment_id} style={{ fontSize: 11.5, padding: '5px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <strong>{a.amendment_name}</strong> {a.status === 'Reversed' && <span className="fo-badge fo-badge-gray" style={{ fontSize: 9 }}>Reversed</span>}
+                  <div style={{ color: 'var(--fo-text-dim)' }}>
+                    {a.original_value && <>orig: {a.original_value} </>}
+                    {a.adjustment_value && <>· adj: {a.adjustment_value} </>}
+                    {a.new_effective_value && <>· now: {a.new_effective_value}</>}
+                  </div>
+                  {a.reason && <div style={{ color: 'var(--fo-text-faint)' }}>{a.reason}</div>}
+                </div>
+                {a.status === 'Active' && <button onClick={() => reverseAmendment(a)} className="fo-btn fo-btn-sm" style={{ flexShrink: 0 }}>Reverse</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {editingDetails && (
+        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+            {textField('Carrier', detailsForm.carrier, v => setDetailsForm({ ...detailsForm, carrier: v }))}
+            {textField('Driver', detailsForm.driver, v => setDetailsForm({ ...detailsForm, driver: v }))}
+            <label style={{ fontSize: 13 }}>Status
+              <select value={detailsForm.jacket_status} onChange={e => setDetailsForm({ ...detailsForm, jacket_status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                {['Planning', 'Booked', 'Loading', 'Dispatched', 'In Transit', 'Delivered', 'Closed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+          </div>
+          <button onClick={updateJacketDetails} className="fo-btn fo-btn-primary fo-btn-sm" style={{ marginTop: 8, marginRight: 6 }}>Save</button>
+          <button onClick={() => setEditingDetails(false)} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginTop: 8 }}>Cancel</button>
+        </div>
+      )}
+      {!editingDetails && <button onClick={openEditDetails} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginBottom: 12 }}>Edit Jacket Details</button>}
+      <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+        {events.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 12 }}>No activity logged yet.</div> : events.map(ev => (
+          <div key={ev.event_id} style={{ padding: '6px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{ev.description}</div>
+            {(ev.original_value || ev.adjustment || ev.new_value) && (
+              <div style={{ fontSize: 11.5, color: 'var(--fo-text-dim)', marginTop: 2 }}>
+                {ev.original_value && <>orig: {ev.original_value} </>}
+                {ev.adjustment && <>· adj: {ev.adjustment} </>}
+                {ev.new_value && <>· now: {ev.new_value}</>}
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 2 }}>{new Date(ev.created_at).toLocaleString()} · {ev.created_by}</div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <AppShell title={`Jacket ${jacket.jacket_number}`} subtitle={jacket.jacket_status}>
       <div className="no-print" style={{ marginBottom: 16 }}>
@@ -1029,6 +1092,7 @@ export default function JacketWorkspace() {
             {claims.length > 0 && <Stat label="Open Claims" value={claims.length} tone="red" />}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <button onClick={() => setShowActivityDrawer(true)} className="fo-btn fo-btn-secondary fo-btn-sm fo-activity-btn">Activity{events.length > 0 ? ` (${events.length})` : ''}</button>
             <button onClick={closeJacket} className="fo-btn fo-btn-secondary fo-btn-sm">Close Jacket</button>
             <button onClick={deleteJacketEntirely} className="fo-btn fo-btn-danger fo-btn-sm">Delete Jacket</button>
           </div>
@@ -1997,61 +2061,17 @@ export default function JacketWorkspace() {
         </div>
 
         {/* ---- Timeline ---- */}
-        <div className="fo-card fo-card-tight no-print" style={{ position: 'sticky', top: 20 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
-          {amendments.length > 0 && (
-            <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Amendments</div>
-              {amendments.map(a => (
-                <div key={a.amendment_id} style={{ fontSize: 11.5, padding: '5px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                    <div>
-                      <strong>{a.amendment_name}</strong> {a.status === 'Reversed' && <span className="fo-badge fo-badge-gray" style={{ fontSize: 9 }}>Reversed</span>}
-                      <div style={{ color: 'var(--fo-text-dim)' }}>
-                        {a.original_value && <>orig: {a.original_value} </>}
-                        {a.adjustment_value && <>· adj: {a.adjustment_value} </>}
-                        {a.new_effective_value && <>· now: {a.new_effective_value}</>}
-                      </div>
-                      {a.reason && <div style={{ color: 'var(--fo-text-faint)' }}>{a.reason}</div>}
-                    </div>
-                    {a.status === 'Active' && <button onClick={() => reverseAmendment(a)} className="fo-btn fo-btn-sm" style={{ flexShrink: 0 }}>Reverse</button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {editingDetails && (
-            <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--fo-border-soft)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                {textField('Carrier', detailsForm.carrier, v => setDetailsForm({ ...detailsForm, carrier: v }))}
-                {textField('Driver', detailsForm.driver, v => setDetailsForm({ ...detailsForm, driver: v }))}
-                <label style={{ fontSize: 13 }}>Status
-                  <select value={detailsForm.jacket_status} onChange={e => setDetailsForm({ ...detailsForm, jacket_status: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
-                    {['Planning', 'Booked', 'Loading', 'Dispatched', 'In Transit', 'Delivered', 'Closed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </label>
-              </div>
-              <button onClick={updateJacketDetails} className="fo-btn fo-btn-primary fo-btn-sm" style={{ marginTop: 8, marginRight: 6 }}>Save</button>
-              <button onClick={() => setEditingDetails(false)} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginTop: 8 }}>Cancel</button>
-            </div>
-          )}
-          {!editingDetails && <button onClick={openEditDetails} className="fo-btn fo-btn-secondary fo-btn-sm" style={{ marginBottom: 12 }}>Edit Jacket Details</button>}
-          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-            {events.length === 0 ? <div style={{ color: 'var(--fo-text-faint)', fontSize: 12 }}>No activity logged yet.</div> : events.map(ev => (
-              <div key={ev.event_id} style={{ padding: '6px 0', borderBottom: '1px solid var(--fo-border-soft)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>{ev.description}</div>
-                {(ev.original_value || ev.adjustment || ev.new_value) && (
-                  <div style={{ fontSize: 11.5, color: 'var(--fo-text-dim)', marginTop: 2 }}>
-                    {ev.original_value && <>orig: {ev.original_value} </>}
-                    {ev.adjustment && <>· adj: {ev.adjustment} </>}
-                    {ev.new_value && <>· now: {ev.new_value}</>}
-                  </div>
-                )}
-                <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 2 }}>{new Date(ev.created_at).toLocaleString()} · {ev.created_by}</div>
-              </div>
-            ))}
-          </div>
+        <div className="fo-card fo-card-tight no-print fo-timeline-rail" style={{ position: 'sticky', top: 20 }}>
+          {timelinePanelContent}
         </div>
+      </div>
+
+      {/* ---- Mobile Activity Drawer — same content, opened via the
+          mobile-only "Activity" button. Desktop never sees this. ---- */}
+      <div className={'no-print fo-activity-backdrop' + (showActivityDrawer ? ' open' : '')} onClick={() => setShowActivityDrawer(false)} />
+      <div className={'no-print fo-activity-drawer' + (showActivityDrawer ? ' open' : '')}>
+        <button className="fo-drawer-close-dark" onClick={() => setShowActivityDrawer(false)} aria-label="Close activity">✕</button>
+        {timelinePanelContent}
       </div>
     </AppShell>
   );
