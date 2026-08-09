@@ -87,6 +87,14 @@ html.theme-dark {
   --fo-glow: 0 0 12px rgba(53,208,127,.25);
 }
 
+/* Sidebar background goes near-black in Command Center Dark; the dark
+   green logo icon needs to flip to white there or it's invisible.
+   Scoped to the sidebar only — the price sheet footer logo always sits
+   on a light background and must keep its natural color. */
+html.theme-dark .fo-sidebar img[alt="FreshOps"] {
+  filter: brightness(0) invert(1);
+}
+
 * { box-sizing: border-box; }
 
 body {
