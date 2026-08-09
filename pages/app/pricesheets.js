@@ -278,11 +278,12 @@ export default function PriceWorksheetPage() {
     }, 0);
   }
   function internalCost(line) { return Number(line.cost_price || 0) + feeTotalPerCase(line); }
-  function customerFOB(line) {
-    const cost = internalCost(line);
-    return line.markup_type === 'dollar' ? cost + Number(line.markup_dollar || 0) : cost * (1 + Number(line.margin_pct || 0) / 100);
+  function baseWithFreight(line) { return internalCost(line) + Number(line.customer_freight_per_case || 0); }
+  function customerDelivered(line) {
+    const base = baseWithFreight(line);
+    return line.markup_type === 'dollar' ? base + Number(line.markup_dollar || 0) : base * (1 + Number(line.margin_pct || 0) / 100);
   }
-  function customerDelivered(line) { return customerFOB(line) + Number(line.customer_freight_per_case || 0); }
+  function customerFOB(line) { return customerDelivered(line) - Number(line.customer_freight_per_case || 0); }
 
   // ---- convert to order ----
   function openConvert(line) {
