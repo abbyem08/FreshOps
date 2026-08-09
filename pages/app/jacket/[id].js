@@ -331,9 +331,27 @@ export default function JacketWorkspace() {
       const capacityWithThisLineFreed = available + Number(jl.cases_to_load || 0);
       if (newCases > capacityWithThisLineFreed) { alert(`Only ${capacityWithThisLineFreed} cases available on this purchased line.`); return; }
     }
+    const isShortage = newCases < Number(jl.cases_to_load || 0);
     const { error } = await supabase.from('jacket_lines').update({ cases_to_load: newCases, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', jl.jacket_line_id);
     if (error) { alert('Save failed: ' + error.message); return; }
     await logAmendments('Allocation cases changed', newCases >= jl.cases_to_load ? 'Quantity Increase' : 'Quantity Decrease', [{ field: 'cases_to_load', before: Number(jl.cases_to_load || 0), after: newCases }], 'jacket_lines', jl.jacket_line_id);
+
+    // A reduced allocation can leave the order showing a phantom "still
+    // needed" count. If the customer is genuinely accepting the shortage,
+    // offer to sync the order's own quantity down to match right here —
+    // rather than leaving two numbers to silently drift apart.
+    if (isShortage && jl.order_line_id) {
+      const { data: allAllocs } = await supabase.from('jacket_lines').select('cases_to_load, jackets(jacket_status)').eq('order_line_id', jl.order_line_id);
+      const totalAllocated = (allAllocs || []).reduce((s, a) => a.jackets?.jacket_status === 'Cancelled' ? s : s + Number(a.cases_to_load || 0), 0);
+      const orderedCases = Number(jl.order_lines?.cases_ordered || 0);
+      if (totalAllocated < orderedCases) {
+        const shortBy = orderedCases - totalAllocated;
+        if (confirm(`This leaves ${shortBy} cases still showing as needed for this order. If the customer is accepting the shortage (no replacement needed), I can reduce the order to ${totalAllocated} cases to match. Reduce the order now?`)) {
+          await supabase.from('order_lines').update({ cases_ordered: totalAllocated, amended_at: new Date().toISOString() }).eq('order_line_id', jl.order_line_id);
+          await logAmendments('Order quantity synced to shortage', 'Shortage', [{ field: 'cases_ordered', before: orderedCases, after: totalAllocated }], 'order_lines', jl.order_line_id);
+        }
+      }
+    }
     setEditingAllocationId(null);
     loadAll();
   }
@@ -712,12 +730,23 @@ export default function JacketWorkspace() {
     await logAmendments('Actual cases loaded changed', 'Quantity Increase', [{ field: 'actual_cases_loaded', before: existing?.actual_cases_loaded != null ? Number(existing.actual_cases_loaded) : null, after: value }], 'jacket_commodity_loads', recordId);
     loadAll();
   }
+  async function checkAutoJacketStatus() {
+    const { data: lines } = await supabase.from('jacket_lines').select('load_status').eq('jacket_id', jacketId);
+    const relevantLines = (lines || []).filter(l => l.load_status);
+    if (relevantLines.length === 0) return;
+    const allDelivered = relevantLines.every(l => l.load_status === 'Delivered');
+    if (allDelivered && !['Delivered', 'Closed', 'Cancelled'].includes(jacket.jacket_status)) {
+      await supabase.from('jackets').update({ jacket_status: 'Delivered' }).eq('jacket_id', jacketId);
+      await logEvent('status_auto_updated', 'Jacket status auto-updated to Delivered — every load is now delivered');
+    }
+  }
   async function updateJacketLineField(id, fieldName, value) {
     const old = jacketLines.find(l => l.jacket_line_id === id);
     const { error } = await supabase.from('jacket_lines').update({ [fieldName]: value, updated_at: new Date().toISOString() }).eq('jacket_line_id', id);
     if (error) { alert('Update failed: ' + error.message); return; }
     const typeMap = { load_status: 'Stop Change', bol_number: 'Note' };
     await logAmendments(`${fieldName === 'bol_number' ? 'BOL #' : 'Load status'} changed`, typeMap[fieldName] || 'Other', [{ field: fieldName, before: old?.[fieldName] ?? null, after: value }], 'jacket_lines', id);
+    if (fieldName === 'load_status') await checkAutoJacketStatus();
     loadAll();
   }
   function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
@@ -744,6 +773,7 @@ export default function JacketWorkspace() {
       if (line && line.load_status !== 'Delivered') {
         await supabase.from('jacket_lines').update({ load_status: 'Delivered', updated_at: new Date().toISOString() }).eq('jacket_line_id', jacketLineId);
         await logAmendments('Load status auto-updated', 'Stop Change', [{ field: 'load_status', before: line.load_status, after: 'Delivered' }], 'jacket_lines', jacketLineId);
+        await checkAutoJacketStatus();
       }
     }
     loadAll();
@@ -1091,7 +1121,7 @@ export default function JacketWorkspace() {
             <Stat label="Est. Profit" value={`$${estProfit.toLocaleString()}`} tone={estProfit >= 0 ? 'green' : 'red'} />
             {claims.length > 0 && <Stat label="Open Claims" value={claims.length} tone="red" />}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <button onClick={() => setShowActivityDrawer(true)} className="fo-btn fo-btn-secondary fo-btn-sm fo-activity-btn">Activity{events.length > 0 ? ` (${events.length})` : ''}</button>
             <button onClick={closeJacket} className="fo-btn fo-btn-secondary fo-btn-sm">Close Jacket</button>
             <button onClick={deleteJacketEntirely} className="fo-btn fo-btn-danger fo-btn-sm">Delete Jacket</button>
