@@ -65,6 +65,8 @@ export default function JacketWorkspace() {
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimForm, setClaimForm] = useState({ jacket_line_id: '', claim_type: 'Quality', description: '' });
   const [resolvingId, setResolvingId] = useState(null);
+  const [editingClaimId, setEditingClaimId] = useState(null);
+  const [editClaimForm, setEditClaimForm] = useState({ claim_type: 'Quality', description: '' });
   const [resolveForm, setResolveForm] = useState({ status: 'Resolved', resolution: '', price_adjustment: '', new_cases_ordered: '', jacket_line_id: '' });
   const [amendingOrderedLineId, setAmendingOrderedLineId] = useState(null);
   const [amendOrderedValue, setAmendOrderedValue] = useState('');
@@ -90,11 +92,11 @@ export default function JacketWorkspace() {
     const { data: j } = await supabase.from('jackets').select('*').eq('jacket_id', jacketId).single();
     setJacket(j);
 
-    const { data: s } = await supabase.from('suppliers').select('supplier_id, company').order('company');
+    const { data: s } = await supabase.from('suppliers').select('supplier_id, company').eq('active', true).order('company');
     setSuppliers(s || []);
-    const { data: p } = await supabase.from('products').select('product_id, commodity, pack_size, cases_per_pallet, gross_weight_per_case').order('commodity');
+    const { data: p } = await supabase.from('products').select('product_id, commodity, pack_size, cases_per_pallet, gross_weight_per_case').eq('active', true).order('commodity');
     setProducts(p || []);
-    const { data: c } = await supabase.from('customers').select('customer_id, company').order('company');
+    const { data: c } = await supabase.from('customers').select('customer_id, company').eq('active', true).order('company');
     setCustomers(c || []);
 
     const { data: lines } = await supabase
@@ -122,7 +124,7 @@ export default function JacketWorkspace() {
       .filter(ol => ol.needsSupply > 0);
     setAllOrderLinesNeed(needList);
 
-    const { data: carrierRows } = await supabase.from('carriers').select('carrier_id, name').order('name');
+    const { data: carrierRows } = await supabase.from('carriers').select('carrier_id, name').eq('active', true).order('name');
     setCarriers(carrierRows || []);
 
     const { data: stopRows } = await supabase
@@ -732,6 +734,13 @@ export default function JacketWorkspace() {
   async function logNotification(jacketLineId, type) {
     const { error } = await supabase.from('customer_notifications').insert({ jacket_line_id: jacketLineId, notification_type: type });
     if (error) { alert('Could not log: ' + error.message); return; }
+    if (type === 'Delivered') {
+      const line = jacketLines.find(l => l.jacket_line_id === jacketLineId);
+      if (line && line.load_status !== 'Delivered') {
+        await supabase.from('jacket_lines').update({ load_status: 'Delivered', updated_at: new Date().toISOString() }).eq('jacket_line_id', jacketLineId);
+        await logAmendments('Load status auto-updated', 'Stop Change', [{ field: 'load_status', before: line.load_status, after: 'Delivered' }], 'jacket_lines', jacketLineId);
+      }
+    }
     loadAll();
   }
   async function removeNotification(id) {
@@ -784,6 +793,17 @@ export default function JacketWorkspace() {
   function openResolve(claim) {
     setResolveForm({ status: claim.status === 'Open' ? 'Resolved' : claim.status, resolution: claim.resolution || '', price_adjustment: claim.resolution_price_adjustment || '', new_cases_ordered: '', jacket_line_id: claim.jacket_line_id || '' });
     setResolvingId(claim.claim_id);
+  }
+  function openEditClaim(claim) {
+    setEditClaimForm({ claim_type: claim.claim_type, description: claim.description || '' });
+    setEditingClaimId(claim.claim_id);
+  }
+  async function saveEditClaim(claim) {
+    if (!editClaimForm.description) { alert('Description is required.'); return; }
+    const { error } = await supabase.from('claims').update({ claim_type: editClaimForm.claim_type, description: editClaimForm.description }).eq('claim_id', claim.claim_id);
+    if (error) { alert('Save failed: ' + error.message); return; }
+    setEditingClaimId(null);
+    loadAll();
   }
   async function deleteClaim(claimId) {
     if (!confirm('Delete this claim? This cannot be undone.')) return;
@@ -1598,12 +1618,27 @@ export default function JacketWorkspace() {
                           <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{c.snapshot_customer} · {c.snapshot_commodity}</div>
                         </div>
                         <div>
-                          <button onClick={() => openResolve(c)} className="fo-btn fo-btn-sm">{c.status === 'Open' ? 'Resolve' : 'Edit'}</button>{' '}
+                          <button onClick={() => openEditClaim(c)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
+                          <button onClick={() => openResolve(c)} className="fo-btn fo-btn-sm">{c.status === 'Open' ? 'Resolve' : 'Update Resolution'}</button>{' '}
                           <button onClick={() => openMoveCases(c)} className="fo-btn fo-btn-sm">Move Cases</button>{' '}
                           <button onClick={() => openCompensation(c)} className="fo-btn fo-btn-sm">Add Compensation</button>{' '}
                           <button onClick={() => deleteClaim(c.claim_id)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
                         </div>
                       </div>
+                      {editingClaimId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                          <label style={{ fontSize: 13 }}><span className="fo-field-label">Type</span>
+                            <select value={editClaimForm.claim_type} onChange={e => setEditClaimForm({ ...editClaimForm, claim_type: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                              <option>Quality</option><option>Shortage</option><option>Overage</option><option>Damage</option><option>Pricing</option><option>Other</option>
+                            </select>
+                          </label>
+                          <div style={{ gridColumn: 'span 2' }}>{textField('Description', editClaimForm.description, v => setEditClaimForm({ ...editClaimForm, description: v }))}</div>
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <button onClick={() => saveEditClaim(c)} className="fo-btn fo-btn-primary" style={{ marginRight: 8 }}>Save</button>
+                            <button onClick={() => setEditingClaimId(null)} className="fo-btn fo-btn-secondary">Cancel</button>
+                          </div>
+                        </div>
+                      )}
                       {resolvingId === c.claim_id && (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                           <label style={{ fontSize: 13 }}><span className="fo-field-label">Status</span>
