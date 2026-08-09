@@ -33,9 +33,9 @@ export default function OrdersPage() {
   async function loadAll() {
     const [o, c, s, p, cl, sl, jl] = await Promise.all([
       supabase.from('customer_orders').select('*, customers(company), order_lines(*, suppliers(company), products(commodity, pack_size))').order('order_date', { ascending: false }).order('customer_order_id', { ascending: false }).order('order_line_id', { ascending: true, foreignTable: 'order_lines' }),
-      supabase.from('customers').select('customer_id, company').order('company'),
+      supabase.from('customers').select('customer_id, company').eq('active', true).order('company'),
       supabase.from('suppliers').select('supplier_id, company').order('company'),
-      supabase.from('products').select('product_id, commodity, pack_size').order('commodity'),
+      supabase.from('products').select('product_id, commodity, pack_size').eq('active', true).order('commodity'),
       supabase.from('customer_locations').select('*').order('label'),
       supabase.from('supplier_locations').select('*').order('label'),
       supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_number, jacket_status)'),

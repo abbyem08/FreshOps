@@ -17,6 +17,7 @@ export function SuppliersContent() {
   const [editingLocId, setEditingLocId] = useState(null);
   const [quoteHistory, setQuoteHistory] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -29,6 +30,13 @@ export function SuppliersContent() {
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.supplier_id); setShowForm(true); }
+  async function toggleActive(r) {
+    const goingInactive = r.active !== false;
+    if (goingInactive && !confirm(`Deactivate ${r.company}? They'll disappear from purchasing pickers, but all existing purchases and history stay exactly as-is. You can reactivate anytime.`)) return;
+    const { error } = await supabase.from('suppliers').update({ active: !goingInactive }).eq('supplier_id', r.supplier_id);
+    if (error) { alert('Failed: ' + error.message); return; }
+    load();
+  }
   async function save() {
     if (!form.company) { alert('Company name is required.'); return; }
     const payload = { ...form, per_case_fee: form.per_case_fee === '' ? 0 : Number(form.per_case_fee) };
@@ -88,19 +96,25 @@ export function SuppliersContent() {
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
-      {rows.map(r => {
+      <label style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Show inactive
+      </label>
+      {rows.filter(r => showInactive || r.active !== false).map(r => {
         const supLocs = locations.filter(l => l.supplier_id === r.supplier_id);
         const supHistory = quoteHistory.filter(h => h.supplier_id === r.supplier_id);
         const isOpen = expandedId === r.supplier_id;
         return (
-          <div key={r.supplier_id} style={card}>
+          <div key={r.supplier_id} style={{ ...card, opacity: r.active === false ? 0.6 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button onClick={() => setExpandedId(isOpen ? null : r.supplier_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', flex: 1 }}>
                 <span style={{ color: 'var(--fo-text-dim)', marginRight: 6 }}>{isOpen ? '⌄' : '›'}</span>
-                <strong>{r.company}</strong>
+                <strong>{r.company}</strong>{r.active === false && <span className="fo-badge fo-badge-gray" style={{ marginLeft: 8 }}>Inactive</span>}
                 <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', marginLeft: 14 }}>{r.contact} {r.phone && '· ' + r.phone} {r.city && '· ' + r.city + ', ' + r.state} {r.per_case_fee ? `· $${Number(r.per_case_fee).toFixed(2)}/cs fee` : ''} · {supLocs.length} location{supLocs.length === 1 ? '' : 's'} · {supHistory.length} quote{supHistory.length === 1 ? '' : 's'} on file</div>
               </button>
-              <div><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></div>
+              <div>
+                <button onClick={() => openEdit(r)} style={editBtn}>Edit</button>
+                <button onClick={() => toggleActive(r)} style={{ ...editBtn, marginLeft: 6, color: r.active === false ? 'var(--fo-success)' : 'var(--fo-error)' }}>{r.active === false ? 'Reactivate' : 'Deactivate'}</button>
+              </div>
             </div>
             {isOpen && (
             <>

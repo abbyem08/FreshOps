@@ -61,7 +61,7 @@ export default function PriceWorksheetPage() {
   }
 
   async function loadSheets() {
-    const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false });
+    const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false }).order('price_sheet_id', { ascending: false });
     setSheets(data || []);
     if (data && data.length && !activeSheetId) setActiveSheetId(data[0].price_sheet_id);
   }
@@ -91,11 +91,11 @@ export default function PriceWorksheetPage() {
     setAllQuotes(data || []);
   }
   async function loadDetail(sheetId) {
-    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size, cases_per_pallet), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId);
+    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size, cases_per_pallet), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId).order('price_sheet_line_id');
     setLines(l || []);
     const lineIds = (l || []).map(x => x.price_sheet_line_id);
     if (lineIds.length) {
-      const { data: fees } = await supabase.from('price_sheet_line_fees').select('*').in('price_sheet_line_id', lineIds);
+      const { data: fees } = await supabase.from('price_sheet_line_fees').select('*').in('price_sheet_line_id', lineIds).order('fee_id');
       const grouped = {};
       (fees || []).forEach(f => { grouped[f.price_sheet_line_id] = grouped[f.price_sheet_line_id] || []; grouped[f.price_sheet_line_id].push(f); });
       setFeesByLine(grouped);
@@ -208,7 +208,7 @@ export default function PriceWorksheetPage() {
     await supabase.from('price_sheet_recipients').delete().eq('price_sheet_id', sheetId);
     const { error } = await supabase.from('price_sheets').delete().eq('price_sheet_id', sheetId);
     if (error) { alert('Delete failed: ' + error.message); return; }
-    const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false });
+    const { data } = await supabase.from('price_sheets').select('*').order('sheet_date', { ascending: false }).order('price_sheet_id', { ascending: false });
     setSheets(data || []);
     setActiveSheetId(data && data.length ? data[0].price_sheet_id : null);
   }
@@ -565,9 +565,9 @@ export default function PriceWorksheetPage() {
                     <div>
                       <div style={miniLabel}>FREIGHT — Est. Carrier Cost / pallet</div>
                       <input type="number" defaultValue={l.est_carrier_cost_per_pallet} onBlur={e => updateLine(l.price_sheet_line_id, 'est_carrier_cost_per_pallet', Number(e.target.value))} style={{ width: 80 }} />
-                      {l.products?.cases_per_pallet && l.est_carrier_cost_per_pallet ? (
-                        <div style={{ fontSize: 10, color: 'var(--fo-text-faint)', marginTop: 2 }}>≈ ${(Number(l.est_carrier_cost_per_pallet) / l.products.cases_per_pallet).toFixed(2)}/case</div>
-                      ) : null}
+                      <div style={{ fontSize: 10, color: 'var(--fo-text-faint)', marginTop: 2, minHeight: 13 }}>
+                        {l.products?.cases_per_pallet && l.est_carrier_cost_per_pallet ? `≈ $${(Number(l.est_carrier_cost_per_pallet) / l.products.cases_per_pallet).toFixed(2)}/case` : '\u00A0'}
+                      </div>
                     </div>
                     <div>
                       <div style={miniLabel}>Customer Freight Charge / cs</div>

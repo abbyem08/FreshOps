@@ -10,6 +10,7 @@ export function CarriersContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK);
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -18,6 +19,13 @@ export function CarriersContent() {
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.carrier_id); setShowForm(true); }
+  async function toggleActive(r) {
+    const goingInactive = r.active !== false;
+    if (goingInactive && !confirm(`Deactivate ${r.name}? They'll disappear from freight pickers, but existing history stays exactly as-is. You can reactivate anytime.`)) return;
+    const { error } = await supabase.from('carriers').update({ active: !goingInactive }).eq('carrier_id', r.carrier_id);
+    if (error) { alert('Failed: ' + error.message); return; }
+    load();
+  }
   async function save() {
     if (!form.name) { alert('Carrier name is required.'); return; }
     if (editingId) {
@@ -55,16 +63,19 @@ export function CarriersContent() {
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
+      <label style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Show inactive
+      </label>
       <table style={table} className="fo-table">
         <thead><tr style={trHead}><th>Carrier</th><th>MC #</th><th>DOT #</th><th>Insurance Expiry</th><th>Contact</th><th>Phone</th><th></th></tr></thead>
-        <tbody>{rows.map(r => {
+        <tbody>{rows.filter(r => showInactive || r.active !== false).map(r => {
           const soon = daysUntil(r.insurance_expiry) <= 30;
           return (
-            <tr key={r.carrier_id} style={tr}>
-              <td>{r.name}</td><td>{r.mc_number}</td><td>{r.dot_number}</td>
+            <tr key={r.carrier_id} style={{ ...tr, opacity: r.active === false ? 0.6 : 1 }}>
+              <td>{r.name}{r.active === false && <span className="fo-badge fo-badge-gray" style={{ marginLeft: 8 }}>Inactive</span>}</td><td>{r.mc_number}</td><td>{r.dot_number}</td>
               <td style={{ color: soon ? 'var(--fo-error)' : 'inherit' }}>{r.insurance_expiry} {soon && '⚠'}</td>
               <td>{r.contact}</td><td>{r.phone}</td>
-              <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
+              <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button> <button onClick={() => toggleActive(r)} style={{ ...editBtn, color: r.active === false ? 'var(--fo-success)' : 'var(--fo-error)' }}>{r.active === false ? 'Reactivate' : 'Deactivate'}</button></td>
             </tr>
           );
         })}</tbody>

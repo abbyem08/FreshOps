@@ -10,6 +10,7 @@ export function ProductsContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK);
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => { load(); }, []);
   async function load() {
@@ -18,6 +19,13 @@ export function ProductsContent() {
   }
   function openAdd() { setForm(BLANK); setEditingId(null); setShowForm(true); }
   function openEdit(r) { setForm(r); setEditingId(r.product_id); setShowForm(true); }
+  async function toggleActive(r) {
+    const goingInactive = r.active !== false;
+    if (goingInactive && !confirm(`Deactivate ${r.commodity} — ${r.pack_size}? It'll disappear from order/allocation pickers, but all existing orders and history stay exactly as-is. You can reactivate anytime.`)) return;
+    const { error } = await supabase.from('products').update({ active: !goingInactive }).eq('product_id', r.product_id);
+    if (error) { alert('Failed: ' + error.message); return; }
+    load();
+  }
   async function save() {
     if (!form.commodity || !form.pack_size) { alert('Commodity and Pack Size are required.'); return; }
     const payload = {
@@ -52,12 +60,15 @@ export function ProductsContent() {
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
         </div>
       )}
+      <label style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Show inactive
+      </label>
       <table style={table} className="fo-table">
         <thead><tr style={trHead}><th>Commodity</th><th>Pack Size</th><th style={{ textAlign: 'right' }}>Weight/Case</th><th style={{ textAlign: 'right' }}>Cases/Pallet</th><th>Origin</th><th></th></tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.product_id} style={tr}>
-            <td>{r.commodity}</td><td>{r.pack_size}</td><td style={{ textAlign: 'right' }}>{r.gross_weight_per_case}</td><td style={{ textAlign: 'right' }}>{r.cases_per_pallet}</td><td>{r.default_origin}</td>
-            <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button></td>
+        <tbody>{rows.filter(r => showInactive || r.active !== false).map(r => (
+          <tr key={r.product_id} style={{ ...tr, opacity: r.active === false ? 0.6 : 1 }}>
+            <td>{r.commodity}{r.active === false && <span className="fo-badge fo-badge-gray" style={{ marginLeft: 8 }}>Inactive</span>}</td><td>{r.pack_size}</td><td style={{ textAlign: 'right' }}>{r.gross_weight_per_case}</td><td style={{ textAlign: 'right' }}>{r.cases_per_pallet}</td><td>{r.default_origin}</td>
+            <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button> <button onClick={() => toggleActive(r)} style={{ ...editBtn, color: r.active === false ? 'var(--fo-success)' : 'var(--fo-error)' }}>{r.active === false ? 'Reactivate' : 'Deactivate'}</button></td>
           </tr>
         ))}</tbody>
       </table>
