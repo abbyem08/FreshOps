@@ -44,6 +44,19 @@ export default function AppShell({ title, subtitle, children }) {
   const [ready, setReady] = useState(false);
   const [darkPreview, setDarkPreview] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    // close the drawer automatically on route change (selecting a nav item)
+    const handler = () => setDrawerOpen(false);
+    router.events.on('routeChangeStart', handler);
+    return () => router.events.off('routeChangeStart', handler);
+  }, [router.events]);
 
   useEffect(() => {
     // fast local cache so there's no flash of light theme before the
@@ -83,9 +96,11 @@ export default function AppShell({ title, subtitle, children }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--fo-page-bg)' }}>
-      <div className="no-print" style={{ width: 224, flexShrink: 0, background: 'var(--fo-sidebar)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '18px 16px 10px' }}>
+      <div className={'no-print fo-sidebar-backdrop' + (drawerOpen ? ' open' : '')} onClick={() => setDrawerOpen(false)} />
+      <div className={'no-print fo-sidebar' + (drawerOpen ? ' open' : '')} style={{ background: 'var(--fo-sidebar)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '18px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Logo variant="icon" size={26} />
+          <button className="fo-drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close menu">✕</button>
         </div>
         <nav style={{ flex: 1, padding: '6px 0', overflowY: 'auto' }}>
           {NAV_SECTIONS.map((section, i) => (
@@ -111,16 +126,19 @@ export default function AppShell({ title, subtitle, children }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 36px', borderBottom: '1px solid var(--fo-border-soft)', background: 'var(--fo-card-bg)' }}>
-          <div>
-            <h1 className="fo-h1" style={{ marginBottom: subtitle ? 2 : 0 }}>{title}</h1>
-            {subtitle && <div style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{subtitle}</div>}
+      <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+        <div className="no-print fo-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 36px', borderBottom: '1px solid var(--fo-border-soft)', background: 'var(--fo-card-bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <button className="fo-hamburger-btn" onClick={() => setDrawerOpen(true)} aria-label="Open menu">☰</button>
+            <div style={{ minWidth: 0 }}>
+              <h1 className="fo-h1" style={{ marginBottom: subtitle ? 2 : 0 }}>{title}</h1>
+              {subtitle && <div style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{subtitle}</div>}
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <input placeholder="Search jackets, orders, products… (coming soon)" disabled
+          <div className="fo-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input className="fo-header-search" placeholder="Search jackets, orders, products… (coming soon)" disabled
               style={{ width: 300, background: 'var(--fo-section-bg)', border: '1px solid var(--fo-border-soft)', color: 'var(--fo-text-faint)' }} />
-            <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+            <div className="fo-header-date" style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
               {today.toLocaleDateString(undefined, { weekday: 'long' })}<br/>{today.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
             <button onClick={toggleTheme} className="fo-btn fo-btn-secondary fo-btn-sm" title="Saved to your account">
