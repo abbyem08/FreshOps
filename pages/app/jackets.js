@@ -154,7 +154,7 @@ export default function JacketsListPage() {
                 {r.attention && <span className="fo-badge fo-badge-amber">Needs Attention</span>}
                 {r.openClaims > 0 && <span className="fo-badge fo-badge-red">{r.openClaims} Claim{r.openClaims === 1 ? '' : 's'}</span>}
               </div>
-              <div style={{ display: 'flex', gap: 20, fontSize: 12.5, color: 'var(--fo-text-dim)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '4px 20px', fontSize: 12.5, color: 'var(--fo-text-dim)', flex: '1 1 320px' }}>
                 <span>{r.carrier || 'No carrier'}</span>
                 <span>{r.jacket_date || '—'}</span>
                 <span>{r.productCount} product{r.productCount === 1 ? '' : 's'}</span>

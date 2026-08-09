@@ -270,15 +270,19 @@ export default function OrdersPage() {
         }, 0);
         return (
           <div key={o.customer_order_id} style={card}>
-            <div style={btnRow}>
-              <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, flex: 1, textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => setOpenOrderId(isOpen ? null : o.customer_order_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textAlign: 'left', minWidth: 0, flex: '1 1 220px' }}>
                 <span>{isOpen ? '⌄' : '›'} {o.acumatica_order_no ? <strong style={{ fontFamily: 'monospace' }}>{o.acumatica_order_no}</strong> : <span style={{ ...unassignedPill, background: 'var(--fo-warn-bg)', color: 'var(--fo-warn)' }}>No Acumatica #</span>} {o.customers?.company} <span style={{ color: 'var(--fo-text-dim)', fontSize: 12 }}>PO {o.customer_po}</span></span>
               </button>
-              {orderNeedsSupply > 0 && <span className="fo-badge fo-badge-amber" style={{ marginRight: 8 }}>Needs Supply: {orderNeedsSupply}</span>}
-              <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
-              <span style={{ ...pill(o.order_status), marginLeft: 8 }}>{o.order_status}</span>
-              <button onClick={() => openEditOrder(o)} style={{ ...editBtn, marginLeft: 8 }}>Edit Order</button>
-              <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, marginLeft: 8, color: 'var(--fo-error)' }}>Delete Order</button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {orderNeedsSupply > 0 && <span className="fo-badge fo-badge-amber">Needs Supply: {orderNeedsSupply}</span>}
+                <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
+                <span style={pill(o.order_status)}>{o.order_status}</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+              <button onClick={() => openEditOrder(o)} style={editBtn}>Edit Order</button>
+              <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete Order</button>
             </div>
             {editingOrderId === o.customer_order_id && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
