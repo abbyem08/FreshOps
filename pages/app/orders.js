@@ -4,7 +4,11 @@ import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
 const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_location_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
-const BLANK_LINE = { product_id: '', cases_ordered: '', sell_price_per_case: '', pricing_type: 'FOB' };
+// A customer order line has reached a final CUSTOMER outcome — separate
+// from the claim lifecycle and the physical case lifecycle, which can
+// both remain open/ongoing after the order itself closes.
+const FINAL_LINE_STATUSES = ['Delivered', 'Rejected', 'Cancelled', 'Shorted'];
+const BLANK_LINE = { product_id: '', cases_ordered: '', sell_price_per_case: '', pricing_type: 'FOB', line_status: 'Open' };
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -116,7 +120,7 @@ export default function OrdersPage() {
 
   function openAddLine(orderId) { setLineForm(BLANK_LINE); setLineTarget({ orderId, lineId: null }); }
   function openEditLine(orderId, l) {
-    setLineForm({ product_id: l.product_id, cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, pricing_type: l.pricing_type || 'FOB' });
+    setLineForm({ product_id: l.product_id, cases_ordered: l.cases_ordered, sell_price_per_case: l.sell_price_per_case, pricing_type: l.pricing_type || 'FOB', line_status: l.line_status || 'Open' });
     setLineTarget({ orderId, lineId: l.order_line_id });
   }
   async function saveLine() {
@@ -130,7 +134,7 @@ export default function OrdersPage() {
     if (lineTarget.lineId) {
       // supplier_id / shipper_po / fob_cost_per_case are intentionally left
       // untouched here — those come from Jacket allocation now, not manual entry
-      const { error } = await supabase.from('order_lines').update(payload).eq('order_line_id', lineTarget.lineId);
+      const { error } = await supabase.from('order_lines').update({ ...payload, line_status: lineForm.line_status }).eq('order_line_id', lineTarget.lineId);
       if (error) { alert('Save failed: ' + error.message); return; }
     } else {
       const original = { original_cases_ordered: payload.cases_ordered, original_sell_price_per_case: payload.sell_price_per_case };
@@ -154,6 +158,16 @@ export default function OrdersPage() {
     loadAll();
   }
 
+  async function closeOrder(o) {
+    const lines = o.order_lines || [];
+    const notFinal = lines.filter(l => !FINAL_LINE_STATUSES.includes(l.line_status));
+    if (notFinal.length > 0) {
+      if (!confirm(`${notFinal.length} line(s) on this order haven't reached a final status yet (still shown as Open). Close the order anyway?`)) return;
+    } else if (!confirm(`Close order ${o.acumatica_order_no || 'this order'}? Every line has reached a final outcome.`)) return;
+    const { error } = await supabase.from('customer_orders').update({ order_status: 'Closed' }).eq('customer_order_id', o.customer_order_id);
+    if (error) { alert('Close failed: ' + error.message); return; }
+    loadAll();
+  }
   async function deleteOrder(orderId, orderNo) {
     if (!confirm(`Delete order ${orderNo} entirely, including all its lines and any jacket assignments? This cannot be undone.`)) return;
     // order_lines, jacket_lines, and stop_lines all cascade automatically now
@@ -268,6 +282,8 @@ export default function OrdersPage() {
           const allocated = allocByLine[l.order_line_id]?.cases || 0;
           return s + Math.max(0, Number(l.cases_ordered || 0) - allocated);
         }, 0);
+        const lines = o.order_lines || [];
+        const readyToClose = o.order_status === 'Open' && lines.length > 0 && lines.every(l => FINAL_LINE_STATUSES.includes(l.line_status));
         return (
           <div key={o.customer_order_id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
@@ -277,11 +293,13 @@ export default function OrdersPage() {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {orderNeedsSupply > 0 && <span className="fo-badge fo-badge-amber">Needs Supply: {orderNeedsSupply}</span>}
                 <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
+                {readyToClose && <span className="fo-badge fo-badge-green">Ready to Close</span>}
                 <span style={pill(o.order_status)}>{o.order_status}</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
               <button onClick={() => openEditOrder(o)} style={editBtn}>Edit Order</button>
+              {o.order_status === 'Open' && <button onClick={() => closeOrder(o)} style={{ ...editBtn, background: readyToClose ? 'var(--fo-accent)' : editBtn.background, color: readyToClose ? '#fff' : editBtn.color }}>Close Order</button>}
               <button onClick={() => deleteOrder(o.customer_order_id, o.acumatica_order_no)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete Order</button>
             </div>
             {editingOrderId === o.customer_order_id && (
@@ -318,14 +336,15 @@ export default function OrdersPage() {
               <div style={{ marginTop: 12 }}>
                 <div className="fo-table-wrap">
                 <table style={table} className="fo-table">
-                  <thead><tr style={trHead}><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th style={{ textAlign: 'right' }}>Allocated</th><th style={{ textAlign: 'right' }}>Needs Supply</th><th>Status</th><th>Jacket(s)</th><th>Sell $/cs</th><th>Revenue</th><th></th></tr></thead>
+                  <thead><tr style={trHead}><th>Commodity</th><th style={{ textAlign: 'right' }}>Ordered</th><th style={{ textAlign: 'right' }}>Allocated</th><th style={{ textAlign: 'right' }}>Needs Supply</th><th>Allocation</th><th>Disposition</th><th>Jacket(s)</th><th>Sell $/cs</th><th>Revenue</th><th></th></tr></thead>
                   <tbody>{(o.order_lines || []).map(l => {
                     const revenue = l.cases_ordered * l.sell_price_per_case;
                     const amended = l.original_cases_ordered != null && Number(l.original_cases_ordered) !== Number(l.cases_ordered);
                     const alloc = allocByLine[l.order_line_id] || { cases: 0, jackets: [] };
                     const needsSupply = Math.max(0, Number(l.cases_ordered || 0) - alloc.cases);
-                    const lineStatus = alloc.cases === 0 ? 'Unassigned' : needsSupply > 0 ? 'Partially Allocated' : 'Fully Allocated';
-                    const statusTone = lineStatus === 'Fully Allocated' ? 'fo-badge-green' : lineStatus === 'Partially Allocated' ? 'fo-badge-amber' : 'fo-badge-gray';
+                    const allocStatus = alloc.cases === 0 ? 'Unassigned' : needsSupply > 0 ? 'Partially Allocated' : 'Fully Allocated';
+                    const allocStatusTone = allocStatus === 'Fully Allocated' ? 'fo-badge-green' : allocStatus === 'Partially Allocated' ? 'fo-badge-amber' : 'fo-badge-gray';
+                    const dispositionTone = l.line_status === 'Delivered' ? 'fo-badge-green' : l.line_status === 'Rejected' ? 'fo-badge-red' : l.line_status === 'Shorted' ? 'fo-badge-amber' : l.line_status === 'Cancelled' ? 'fo-badge-gray' : 'fo-badge-gray';
                     return (
                       <tr key={l.order_line_id} style={tr}>
                         <td>{l.products?.commodity} — {l.products?.pack_size}</td>
@@ -335,7 +354,8 @@ export default function OrdersPage() {
                         </td>
                         <td style={{ textAlign: 'right' }}>{alloc.cases}</td>
                         <td style={{ textAlign: 'right', color: needsSupply > 0 ? 'var(--fo-warn)' : 'var(--fo-text-dim)', fontWeight: needsSupply > 0 ? 600 : 400 }}>{needsSupply}</td>
-                        <td><span className={`fo-badge ${statusTone}`}>{lineStatus}</span></td>
+                        <td><span className={`fo-badge ${allocStatusTone}`}>{allocStatus}</span></td>
+                        <td><span className={`fo-badge ${dispositionTone}`}>{l.line_status || 'Open'}</span></td>
                         <td style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{alloc.jackets.length ? alloc.jackets.join(', ') : '—'}</td>
                         <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
@@ -363,6 +383,13 @@ export default function OrdersPage() {
                           <option>FOB</option><option>Delivered</option>
                         </select>
                       </label>
+                      {lineTarget.lineId && (
+                        <label style={{ fontSize: 13 }}>Disposition
+                          <select value={lineForm.line_status} onChange={e => setLineForm({ ...lineForm, line_status: e.target.value })} style={input}>
+                            {FINAL_LINE_STATUSES.concat('Open').map(s => <option key={s}>{s}</option>)}
+                          </select>
+                        </label>
+                      )}
                     </div>
                     <button onClick={saveLine} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{lineTarget.lineId ? 'Update Line' : 'Save Line'}</button>
                     <button onClick={() => setLineTarget(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
