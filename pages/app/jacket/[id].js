@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../../components/AppShell';
 import Logo from '../../../components/Logo';
 import { supabase } from '../../../lib/supabaseClient';
+import { ProgressBar, BarChart } from '../../../components/charts';
 
 const BLANK_PURCHASED = { supplier_id: '', product_id: '', shipper_po: '', purchased_cases: '', actual_cases_received: '', purchase_cost_per_case: '', fee_total_per_case: '', notes: '' };
 const TABS = ['Overview', 'Products', 'Orders', 'Logistics', 'Financials', 'Documents'];
@@ -1260,6 +1261,10 @@ export default function JacketWorkspace() {
             <button onClick={deleteJacketEntirely} className="fo-btn fo-btn-danger fo-btn-sm">Delete Jacket</button>
           </div>
         </div>
+        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--fo-border-soft)' }}>
+          <ProgressBar label="Pallet Capacity" current={totalPallets} max={palletCapacity} />
+          <ProgressBar label="Weight Capacity" current={totalWeight} max={weightCapacity} unit=" lb" />
+        </div>
       </div>
 
       {/* ---- Tabs + Timeline layout ---- */}
@@ -1989,6 +1994,33 @@ export default function JacketWorkspace() {
               {/* ---- Section 1: Profit Summary (expanded, same card you already had) ---- */}
               <div className="fo-card">
                 <div className="fo-h2">Profit Summary</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--fo-border-soft)' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 8 }}>Revenue Breakdown</div>
+                    <BarChart
+                      data={[
+                        { label: 'Product', value: estRevenue },
+                        { label: 'Freight-Only', value: freightOnlyRevenue },
+                        { label: 'Other', value: adjustmentsRevenue },
+                      ].filter(d => d.value !== 0)}
+                      formatValue={v => `$${v.toLocaleString()}`}
+                      emptyText="No revenue yet."
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 8 }}>Cost Breakdown</div>
+                    <BarChart
+                      data={[
+                        { label: 'Product', value: baseCostTotal, color: 'var(--fo-error)' },
+                        { label: 'Supplier Fees', value: supplierFeesTotal, color: 'var(--fo-error)' },
+                        { label: 'Freight', value: freightCost, color: 'var(--fo-error)' },
+                        { label: 'Other', value: adjustmentsCost, color: 'var(--fo-error)' },
+                      ].filter(d => d.value !== 0)}
+                      formatValue={v => `$${v.toLocaleString()}`}
+                      emptyText="No costs yet."
+                    />
+                  </div>
+                </div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', marginBottom: 6 }}>Revenue</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, marginBottom: 12 }}>
                   <FinRow label="Product Revenue" value={estRevenue} />
