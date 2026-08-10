@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
+import { ProgressBar } from '../../components/charts';
 
 export default function JacketsListPage() {
   const [rows, setRows] = useState([]);
@@ -15,7 +16,7 @@ export default function JacketsListPage() {
   async function load() {
     const [j, jpl, jl, fr, cl, ol] = await Promise.all([
       supabase.from('jackets').select('*').order('jacket_id', { ascending: false }),
-      supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity)'),
+      supabase.from('jacket_product_lines').select('*, suppliers(company), products(commodity, cases_per_pallet, gross_weight_per_case)'),
       supabase.from('jacket_lines').select('*, order_lines(sell_price_per_case, customer_orders(acumatica_order_no)), jackets(jacket_status)'),
       supabase.from('freight_records').select('jacket_id, status'),
       supabase.from('claims').select('claim_id, jacket_lines(jacket_id)').eq('status', 'Open'),
@@ -46,7 +47,11 @@ export default function JacketsListPage() {
       const openClaims = claimsByJacket[jacket.jacket_id] || 0;
       const freightRecord = freightByJacket[jacket.jacket_id];
       const attention = openClaims > 0 || (available > 0 && ['Loading', 'Dispatched', 'In Transit'].includes(jacket.jacket_status)) || (!freightRecord && !['Planning', 'Closed', 'Cancelled'].includes(jacket.jacket_status));
-      return { ...jacket, productCount: purchased.length, orderCount, available, estRevenue, estProfit, openClaims, freightStatus: freightRecord?.status, attention };
+      const totalPallets = purchased.reduce((s, p) => s + (p.products?.cases_per_pallet ? Math.ceil((p.actual_cases_received ?? p.purchased_cases) / p.products.cases_per_pallet) : 0), 0);
+      const totalWeight = purchased.reduce((s, p) => s + (p.products?.gross_weight_per_case || 0) * (p.actual_cases_received ?? (p.purchased_cases || 0)), 0);
+      const weightCapacity = jacket.weight_capacity || 42500;
+      const palletCapacity = jacket.pallet_capacity || 24;
+      return { ...jacket, productCount: purchased.length, orderCount, available, estRevenue, estProfit, openClaims, freightStatus: freightRecord?.status, attention, totalPallets, totalWeight, weightCapacity, palletCapacity };
     });
     setRows(computed);
 
@@ -85,6 +90,7 @@ export default function JacketsListPage() {
     delivered: rows.filter(r => r.jacket_status === 'Delivered').length,
     needsAttention: rows.filter(r => r.attention).length,
     estProfit: rows.filter(r => !['Closed', 'Cancelled'].includes(r.jacket_status)).reduce((s, r) => s + r.estProfit, 0),
+    casesAvailable: rows.filter(r => !['Closed', 'Cancelled'].includes(r.jacket_status)).reduce((s, r) => s + Math.max(0, r.available), 0),
   };
 
   const filtered = rows
@@ -129,6 +135,7 @@ export default function JacketsListPage() {
         <KPI label="Delivered" value={summary.delivered} />
         <KPI label="Needs Attention" value={summary.needsAttention} tone={summary.needsAttention > 0 ? 'amber' : 'green'} />
         <KPI label="Est. Profit (Active)" value={`$${summary.estProfit.toLocaleString()}`} tone={summary.estProfit >= 0 ? 'green' : 'red'} />
+        <KPI label="Cases Available" value={summary.casesAvailable.toLocaleString()} tone={summary.casesAvailable > 0 ? 'amber' : 'green'} />
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
@@ -163,6 +170,12 @@ export default function JacketsListPage() {
                 <span>${r.estRevenue.toLocaleString()} rev</span>
                 <span style={{ color: r.estProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)', fontWeight: 600 }}>${r.estProfit.toLocaleString()} profit</span>
               </div>
+              {r.productCount > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '4px 20px', marginTop: 10 }}>
+                  <ProgressBar label="Pallets" current={r.totalPallets} max={r.palletCapacity} height={6} />
+                  <ProgressBar label="Weight" current={r.totalWeight} max={r.weightCapacity} unit=" lb" height={6} />
+                </div>
+              )}
             </div>
           </a>
         ))}

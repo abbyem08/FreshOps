@@ -9,16 +9,19 @@ export default function DashboardPage() {
   const [issues, setIssues] = useState([]);
   const [jacketProfitChart, setJacketProfitChart] = useState([]);
   const [statusChart, setStatusChart] = useState([]);
+  const [casesNeededChart, setCasesNeededChart] = useState([]);
+  const [supplyDemand, setSupplyDemand] = useState({ needed: 0, available: 0 });
 
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [ol, jl, freight, jackets, claims] = await Promise.all([
-      supabase.from('order_lines').select('order_line_id, cases_ordered, sell_price_per_case, fob_cost_per_case, customer_orders(order_status)'),
-      supabase.from('jacket_lines').select('order_line_id, cases_to_load, allocated_cost_per_case, jacket_id, order_lines(sell_price_per_case), jackets(jacket_status, jacket_number)'),
+    const [ol, jl, freight, jackets, claims, jpl] = await Promise.all([
+      supabase.from('order_lines').select('order_line_id, cases_ordered, sell_price_per_case, fob_cost_per_case, product_id, products(commodity, pack_size), customer_orders(order_status)'),
+      supabase.from('jacket_lines').select('order_line_id, cases_to_load, allocated_cost_per_case, jacket_product_line_id, jacket_id, order_lines(sell_price_per_case), jackets(jacket_status, jacket_number)'),
       supabase.from('freight_records').select('booked_rate, extra_fees, jacket_id, jackets(jacket_status)'),
       supabase.from('jackets').select('jacket_id, jacket_number, jacket_status'),
       supabase.from('claims').select('claim_id, status, snapshot_jacket_number, snapshot_customer').eq('status', 'Open'),
+      supabase.from('jacket_product_lines').select('jacket_product_line_id, purchased_cases, actual_cases_received, jacket_id, jackets(jacket_status)'),
     ]);
 
     const openLines = (ol.data || []).filter(l => l.customer_orders?.order_status === 'Open');
@@ -41,6 +44,37 @@ export default function DashboardPage() {
       const remaining = Number(l.cases_ordered || 0) - (assignedByLine[l.order_line_id] || 0);
       if (remaining > 0) casesNeeded += remaining;
     });
+
+    // ---- Cases Still Needed, by commodity ----
+    const neededByCommodity = {};
+    openLines.forEach(l => {
+      const remaining = Number(l.cases_ordered || 0) - (assignedByLine[l.order_line_id] || 0);
+      if (remaining <= 0) return;
+      const label = l.products?.commodity || 'Unknown';
+      neededByCommodity[label] = (neededByCommodity[label] || 0) + remaining;
+    });
+    setCasesNeededChart(
+      Object.entries(neededByCommodity)
+        .map(([label, value]) => ({ label, value, color: 'var(--fo-warn)' }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8)
+    );
+
+    // ---- Orders vs Available Product — total open demand vs total
+    // purchased-but-unallocated supply, across active Jackets ----
+    const allocatedByPurchased = {};
+    (jl.data || []).forEach(row => {
+      if (row.jackets?.jacket_status === 'Cancelled' || !row.jacket_product_line_id) return;
+      allocatedByPurchased[row.jacket_product_line_id] = (allocatedByPurchased[row.jacket_product_line_id] || 0) + Number(row.cases_to_load || 0);
+    });
+    const totalAvailable = (jpl.data || [])
+      .filter(p => !['Closed', 'Cancelled'].includes(p.jackets?.jacket_status))
+      .reduce((s, p) => {
+        const purchased = Number(p.actual_cases_received ?? p.purchased_cases ?? 0);
+        const allocated = allocatedByPurchased[p.jacket_product_line_id] || 0;
+        return s + Math.max(0, purchased - allocated);
+      }, 0);
+    setSupplyDemand({ needed: casesNeeded, available: totalAvailable });
 
     setStats({ openRevenue, grossMargin, committedFreight, activeJackets: activeJackets.length, casesNeeded, openLineCount: openLines.length });
 
@@ -106,6 +140,26 @@ export default function DashboardPage() {
         <div className="fo-card">
           <h2 className="fo-h2">Jacket Status Distribution</h2>
           <BarChart data={statusChart} emptyText="No Jackets yet." />
+        </div>
+        <div className="fo-card">
+          <h2 className="fo-h2">Cases Still Needed</h2>
+          <BarChart data={casesNeededChart} emptyText="Nothing outstanding — every open order is sourced." />
+        </div>
+        <div className="fo-card">
+          <h2 className="fo-h2">Orders vs Available Product</h2>
+          {supplyDemand.needed === 0 && supplyDemand.available === 0 ? (
+            <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No open demand or purchased product yet.</div>
+          ) : (
+            <>
+              <BarChart
+                data={[
+                  { label: 'Still Needed', value: supplyDemand.needed, color: 'var(--fo-warn)' },
+                  { label: 'Available', value: supplyDemand.available, color: 'var(--fo-success)' },
+                ]}
+              />
+              <div style={{ fontSize: 12, color: 'var(--fo-text-faint)', marginTop: 10 }}>Available product isn't necessarily the same commodity as what's still needed — this is a fleet-wide total, not a 1:1 match.</div>
+            </>
+          )}
         </div>
       </div>
 
