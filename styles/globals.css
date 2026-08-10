@@ -1,97 +1,141 @@
-/* styles/globals.css — FreshOps design system v3 (Phase 1) */
+/* styles/globals.css — FreshOps design system v4 (premium/modern pass) */
 
 /* ============ FRESHOPS LIGHT (default / official theme) ============ */
 :root {
-  --fo-fresh: #165C3A;
-  --fo-ops: #2FA866;
-  --fo-ink: #1A1A1A;
+  --fo-fresh: #168A45;
+  --fo-ops: #168A45;
+  --fo-ink: #111513;
 
-  /* four visual layers */
-  --fo-sidebar: #0F5A35;
-  --fo-sidebar-active: #1C7A4B;
-  --fo-sidebar-text: rgba(255,255,255,.92);
-  --fo-sidebar-text-dim: rgba(255,255,255,.60);
-  --fo-page-bg: #F6F7F4;
-  --fo-section-bg: #EEF2EC;
+  /* sidebar — sophisticated near-black charcoal, not brand green */
+  --fo-sidebar: #0D1512;
+  --fo-sidebar-active: #1A2822;
+  --fo-sidebar-text: #F4F7F5;
+  --fo-sidebar-text-dim: #AAB5AF;
+  --fo-sidebar-section-label: #7E8A84;
+  --fo-sidebar-icon: #C8D0CC;
+  --fo-sidebar-indicator: #20A653;
+
+  --fo-page-bg: #F7F8F7;
+  --fo-section-bg: #F3F5F4;
+  --fo-hover-bg: #F0F2F1;
   --fo-card-bg: #FFFFFF;
 
-  --fo-border: #E2E7E1;
-  --fo-border-soft: #EAEEE8;
-  --fo-text: #1B231D;
-  --fo-text-dim: #6A746D;
-  --fo-text-faint: #9BA39C;
+  --fo-border: #D8DEDB;
+  --fo-border-soft: #E5E9E7;
+  --fo-text: #111513;
+  --fo-text-dim: #5F6763;
+  --fo-text-faint: #8B928E;
+  --fo-text-faintest: #A9AFAC;
 
-  --fo-primary: #165C3A;
-  --fo-primary-hover: #114A2E;
-  --fo-accent: #2FA866;
-  --fo-accent-soft: #DDE9DF;
+  --fo-primary: #168A45;
+  --fo-primary-hover: #12783B;
+  --fo-primary-active: #0F6834;
+  --fo-accent: #168A45;
+  --fo-accent-soft: #EAF7EE;
+  --fo-accent-border: #CDEBD6;
 
-  --fo-warn: #A6700D;
-  --fo-warn-bg: #F6E7CE;
-  --fo-error: #A5433A;
-  --fo-error-bg: #F3DCDA;
-  --fo-success: #165C3A;
-  --fo-success-bg: #DDE9DF;
-  --fo-info: #3E6FA0;
-  --fo-info-bg: #DDE7F1;
-  --fo-neutral-bg: #EEF2EC;
+  --fo-warn: #B76A08;
+  --fo-warn-bg: #FFF6E7;
+  --fo-warn-border: #F5DFC0;
+  --fo-error: #C9473D;
+  --fo-error-bg: #FFF0EE;
+  --fo-error-border: #F4D4D0;
+  --fo-success: #168A45;
+  --fo-success-bg: #EAF7EE;
+  --fo-success-border: #CDEBD6;
+  --fo-info: #2878C7;
+  --fo-info-bg: #EDF6FF;
+  --fo-info-border: #D3E8FA;
+  --fo-neutral-bg: #F2F4F3;
+  --fo-neutral-text: #59615D;
+  --fo-inactive-bg: #F0F2F1;
+  --fo-inactive-text: #66706B;
+  --fo-inactive-border: #DDE1DF;
+
+  /* attention/exception — warm, distinct from standard warning amber */
+  --fo-attention-bg: #FFF8F5;
+  --fo-attention-border: #F3DDD5;
+  --fo-attention-icon: #E05A32;
 
   --fo-sp-1: 4px; --fo-sp-2: 8px; --fo-sp-3: 12px; --fo-sp-4: 16px;
   --fo-sp-5: 24px; --fo-sp-6: 32px; --fo-sp-7: 48px;
 
   --fo-radius-sm: 8px;
-  --fo-radius-md: 12px;
-  --fo-radius-lg: 16px;
+  --fo-radius-md: 10px;
+  --fo-radius-lg: 14px;
+  --fo-radius-xl: 16px;
   --fo-radius-full: 999px;
 
-  --fo-shadow-sm: 0 1px 2px rgba(15,20,15,.04), 0 1px 8px rgba(15,20,15,.05);
-  --fo-shadow-md: 0 2px 6px rgba(15,20,15,.06), 0 10px 28px rgba(15,20,15,.08);
+  --fo-shadow-sm: 0 1px 2px rgba(17,21,19,.04);
+  --fo-shadow-md: 0 8px 24px rgba(17,21,19,.08);
   --fo-glow: none;
+  --fo-focus-ring: rgba(22,138,69,0.10);
 }
 
 /* ============ COMMAND CENTER DARK (personal preference, opt-in) ============
-   Structure only in Phase 1 — per-user persistence comes in Phase 7. Toggle
-   is applied via a `theme-dark` class on <html> for now (preview only). */
+   Designed with its own surface hierarchy and status colors — not a plain
+   inversion of light mode. Toggle applied via `theme-dark` class on <html>. */
 html.theme-dark {
-  --fo-sidebar: #05070A;
-  --fo-sidebar-active: rgba(47,168,102,.16);
-  --fo-sidebar-text: rgba(255,255,255,.92);
-  --fo-sidebar-text-dim: rgba(255,255,255,.45);
+  --fo-sidebar: #080C0A;
+  --fo-sidebar-active: #17251E;
+  --fo-sidebar-text: #F3F6F4;
+  --fo-sidebar-text-dim: #9CA6A1;
+  --fo-sidebar-section-label: #6F7A75;
+  --fo-sidebar-icon: #A9B3AE;
+  --fo-sidebar-indicator: #25B85A;
+
   --fo-page-bg: #0B0F0D;
-  --fo-section-bg: #101512;
-  --fo-card-bg: #121815;
+  --fo-section-bg: #161D19;
+  --fo-hover-bg: #1A221E;
+  --fo-card-bg: #111714;
 
-  --fo-border: #1E2A24;
-  --fo-border-soft: #182119;
-  --fo-text: #E7EFEA;
-  --fo-text-dim: #8FA097;
-  --fo-text-faint: #5C6C63;
+  --fo-border: #35413B;
+  --fo-border-soft: #26302B;
+  --fo-text: #F3F6F4;
+  --fo-text-dim: #A9B1AD;
+  --fo-text-faint: #7E8782;
+  --fo-text-faintest: #5F6763;
 
-  --fo-primary: #2FA866;
-  --fo-primary-hover: #3ABE76;
-  --fo-accent: #35D07F;
-  --fo-accent-soft: rgba(53,208,127,.12);
+  --fo-primary: #25B85A;
+  --fo-primary-hover: #31C967;
+  --fo-primary-active: #1D9E4C;
+  --fo-accent: #25B85A;
+  --fo-accent-soft: #112A1B;
+  --fo-accent-border: #1C5130;
 
-  --fo-warn: #E0A83E;
-  --fo-warn-bg: rgba(224,168,62,.12);
-  --fo-error: #E0605A;
-  --fo-error-bg: rgba(224,96,90,.12);
-  --fo-success: #35D07F;
-  --fo-success-bg: rgba(53,208,127,.12);
-  --fo-info: #5CA3E0;
-  --fo-info-bg: rgba(92,163,224,.12);
-  --fo-neutral-bg: #161D19;
+  --fo-warn: #E5A33D;
+  --fo-warn-bg: #302311;
+  --fo-warn-border: #4A3819;
+  --fo-error: #EB6A62;
+  --fo-error-bg: #321917;
+  --fo-error-border: #4D2622;
+  --fo-success: #59D47F;
+  --fo-success-bg: #112A1B;
+  --fo-success-border: #1C5130;
+  --fo-info: #5CA7EA;
+  --fo-info-bg: #102438;
+  --fo-info-border: #1C3A54;
+  --fo-neutral-bg: #1B211E;
+  --fo-neutral-text: #A9B1AD;
+  --fo-inactive-bg: #1B211E;
+  --fo-inactive-text: #9CA6A1;
+  --fo-inactive-border: #2C3733;
 
-  --fo-shadow-sm: 0 0 0 1px rgba(53,208,127,.06), 0 1px 8px rgba(0,0,0,.35);
-  --fo-shadow-md: 0 0 0 1px rgba(53,208,127,.1), 0 8px 28px rgba(0,0,0,.5);
-  --fo-glow: 0 0 12px rgba(53,208,127,.25);
+  --fo-attention-bg: #241812;
+  --fo-attention-border: #3D2A20;
+  --fo-attention-icon: #E97A52;
+
+  --fo-shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  --fo-shadow-md: 0 8px 24px rgba(0,0,0,.5);
+  --fo-glow: 0 0 12px rgba(37,184,90,.2);
+  --fo-focus-ring: rgba(37,184,90,0.16);
 }
 
-/* Sidebar background goes near-black in Command Center Dark; the dark
-   green logo icon needs to flip to white there or it's invisible.
-   Scoped to the sidebar only — the price sheet footer logo always sits
-   on a light background and must keep its natural color. */
-html.theme-dark .fo-sidebar img[alt="FreshOps"] {
+/* The sidebar is near-black charcoal in BOTH themes now, not just dark
+   mode — the dark green logo icon needs to flip to white there always,
+   or it's invisible. Scoped to the sidebar only — the price sheet footer
+   logo always sits on a light background and must keep its natural color. */
+.fo-sidebar img[alt="FreshOps"] {
   filter: brightness(0) invert(1);
 }
 
@@ -114,7 +158,7 @@ button { color: inherit; }
 input, select, textarea {
   border: 1px solid var(--fo-border);
   border-radius: var(--fo-radius-sm);
-  padding: 8px 11px;
+  padding: 10px 12px;
   font-size: 13.5px;
   background: var(--fo-card-bg);
   color: var(--fo-text);
@@ -122,8 +166,8 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--fo-accent);
-  box-shadow: 0 0 0 3px var(--fo-accent-soft);
+  border-color: var(--fo-primary);
+  box-shadow: 0 0 0 3px var(--fo-focus-ring);
 }
 
 /* ---- Sidebar / Mobile Navigation Drawer ----
@@ -302,24 +346,26 @@ input:focus, select:focus, textarea:focus {
 .fo-btn-secondary { background: var(--fo-card-bg); color: var(--fo-text); border-color: var(--fo-border); }
 .fo-btn-secondary:hover { background: var(--fo-section-bg); }
 .fo-btn-warn { background: var(--fo-warn-bg); color: var(--fo-warn); }
-.fo-btn-danger { background: var(--fo-error-bg); color: var(--fo-error); }
-.fo-btn-danger:hover { filter: brightness(.95); }
+.fo-btn-danger { background: var(--fo-card-bg); color: var(--fo-error); border-color: var(--fo-border); }
+.fo-btn-danger:hover { background: var(--fo-error-bg); border-color: var(--fo-error-border); }
 .fo-btn-sm { padding: 6px 13px; font-size: 12.5px; border-radius: var(--fo-radius-sm); }
 
 /* ---- Badges ---- */
 .fo-badge {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 11px;
+  padding: 4px 9px;
+  min-height: 24px; box-sizing: border-box;
   border-radius: var(--fo-radius-full);
+  border: 1px solid transparent;
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
-.fo-badge-green { background: var(--fo-success-bg); color: var(--fo-success); }
-.fo-badge-amber { background: var(--fo-warn-bg); color: var(--fo-warn); }
-.fo-badge-red { background: var(--fo-error-bg); color: var(--fo-error); }
-.fo-badge-blue { background: var(--fo-info-bg); color: var(--fo-info); }
-.fo-badge-gray { background: var(--fo-neutral-bg); color: var(--fo-text-dim); }
+.fo-badge-green { background: var(--fo-success-bg); color: var(--fo-success); border-color: var(--fo-accent-border); }
+.fo-badge-amber { background: var(--fo-warn-bg); color: var(--fo-warn); border-color: var(--fo-warn-border); }
+.fo-badge-red { background: var(--fo-error-bg); color: var(--fo-error); border-color: var(--fo-error-border); }
+.fo-badge-blue { background: var(--fo-info-bg); color: var(--fo-info); border-color: var(--fo-info-border); }
+.fo-badge-gray { background: var(--fo-neutral-bg); color: var(--fo-neutral-text); border-color: var(--fo-inactive-border); }
 
 /* ---- Tables ---- */
 .fo-table-wrap {
@@ -358,13 +404,14 @@ input:focus, select:focus, textarea:focus {
   color: var(--fo-sidebar-text-dim);
   text-decoration: none;
   border-radius: var(--fo-radius-md);
-  transition: background .12s ease, color .12s ease;
+  border-left: 2px solid transparent;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
 }
 .fo-navlink:hover { background: rgba(255,255,255,.06); color: var(--fo-sidebar-text); }
-.fo-navlink.active { background: var(--fo-sidebar-active); color: #fff; font-weight: 600; }
+.fo-navlink.active { background: var(--fo-sidebar-active); color: var(--fo-sidebar-text); font-weight: 600; border-left-color: var(--fo-sidebar-indicator); }
 .fo-nav-section-label {
   padding: 16px 14px 4px;
-  font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--fo-sidebar-text-dim); font-weight: 700;
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--fo-sidebar-section-label); font-weight: 700;
 }
 
 @media print {
