@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
+import { ProgressBar } from '../../components/charts';
 
 const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_location_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
 // A customer order line has reached a final CUSTOMER outcome — separate
@@ -21,6 +22,7 @@ export default function OrdersPage() {
   const [supLocations, setSupLocations] = useState([]);
   const [jacketByOrder, setJacketByOrder] = useState({});
   const [allocByLine, setAllocByLine] = useState({});
+  const [claimsByLine, setClaimsByLine] = useState({});
   const [openOrderId, setOpenOrderId] = useState(null);
 
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -35,7 +37,7 @@ export default function OrdersPage() {
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [o, c, s, p, cl, sl, jl] = await Promise.all([
+    const [o, c, s, p, cl, sl, jl, claimsData] = await Promise.all([
       supabase.from('customer_orders').select('*, customers(company), order_lines(*, suppliers(company), products(commodity, pack_size))').order('order_date', { ascending: false }).order('customer_order_id', { ascending: false }).order('order_line_id', { ascending: true, foreignTable: 'order_lines' }),
       supabase.from('customers').select('customer_id, company').eq('active', true).order('company'),
       supabase.from('suppliers').select('supplier_id, company').order('company'),
@@ -43,6 +45,7 @@ export default function OrdersPage() {
       supabase.from('customer_locations').select('*').order('label'),
       supabase.from('supplier_locations').select('*').order('label'),
       supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_number, jacket_status)'),
+      supabase.from('claims').select('claim_id, status, jacket_lines(order_line_id)').eq('status', 'Open'),
     ]);
     setOrders(o.data || []);
     setCustomers(c.data || []);
@@ -51,13 +54,14 @@ export default function OrdersPage() {
     setCustLocations(cl.data || []);
     setSupLocations(sl.data || []);
 
-    // per-line: active allocated cases + which jacket(s), then roll up to order-level
+    // per-line: active allocated cases + per-jacket breakdown, then roll up to order-level
     const allocByLine = {};
     (jl.data || []).forEach(row => {
       if (!row.jackets || row.jackets.jacket_status === 'Cancelled') return;
-      if (!allocByLine[row.order_line_id]) allocByLine[row.order_line_id] = { cases: 0, jackets: [] };
+      if (!allocByLine[row.order_line_id]) allocByLine[row.order_line_id] = { cases: 0, jackets: [], byJacket: [] };
       allocByLine[row.order_line_id].cases += Number(row.cases_to_load || 0);
       allocByLine[row.order_line_id].jackets.push(row.jackets.jacket_number);
+      allocByLine[row.order_line_id].byJacket.push({ jacket_number: row.jackets.jacket_number, cases: Number(row.cases_to_load || 0) });
     });
     setAllocByLine(allocByLine);
     const byOrder = {};
@@ -67,6 +71,14 @@ export default function OrdersPage() {
       byOrder[ord.customer_order_id] = [...nums];
     });
     setJacketByOrder(byOrder);
+
+    // open claims mapped back to their order line, for the Attention indicator
+    const claimsByLine = {};
+    (claimsData.data || []).forEach(c => {
+      const olId = c.jacket_lines?.order_line_id;
+      if (olId) claimsByLine[olId] = (claimsByLine[olId] || 0) + 1;
+    });
+    setClaimsByLine(claimsByLine);
   }
 
   function openNewOrder() { setOrderForm(BLANK_ORDER); setEditingOrderId(null); setDraftLines([]); setDraftLineForm(BLANK_LINE); setShowNewOrder(true); }
@@ -182,9 +194,39 @@ export default function OrdersPage() {
     loadAll();
   }
 
+  // ---- Page Summary — computed from data already loaded above, same
+  // allocation formula used everywhere else in FreshOps ----
+  const openOrders = orders.filter(o => o.order_status === 'Open');
+  let needsSupplyOrders = 0, partiallyAllocatedOrders = 0, fullyAllocatedOrders = 0, totalOpenCases = 0, totalCasesStillNeeded = 0;
+  openOrders.forEach(o => {
+    const lines = o.order_lines || [];
+    if (lines.length === 0) return;
+    let anyAllocated = false, allFull = true;
+    lines.forEach(l => {
+      const allocated = allocByLine[l.order_line_id]?.cases || 0;
+      const ordered = Number(l.cases_ordered || 0);
+      totalOpenCases += ordered;
+      const stillNeeded = Math.max(0, ordered - allocated);
+      totalCasesStillNeeded += stillNeeded;
+      if (allocated > 0) anyAllocated = true;
+      if (stillNeeded > 0) allFull = false;
+    });
+    if (allFull) fullyAllocatedOrders++;
+    else if (anyAllocated) partiallyAllocatedOrders++;
+    else needsSupplyOrders++;
+  });
+
   return (
     <AppShell title="Customer Orders">
       <button onClick={openNewOrder} style={btn}>+ New Order</button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, margin: '16px 0' }}>
+        <MiniKPI label="Open Orders" value={openOrders.length} />
+        <MiniKPI label="Needs Supply" value={needsSupplyOrders} tone={needsSupplyOrders > 0 ? 'red' : 'green'} />
+        <MiniKPI label="Partially Allocated" value={partiallyAllocatedOrders} tone={partiallyAllocatedOrders > 0 ? 'amber' : undefined} />
+        <MiniKPI label="Fully Allocated" value={fullyAllocatedOrders} tone="green" />
+        <MiniKPI label="Total Open Cases" value={totalOpenCases.toLocaleString()} />
+        <MiniKPI label="Cases Still Needed" value={totalCasesStillNeeded.toLocaleString()} tone={totalCasesStillNeeded > 0 ? 'amber' : 'green'} />
+      </div>
       {showNewOrder && !editingOrderId && (
         <div style={card}>
           <div style={grid}>
@@ -284,6 +326,9 @@ export default function OrdersPage() {
         }, 0);
         const lines = o.order_lines || [];
         const readyToClose = o.order_status === 'Open' && lines.length > 0 && lines.every(l => FINAL_LINE_STATUSES.includes(l.line_status));
+        const orderTotalOrdered = lines.reduce((s, l) => s + Number(l.cases_ordered || 0), 0);
+        const orderTotalAllocated = lines.reduce((s, l) => s + (allocByLine[l.order_line_id]?.cases || 0), 0);
+        const orderClaimsCount = lines.reduce((s, l) => s + (claimsByLine[l.order_line_id] || 0), 0);
         return (
           <div key={o.customer_order_id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
@@ -294,9 +339,15 @@ export default function OrdersPage() {
                 {orderNeedsSupply > 0 && <span className="fo-badge fo-badge-amber">Needs Supply: {orderNeedsSupply}</span>}
                 <span style={jackets.length ? jacketPill : unassignedPill}>{jackets.length ? 'Jacket: ' + jackets.join(', ') : 'Unassigned'}</span>
                 {readyToClose && <span className="fo-badge fo-badge-green">Ready to Close</span>}
+                {orderClaimsCount > 0 && <span className="fo-badge fo-badge-red">{orderClaimsCount} Claim{orderClaimsCount === 1 ? '' : 's'}</span>}
                 <span style={pill(o.order_status)}>{o.order_status}</span>
               </div>
             </div>
+            {o.order_status === 'Open' && orderTotalOrdered > 0 && (
+              <div style={{ marginTop: 10, maxWidth: 340 }}>
+                <ProgressBar label="Allocated" current={orderTotalAllocated} max={orderTotalOrdered} height={6} />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
               <button onClick={() => openEditOrder(o)} style={editBtn}>Edit Order</button>
               {o.order_status === 'Open' && <button onClick={() => closeOrder(o)} style={{ ...editBtn, background: readyToClose ? 'var(--fo-accent)' : editBtn.background, color: readyToClose ? '#fff' : editBtn.color }}>Close Order</button>}
@@ -340,7 +391,7 @@ export default function OrdersPage() {
                   <tbody>{(o.order_lines || []).map(l => {
                     const revenue = l.cases_ordered * l.sell_price_per_case;
                     const amended = l.original_cases_ordered != null && Number(l.original_cases_ordered) !== Number(l.cases_ordered);
-                    const alloc = allocByLine[l.order_line_id] || { cases: 0, jackets: [] };
+                    const alloc = allocByLine[l.order_line_id] || { cases: 0, jackets: [], byJacket: [] };
                     const needsSupply = Math.max(0, Number(l.cases_ordered || 0) - alloc.cases);
                     const allocStatus = alloc.cases === 0 ? 'Unassigned' : needsSupply > 0 ? 'Partially Allocated' : 'Fully Allocated';
                     const allocStatusTone = allocStatus === 'Fully Allocated' ? 'fo-badge-green' : allocStatus === 'Partially Allocated' ? 'fo-badge-amber' : 'fo-badge-gray';
@@ -354,9 +405,14 @@ export default function OrdersPage() {
                         </td>
                         <td style={{ textAlign: 'right' }}>{alloc.cases}</td>
                         <td style={{ textAlign: 'right', color: needsSupply > 0 ? 'var(--fo-warn)' : 'var(--fo-text-dim)', fontWeight: needsSupply > 0 ? 600 : 400 }}>{needsSupply}</td>
-                        <td><span className={`fo-badge ${allocStatusTone}`}>{allocStatus}</span></td>
+                        <td style={{ minWidth: 110 }}>
+                          <span className={`fo-badge ${allocStatusTone}`}>{allocStatus}</span>
+                          {Number(l.cases_ordered) > 0 && <div style={{ marginTop: 4 }}><ProgressBar current={alloc.cases} max={Number(l.cases_ordered)} height={4} label="" /></div>}
+                        </td>
                         <td><span className={`fo-badge ${dispositionTone}`}>{l.line_status || 'Open'}</span></td>
-                        <td style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{alloc.jackets.length ? alloc.jackets.join(', ') : '—'}</td>
+                        <td style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>
+                          {alloc.byJacket.length ? alloc.byJacket.map((j, i) => <div key={i}>#{j.jacket_number} — {j.cases}cs</div>) : '—'}
+                        </td>
                         <td><input type="number" defaultValue={l.sell_price_per_case} onBlur={e => updateLineField(l.order_line_id, 'sell_price_per_case', Number(e.target.value))} style={{ width: 72 }} /></td>
                         <td>${revenue.toLocaleString()}</td>
                         <td><button onClick={() => openEditLine(o.customer_order_id, l)} style={editBtn}>Edit</button> <button onClick={() => deleteLine(l.order_line_id)} style={{ ...editBtn, color: 'var(--fo-error)' }}>Delete</button></td>
@@ -434,3 +490,13 @@ const input = { display: 'block', width: '100%', marginTop: 4 };
 const table = { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 };
 const trHead = { textAlign: 'left', color: 'var(--fo-text-dim)' };
 const tr = {};
+
+function MiniKPI({ label, value, tone }) {
+  const toneColor = tone === 'red' ? 'var(--fo-error)' : tone === 'amber' ? 'var(--fo-warn)' : tone === 'green' ? 'var(--fo-success)' : 'var(--fo-text)';
+  return (
+    <div style={{ background: 'var(--fo-card-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: '10px 14px' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.02em' }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: toneColor, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
