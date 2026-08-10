@@ -1280,7 +1280,8 @@ export default function JacketWorkspace() {
           </div>
 
           {activeTab === 'Overview' && (
-            <OverviewTab jacket={jacket} purchasedLines={purchasedLines} allJacketLinesGlobal={allJacketLinesGlobal} jacketLines={jacketLines} claims={claims} freight={freight} availableOnPurchased={availableOnPurchased} totalWeight={totalWeight} totalPallets={totalPallets} weightCapacity={weightCapacity} palletCapacity={palletCapacity} />
+            <OverviewTab jacket={jacket} purchasedLines={purchasedLines} allJacketLinesGlobal={allJacketLinesGlobal} jacketLines={jacketLines} claims={claims} freight={freight} availableOnPurchased={availableOnPurchased} totalWeight={totalWeight} totalPallets={totalPallets} weightCapacity={weightCapacity} palletCapacity={palletCapacity}
+              estRevenue={estRevenue} freightOnlyRevenue={freightOnlyRevenue} adjustmentsRevenue={adjustmentsRevenue} baseCostTotal={baseCostTotal} supplierFeesTotal={supplierFeesTotal} freightCost={freightCost} adjustmentsCost={adjustmentsCost} totalRevenue={totalRevenue} totalCost={totalCost} totalProfit={totalProfit} totalMarginPct={totalMarginPct} />
           )}
 
           {activeTab === 'Products' && (
@@ -2364,45 +2365,109 @@ function textField(label, value, onChange, type = 'text') {
   );
 }
 
-function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased, totalWeight, totalPallets, weightCapacity, palletCapacity }) {
+function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased, totalWeight, totalPallets, weightCapacity, palletCapacity,
+  estRevenue, freightOnlyRevenue, adjustmentsRevenue, baseCostTotal, supplierFeesTotal, freightCost, adjustmentsCost, totalRevenue, totalCost, totalProfit, totalMarginPct }) {
   const hasProduct = purchasedLines.length > 0;
-  const stillAvailable = purchasedLines.reduce((s, p) => s + availableOnPurchased(p).available, 0);
+  const totals = purchasedLines.reduce((s, p) => {
+    const a = availableOnPurchased(p);
+    return { base: s.base + a.base, allocated: s.allocated + a.allocated };
+  }, { base: 0, allocated: 0 });
+  const stillAvailable = totals.base - totals.allocated;
+  const allocationPct = totals.base > 0 ? Math.round((totals.allocated / totals.base) * 100) : 0;
+  const palletPct = palletCapacity > 0 ? Math.round((totalPallets / palletCapacity) * 100) : 0;
+  const weightPct = weightCapacity > 0 ? Math.round((totalWeight / weightCapacity) * 100) : 0;
+
+  // ---- Attention Radar — real data only, each item carries a genuine
+  // severity rather than one blanket color ----
   const attention = [];
-  if (totalWeight > weightCapacity) attention.push(`Over weight capacity — ${totalWeight.toLocaleString()} / ${weightCapacity.toLocaleString()} lb`);
-  if (totalPallets > palletCapacity) attention.push(`Over pallet capacity — ${totalPallets} / ${palletCapacity} pallets`);
-  if (stillAvailable > 0) attention.push(`${stillAvailable} cases still available to sell`);
-  if (claims.length > 0) attention.push(`${claims.length} open claim(s)`);
-  if (hasProduct && !freight) attention.push('Carrier not booked');
-  if (freight && !freight.carrier_paid) attention.push('Carrier not yet paid');
-  if (hasProduct && jacket.supplier_payment_status && jacket.supplier_payment_status !== 'Paid') attention.push(`Supplier payment: ${jacket.supplier_payment_status}`);
+  if (totalWeight > weightCapacity) attention.push({ text: `Over weight capacity — ${totalWeight.toLocaleString()} / ${weightCapacity.toLocaleString()} lb`, severity: 'red' });
+  if (totalPallets > palletCapacity) attention.push({ text: `Over pallet capacity — ${totalPallets} / ${palletCapacity} pallets`, severity: 'red' });
+  if (claims.length > 0) attention.push({ text: `${claims.length} open claim${claims.length === 1 ? '' : 's'}`, severity: 'red' });
+  if (stillAvailable > 0) attention.push({ text: `${stillAvailable} cases still available to sell`, severity: 'amber' });
+  if (hasProduct && !freight) attention.push({ text: 'Carrier not booked', severity: 'amber' });
+  if (freight && !freight.carrier_paid) attention.push({ text: 'Carrier not yet paid', severity: 'blue' });
+  if (hasProduct && jacket.supplier_payment_status && jacket.supplier_payment_status !== 'Paid') attention.push({ text: `Supplier payment: ${jacket.supplier_payment_status}`, severity: 'blue' });
+  const severityRank = { red: 0, amber: 1, blue: 2 };
+  attention.sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+  const severityBadge = { red: 'fo-badge-red', amber: 'fo-badge-amber', blue: 'fo-badge-blue' };
+
+  const logisticsState = ['In Transit', 'Delivered', 'Closed'].includes(jacket.jacket_status) ? 'Healthy' : jacket.jacket_status === 'Planning' ? 'Pending' : 'Attention';
+  const financialsState = jacket.jacket_status === 'Closed' ? 'Healthy' : 'Pending';
+  const claimsState = claims.length > 0 ? 'Issue' : 'Healthy';
 
   return (
-    <div className="fo-card">
-      <div className="fo-h2">Jacket Health</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 20 }}>
-        <HealthRow label="Supplier" value={!hasProduct ? 'Not Purchased Yet' : 'Confirmed'} tone={!hasProduct ? 'gray' : 'green'} />
-        <HealthRow label="Product" value={!hasProduct ? 'Not Purchased Yet' : stillAvailable > 0 ? `${stillAvailable} cs Available` : 'Fully Allocated'} tone={!hasProduct ? 'gray' : stillAvailable === 0 ? 'green' : 'amber'} />
-        <HealthRow label="Logistics" value={jacket.jacket_status} tone={['In Transit', 'Delivered', 'Closed'].includes(jacket.jacket_status) ? 'green' : jacket.jacket_status === 'Planning' ? 'gray' : 'amber'} />
-        <HealthRow label="Freight" value={freight ? freight.status : hasProduct ? 'Unbooked' : 'N/A'} tone={freight ? 'green' : hasProduct ? 'amber' : 'gray'} />
-        <HealthRow label="Financials" value={jacket.jacket_status === 'Closed' ? 'Closed' : 'Open'} tone={jacket.jacket_status === 'Closed' ? 'green' : 'gray'} />
-        <HealthRow label="Claims" value={claims.length > 0 ? `${claims.length} Open` : 'None'} tone={claims.length > 0 ? 'amber' : 'green'} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ---- Jacket Health — consolidated command-center panel ---- */}
+      <div className="fo-card">
+        <div className="fo-h2">Jacket Health</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
+          <HealthMetric label="Allocation" value={hasProduct ? `${allocationPct}%` : '—'} pct={hasProduct ? allocationPct : null} tone={!hasProduct ? 'gray' : allocationPct >= 100 ? 'green' : allocationPct >= 50 ? 'amber' : 'red'} />
+          <HealthMetric label="Pallets" value={`${palletPct}%`} pct={palletPct} tone={palletPct > 100 ? 'red' : palletPct >= 85 ? 'amber' : 'green'} />
+          <HealthMetric label="Weight" value={`${weightPct}%`} pct={weightPct} tone={weightPct > 100 ? 'red' : weightPct >= 85 ? 'amber' : 'green'} />
+          <HealthMetric label="Route" value={jacket.jacket_status} state={logisticsState} />
+          <HealthMetric label="Financials" value={financialsState} state={financialsState} />
+          <HealthMetric label="Claims" value={claims.length > 0 ? `${claims.length} Open` : 'None'} state={claimsState} />
+        </div>
       </div>
-      <div className="fo-h2">What Needs Attention</div>
-      {attention.length === 0 ? (
-        <span className="fo-badge fo-badge-green">All clear</span>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {attention.map((a, i) => <div key={i}><span className={`fo-badge ${a.startsWith('Over') ? 'fo-badge-red' : 'fo-badge-amber'}`}>{a}</span></div>)}
+
+      {/* ---- Profit Pulse — reuses the exact same numbers as the
+          Financials tab, nothing recalculated ---- */}
+      <div className="fo-card">
+        <div className="fo-h2">Profit Pulse</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 14 }}>
+          <PulseStat label="Product Revenue" value={estRevenue} />
+          <PulseStat label="Freight Revenue" value={freightOnlyRevenue} />
+          <PulseStat label="Product Cost" value={-(baseCostTotal + supplierFeesTotal)} />
+          <PulseStat label="Freight Cost" value={-freightCost} />
+          {adjustmentsRevenue !== 0 || adjustmentsCost !== 0 ? <PulseStat label="Other Adjustments" value={adjustmentsRevenue - adjustmentsCost} /> : null}
+        </div>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', paddingTop: 14, borderTop: '1px solid var(--fo-border-soft)' }}>
+          <div>
+            <div className="fo-kpi-label">Estimated Profit</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: totalProfit >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>${totalProfit.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="fo-kpi-label">Margin</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: totalMarginPct >= 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>{totalMarginPct.toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---- Attention Radar ---- */}
+      <div className="fo-card">
+        <div className="fo-h2">Attention Radar</div>
+        {attention.length === 0 ? (
+          <span className="fo-badge fo-badge-green">All clear</span>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {attention.map((a, i) => <div key={i}><span className={`fo-badge ${severityBadge[a.severity]}`}>{a.text}</span></div>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+function HealthMetric({ label, value, pct, tone, state }) {
+  const stateColor = { Healthy: 'var(--fo-success)', Attention: 'var(--fo-warn)', Pending: 'var(--fo-text-faint)', Issue: 'var(--fo-error)' };
+  const toneColor = { green: 'var(--fo-success)', amber: 'var(--fo-warn)', red: 'var(--fo-error)', gray: 'var(--fo-text-faint)' };
+  const color = state ? (stateColor[state] || 'var(--fo-text-dim)') : (toneColor[tone] || 'var(--fo-text)');
+  return (
+    <div style={{ background: 'var(--fo-section-bg)', border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: '10px 12px' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.02em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color }}>{value}</div>
+      {pct != null && (
+        <div style={{ height: 5, background: 'var(--fo-card-bg)', borderRadius: 999, marginTop: 6, overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: 999, transition: 'width .3s ease' }} />
         </div>
       )}
     </div>
   );
 }
-function HealthRow({ label, value, tone }) {
+function PulseStat({ label, value }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--fo-section-bg)', borderRadius: 'var(--fo-radius-sm)' }}>
-      <span style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{label}</span>
-      <span className={`fo-badge fo-badge-${tone === 'green' ? 'green' : tone === 'amber' ? 'amber' : 'gray'}`}>{value}</span>
+    <div>
+      <div className="fo-kpi-label">{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: value < 0 ? 'var(--fo-error)' : 'var(--fo-text)' }}>{value < 0 ? '-' : ''}${Math.abs(value).toLocaleString()}</div>
     </div>
   );
 }
