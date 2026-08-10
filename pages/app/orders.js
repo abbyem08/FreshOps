@@ -368,7 +368,7 @@ export default function OrdersPage() {
                 <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', marginTop: 8 }}>Supplier and cost come from Jacket allocation — assign this line to a Jacket to see them there.</div>
 
                 {lineTarget && lineTarget.orderId === o.customer_order_id ? (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #DCD5C1' }}>
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--fo-border)' }}>
                     <div style={grid}>
                       <label style={{ fontSize: 13 }}>Product
                         <select value={lineForm.product_id} onChange={e => setLineForm({ ...lineForm, product_id: e.target.value })} style={input}>
@@ -391,11 +391,11 @@ export default function OrdersPage() {
                         </label>
                       )}
                     </div>
-                    <button onClick={saveLine} style={{ ...btn, background: '#6B8E4E', marginTop: 12 }}>{lineTarget.lineId ? 'Update Line' : 'Save Line'}</button>
-                    <button onClick={() => setLineTarget(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid #DCD5C1', marginTop: 12, marginLeft: 8 }}>Cancel</button>
+                    <button onClick={saveLine} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{lineTarget.lineId ? 'Update Line' : 'Save Line'}</button>
+                    <button onClick={() => setLineTarget(null)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
                   </div>
                 ) : (
-                  <button onClick={() => openAddLine(o.customer_order_id)} style={{ background: 'none', border: 'none', color: '#6B8E4E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
+                  <button onClick={() => openAddLine(o.customer_order_id)} style={{ background: 'none', border: 'none', color: 'var(--fo-accent)', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8, padding: '4px 0' }}>+ Add Order Line</button>
                 )}
               </div>
             )}
