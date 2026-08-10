@@ -74,10 +74,18 @@ export default function JacketWorkspace() {
   const [reassigningLineId, setReassigningLineId] = useState(null);
   const [reassignOptions, setReassignOptions] = useState([]);
   const [reassignTarget, setReassignTarget] = useState('');
-  const [movingClaimId, setMovingClaimId] = useState(null);
-  const [moveCasesForm, setMoveCasesForm] = useState({ target_order_line_id: '', cases: '' });
-  const [moveCasesOptions, setMoveCasesOptions] = useState([]);
   const [compensatingClaimId, setCompensatingClaimId] = useState(null);
+  const [caseDispositions, setCaseDispositions] = useState([]);
+  const [rejectingClaimId, setRejectingClaimId] = useState(null);
+  const [rejectForm, setRejectForm] = useState({ cases: '', notes: '' });
+  const [reassignPickerFor, setReassignPickerFor] = useState(null); // { claimId, jacketLineId, available }
+  const [reassignMode, setReassignMode] = useState(null); // 'existing' | 'allocation' | 'new'
+  const [reassignReason, setReassignReason] = useState('Rejected Product Reassignment');
+  const [assignExistingForm, setAssignExistingForm] = useState({ order_line_id: '', cases: '' });
+  const [assignExistingOptions, setAssignExistingOptions] = useState([]);
+  const [newOrderFromRejectForm, setNewOrderFromRejectForm] = useState({ customer_id: '', cases: '', sell_price_per_case: '', customer_po: '' });
+  const [showDumpFor, setShowDumpFor] = useState(null); // { claimId, jacketLineId, available }
+  const [dumpForm, setDumpForm] = useState({ cases: '', dump_date: '', reason: 'Quality/Condition', dump_fee: '', notes: '' });
   const [compensationForm, setCompensationForm] = useState({ cases: '', notes: '' });
 
   useEffect(() => {
@@ -171,6 +179,15 @@ export default function JacketWorkspace() {
 
     const { data: fa } = await supabase.from('financial_adjustments').select('*').eq('jacket_id', jacketId).order('adjustment_date', { ascending: false }).order('adjustment_id', { ascending: false });
     setFinancialAdjustments(fa || []);
+
+    const { data: allJacketLineIdsRows } = await supabase.from('jacket_lines').select('jacket_line_id').eq('jacket_id', jacketId);
+    const allJacketLineIds = (allJacketLineIdsRows || []).map(r => r.jacket_line_id);
+    if (allJacketLineIds.length) {
+      const { data: cd } = await supabase.from('case_dispositions').select('*').in('jacket_line_id', allJacketLineIds).order('created_at').order('disposition_id');
+      setCaseDispositions(cd || []);
+    } else {
+      setCaseDispositions([]);
+    }
 
     // Cases Still Needed — across ALL open orders, not just this jacket's,
     // so it stays useful for sourcing/truck planning while you're in here
@@ -746,7 +763,13 @@ export default function JacketWorkspace() {
     if (error) { alert('Update failed: ' + error.message); return; }
     const typeMap = { load_status: 'Stop Change', bol_number: 'Note' };
     await logAmendments(`${fieldName === 'bol_number' ? 'BOL #' : 'Load status'} changed`, typeMap[fieldName] || 'Other', [{ field: fieldName, before: old?.[fieldName] ?? null, after: value }], 'jacket_lines', id);
-    if (fieldName === 'load_status') await checkAutoJacketStatus();
+    if (fieldName === 'load_status') {
+      if (value === 'Delivered' && old?.order_line_id) {
+        const { data: ol } = await supabase.from('order_lines').select('line_status').eq('order_line_id', old.order_line_id).maybeSingle();
+        if (ol && ol.line_status === 'Open') await supabase.from('order_lines').update({ line_status: 'Delivered' }).eq('order_line_id', old.order_line_id);
+      }
+      await checkAutoJacketStatus();
+    }
     loadAll();
   }
   function openAmendOrdered(line) { setAmendingOrderedLineId(line.jacket_line_id); setAmendOrderedValue(line.order_lines?.cases_ordered ?? ''); }
@@ -773,6 +796,9 @@ export default function JacketWorkspace() {
       if (line && line.load_status !== 'Delivered') {
         await supabase.from('jacket_lines').update({ load_status: 'Delivered', updated_at: new Date().toISOString() }).eq('jacket_line_id', jacketLineId);
         await logAmendments('Load status auto-updated', 'Stop Change', [{ field: 'load_status', before: line.load_status, after: 'Delivered' }], 'jacket_lines', jacketLineId);
+        if (line.order_line_id && line.order_lines?.line_status === 'Open') {
+          await supabase.from('order_lines').update({ line_status: 'Delivered' }).eq('order_line_id', line.order_line_id);
+        }
         await checkAutoJacketStatus();
       }
     }
@@ -846,35 +872,142 @@ export default function JacketWorkspace() {
     if (error) { alert('Delete failed: ' + error.message); return; }
     loadAll();
   }
-  async function openMoveCases(claim) {
-    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
-    if (!line) { alert('This claim has no jacket line attached — nothing to move.'); return; }
-    const { data } = await supabase
-      .from('order_lines').select('order_line_id, customer_orders(acumatica_order_no, order_status, customers(company))')
-      .eq('product_id', line.order_lines?.product_id).neq('order_line_id', line.order_line_id);
-    setMoveCasesOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
-    setMoveCasesForm({ target_order_line_id: '', cases: '' });
-    setMovingClaimId(claim.claim_id);
+  function availableForLine(jacketLineId) {
+    const relevant = caseDispositions.filter(d => d.jacket_line_id === jacketLineId);
+    const rejected = relevant.filter(d => d.disposition_type === 'Rejected').reduce((s, d) => s + Number(d.cases), 0);
+    const reassigned = relevant.filter(d => d.disposition_type === 'Reassigned').reduce((s, d) => s + Number(d.cases), 0);
+    const dumped = relevant.filter(d => d.disposition_type === 'Dumped').reduce((s, d) => s + Number(d.cases), 0);
+    return { rejected, reassigned, dumped, available: rejected - reassigned - dumped };
   }
-  async function saveMoveCases(claim) {
+  function openMarkRejected(claim) {
     const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
-    if (!line) return;
-    const cases = Number(moveCasesForm.cases);
-    if (!cases || cases <= 0) { alert('Enter how many cases to move.'); return; }
-    if (!moveCasesForm.target_order_line_id) { alert('Pick which order to move them to.'); return; }
+    setRejectForm({ cases: line ? String(line.cases_to_load) : '', notes: '' });
+    setRejectingClaimId(claim.claim_id);
+  }
+  async function saveMarkRejected(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached.'); return; }
+    const cases = Number(rejectForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases were rejected.'); return; }
     if (cases > Number(line.cases_to_load)) { alert(`Only ${line.cases_to_load} cases are on this allocation.`); return; }
-    const { error: updateErr } = await supabase.from('jacket_lines').update({ cases_to_load: Number(line.cases_to_load) - cases, quantity_updated_at: new Date().toISOString() }).eq('jacket_line_id', line.jacket_line_id);
-    if (updateErr) { alert('Move failed: ' + updateErr.message); return; }
-    const { error: insertErr } = await supabase.from('jacket_lines').insert({
-      jacket_id: line.jacket_id, order_line_id: Number(moveCasesForm.target_order_line_id), jacket_product_line_id: line.jacket_product_line_id,
-      allocated_cost_per_case: line.allocated_cost_per_case, planned_cases: cases, cases_to_load: cases, actual_cases_loaded: 0, actual_cases_delivered: 0,
-      load_status: line.load_status, quantity_updated_at: new Date().toISOString(),
+    const { error } = await supabase.from('case_dispositions').insert({
+      jacket_line_id: line.jacket_line_id, claim_id: claim.claim_id, disposition_type: 'Rejected',
+      cases, notes: rejectForm.notes || null, created_by: userEmail,
     });
-    if (insertErr) { alert('Move partly failed: ' + insertErr.message); return; }
-    await logEvent('cases_moved', `Moved ${cases} cases to a different order (claim resolution)`);
-    setMovingClaimId(null);
+    if (error) { alert('Failed: ' + error.message); return; }
+    const fullReject = cases >= Number(line.cases_to_load);
+    if (line.order_line_id) {
+      await supabase.from('order_lines').update({ line_status: fullReject ? 'Rejected' : 'Shorted' }).eq('order_line_id', line.order_line_id);
+    }
+    await logEvent('cases_rejected', `${cases} cases marked rejected — ${line.order_lines?.products?.commodity}`);
+    setRejectingClaimId(null);
+    setRejectForm({ cases: '', notes: '' });
     loadAll();
   }
+
+  // ---- Reassign Cases: 3-option picker ----
+  function openReassignPicker(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached.'); return; }
+    const { available } = availableForLine(line.jacket_line_id);
+    setReassignPickerFor({ claimId: claim.claim_id, jacketLineId: line.jacket_line_id, available });
+    setReassignMode(null);
+    setReassignReason('Rejected Product Reassignment');
+    setAssignExistingForm({ order_line_id: '', cases: '' });
+    setNewOrderFromRejectForm({ customer_id: '', cases: '', sell_price_per_case: '', customer_po: '' });
+  }
+  function closeReassignPicker() { setReassignPickerFor(null); setReassignMode(null); }
+  async function chooseReassignMode(mode) {
+    setReassignMode(mode);
+    if (mode === 'existing' || mode === 'allocation') {
+      const line = jacketLines.find(l => l.jacket_line_id === reassignPickerFor.jacketLineId);
+      const { data } = await supabase
+        .from('order_lines').select('order_line_id, cases_ordered, customer_orders(acumatica_order_no, order_status, customers(company))')
+        .eq('product_id', line?.order_lines?.product_id).neq('order_line_id', line?.order_line_id);
+      setAssignExistingOptions((data || []).filter(ol => ol.customer_orders?.order_status === 'Open'));
+      setReassignReason(mode === 'existing' ? 'Rejected Product Reassignment' : 'Operational Correction');
+    }
+  }
+  async function saveAssignExisting() {
+    const line = jacketLines.find(l => l.jacket_line_id === reassignPickerFor.jacketLineId);
+    if (!line) return;
+    const cases = Number(assignExistingForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases to move.'); return; }
+    if (cases > reassignPickerFor.available) { alert(`Only ${reassignPickerFor.available} cases are available.`); return; }
+    if (!assignExistingForm.order_line_id) { alert('Pick which order.'); return; }
+    const { data: newLine, error: insertErr } = await supabase.from('jacket_lines').insert({
+      jacket_id: line.jacket_id, order_line_id: Number(assignExistingForm.order_line_id), jacket_product_line_id: line.jacket_product_line_id,
+      allocated_cost_per_case: line.allocated_cost_per_case, planned_cases: cases, cases_to_load: cases, actual_cases_loaded: 0, actual_cases_delivered: 0,
+      load_status: 'Planned', quantity_updated_at: new Date().toISOString(),
+    }).select().single();
+    if (insertErr) { alert('Move failed: ' + insertErr.message); return; }
+    await supabase.from('case_dispositions').insert({
+      jacket_line_id: line.jacket_line_id, claim_id: reassignPickerFor.claimId, disposition_type: 'Reassigned',
+      cases, reason: reassignReason, target_order_line_id: Number(assignExistingForm.order_line_id), target_jacket_line_id: newLine.jacket_line_id,
+      created_by: userEmail,
+    });
+    await logEvent('cases_reassigned', `${cases} cases reassigned to a different order — ${reassignReason}`);
+    closeReassignPicker();
+    loadAll();
+  }
+  async function saveCreateNewOrderFromReject() {
+    const line = jacketLines.find(l => l.jacket_line_id === reassignPickerFor.jacketLineId);
+    if (!line) return;
+    const cases = Number(newOrderFromRejectForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases.'); return; }
+    if (cases > reassignPickerFor.available) { alert(`Only ${reassignPickerFor.available} cases are available.`); return; }
+    if (!newOrderFromRejectForm.customer_id) { alert('Pick a customer.'); return; }
+    const { data: newOrder, error: orderErr } = await supabase.from('customer_orders').insert({
+      customer_id: Number(newOrderFromRejectForm.customer_id), customer_po: newOrderFromRejectForm.customer_po || null,
+      order_date: new Date().toISOString().slice(0, 10), order_status: 'Open', source: 'Internal', order_type: 'Produce Sale',
+    }).select().single();
+    if (orderErr) { alert('Could not create order: ' + orderErr.message); return; }
+    const sell = newOrderFromRejectForm.sell_price_per_case ? Number(newOrderFromRejectForm.sell_price_per_case) : null;
+    const { data: newOrderLine, error: lineErr } = await supabase.from('order_lines').insert({
+      customer_order_id: newOrder.customer_order_id, product_id: line.order_lines?.product_id, cases_ordered: cases,
+      original_cases_ordered: cases, sell_price_per_case: sell, original_sell_price_per_case: sell, fob_cost_per_case: line.allocated_cost_per_case,
+      pricing_type: 'FOB', line_status: 'Open',
+    }).select().single();
+    if (lineErr) { alert('Order created, but the line failed: ' + lineErr.message); return; }
+    const { data: newJacketLine, error: jlErr } = await supabase.from('jacket_lines').insert({
+      jacket_id: line.jacket_id, order_line_id: newOrderLine.order_line_id, jacket_product_line_id: line.jacket_product_line_id,
+      allocated_cost_per_case: line.allocated_cost_per_case, planned_cases: cases, cases_to_load: cases, actual_cases_loaded: 0, actual_cases_delivered: 0,
+      load_status: 'Planned', quantity_updated_at: new Date().toISOString(),
+    }).select().single();
+    if (jlErr) { alert('Order and line created, but allocation failed: ' + jlErr.message); return; }
+    await supabase.from('case_dispositions').insert({
+      jacket_line_id: line.jacket_line_id, claim_id: reassignPickerFor.claimId, disposition_type: 'Reassigned',
+      cases, reason: 'Rejected Product Reassignment', target_order_line_id: newOrderLine.order_line_id, target_jacket_line_id: newJacketLine.jacket_line_id,
+      created_by: userEmail,
+    });
+    await logEvent('new_order_from_rejected', `Created a new order for ${cases} reassigned cases — ${line.order_lines?.products?.commodity}`);
+    closeReassignPicker();
+    loadAll();
+  }
+
+  // ---- Dump Cases ----
+  function openDumpCases(claim) {
+    const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
+    if (!line) { alert('This claim has no jacket line attached.'); return; }
+    const { available } = availableForLine(line.jacket_line_id);
+    setShowDumpFor({ claimId: claim.claim_id, jacketLineId: line.jacket_line_id, available });
+    setDumpForm({ cases: '', dump_date: new Date().toISOString().slice(0, 10), reason: 'Quality/Condition', dump_fee: '', notes: '' });
+  }
+  async function saveDumpCases() {
+    const cases = Number(dumpForm.cases);
+    if (!cases || cases <= 0) { alert('Enter how many cases were dumped.'); return; }
+    if (cases > showDumpFor.available) { alert(`Only ${showDumpFor.available} cases are available.`); return; }
+    const { error } = await supabase.from('case_dispositions').insert({
+      jacket_line_id: showDumpFor.jacketLineId, claim_id: showDumpFor.claimId, disposition_type: 'Dumped',
+      cases, reason: dumpForm.reason, dump_fee: dumpForm.dump_fee ? Number(dumpForm.dump_fee) : null,
+      notes: dumpForm.notes || null, created_by: userEmail,
+    });
+    if (error) { alert('Failed: ' + error.message); return; }
+    await logEvent('cases_dumped', `${cases} cases dumped — ${dumpForm.reason}`);
+    setShowDumpFor(null);
+    loadAll();
+  }
+
   function openCompensation(claim) { setCompensationForm({ cases: '', notes: '' }); setCompensatingClaimId(claim.claim_id); }
   async function saveCompensation(claim) {
     const line = jacketLines.find(l => l.jacket_line_id === claim.jacket_line_id);
@@ -1710,12 +1843,26 @@ export default function JacketWorkspace() {
                           <span className={c.status === 'Open' ? 'fo-badge fo-badge-amber' : c.status === 'Under Review' ? 'fo-badge fo-badge-amber' : 'fo-badge fo-badge-green'}>{c.status}</span>{' '}
                           <strong>{c.claim_type}</strong> — {c.description}
                           <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{c.snapshot_customer} · {c.snapshot_commodity}</div>
+                          {c.jacket_line_id && (() => {
+                            const disp = availableForLine(c.jacket_line_id);
+                            if (disp.rejected === 0) return null;
+                            return (
+                              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 6, fontSize: 12 }}>
+                                <span>Rejected <strong>{disp.rejected}</strong></span>
+                                <span>Reassigned <strong>{disp.reassigned}</strong></span>
+                                <span>Dumped <strong>{disp.dumped}</strong></span>
+                                <span style={{ color: disp.available > 0 ? 'var(--fo-warn)' : 'var(--fo-text-dim)' }}>Available <strong>{disp.available}</strong></span>
+                              </div>
+                            );
+                          })()}
                         </div>
-                        <div>
-                          <button onClick={() => openEditClaim(c)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
-                          <button onClick={() => openResolve(c)} className="fo-btn fo-btn-sm">{c.status === 'Open' ? 'Resolve' : 'Update Resolution'}</button>{' '}
-                          <button onClick={() => openMoveCases(c)} className="fo-btn fo-btn-sm">Move Cases</button>{' '}
-                          <button onClick={() => openCompensation(c)} className="fo-btn fo-btn-sm">Add Compensation</button>{' '}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button onClick={() => openEditClaim(c)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>
+                          <button onClick={() => openResolve(c)} className="fo-btn fo-btn-sm">{c.status === 'Open' ? 'Resolve' : 'Update Resolution'}</button>
+                          <button onClick={() => openMarkRejected(c)} className="fo-btn fo-btn-secondary fo-btn-sm">Mark Rejected</button>
+                          <button onClick={() => openReassignPicker(c)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Reassign Cases</button>
+                          <button onClick={() => openDumpCases(c)} className="fo-btn fo-btn-danger fo-btn-sm">Dump Cases</button>
+                          <button onClick={() => openCompensation(c)} className="fo-btn fo-btn-sm">Add Compensation</button>
                           <button onClick={() => deleteClaim(c.claim_id)} className="fo-btn fo-btn-danger fo-btn-sm">Delete</button>
                         </div>
                       </div>
@@ -1754,17 +1901,70 @@ export default function JacketWorkspace() {
                           </div>
                         </div>
                       )}
-                      {movingClaimId === c.claim_id && (
+                      {rejectingClaimId === c.claim_id && (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                          <label style={{ fontSize: 13 }}>Move to which order?
-                            <select value={moveCasesForm.target_order_line_id} onChange={e => setMoveCasesForm({ ...moveCasesForm, target_order_line_id: e.target.value })} style={{ display: 'block', minWidth: 220, marginTop: 4 }}>
-                              <option value="">— select —</option>
-                              {moveCasesOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
-                            </select>
-                          </label>
-                          <label style={{ fontSize: 13 }}>Cases<input type="number" value={moveCasesForm.cases} onChange={e => setMoveCasesForm({ ...moveCasesForm, cases: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
-                          <button onClick={() => saveMoveCases(c)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
-                          <button onClick={() => setMovingClaimId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                          <label style={{ fontSize: 13 }}>Cases Rejected<input type="number" value={rejectForm.cases} onChange={e => setRejectForm({ ...rejectForm, cases: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
+                          <label style={{ fontSize: 13 }}>Notes<input value={rejectForm.notes} onChange={e => setRejectForm({ ...rejectForm, notes: e.target.value })} style={{ display: 'block', minWidth: 200, marginTop: 4 }} /></label>
+                          <button onClick={() => saveMarkRejected(c)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
+                          <button onClick={() => setRejectingClaimId(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                          <div style={{ fontSize: 11, color: 'var(--fo-text-faint)', width: '100%' }}>This sets the order line's status and makes these cases available to reassign or dump — it doesn't touch the claim's own financial resolution.</div>
+                        </div>
+                      )}
+                      {reassignPickerFor?.claimId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)' }}>
+                          <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', marginBottom: 8 }}><strong>{reassignPickerFor.available}</strong> cases available to reassign</div>
+                          {!reassignMode ? (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button onClick={() => chooseReassignMode('existing')} className="fo-btn fo-btn-sm">Assign to Existing Order</button>
+                              <button onClick={() => chooseReassignMode('allocation')} className="fo-btn fo-btn-sm">Move to Existing Allocation</button>
+                              <button onClick={() => setReassignMode('new')} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Create New Order</button>
+                              <button onClick={closeReassignPicker} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                            </div>
+                          ) : reassignMode === 'new' ? (
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                              <label style={{ fontSize: 13 }}>Customer
+                                <select value={newOrderFromRejectForm.customer_id} onChange={e => setNewOrderFromRejectForm({ ...newOrderFromRejectForm, customer_id: e.target.value })} style={{ display: 'block', minWidth: 180, marginTop: 4 }}>
+                                  <option value="">— select —</option>
+                                  {customers.map(cu => <option key={cu.customer_id} value={cu.customer_id}>{cu.company}</option>)}
+                                </select>
+                              </label>
+                              <label style={{ fontSize: 13 }}>Cases<input type="number" value={newOrderFromRejectForm.cases} onChange={e => setNewOrderFromRejectForm({ ...newOrderFromRejectForm, cases: e.target.value })} style={{ display: 'block', width: 80, marginTop: 4 }} /></label>
+                              <label style={{ fontSize: 13 }}>Sell $/cs<input type="number" value={newOrderFromRejectForm.sell_price_per_case} onChange={e => setNewOrderFromRejectForm({ ...newOrderFromRejectForm, sell_price_per_case: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
+                              <label style={{ fontSize: 13 }}>Customer PO<input value={newOrderFromRejectForm.customer_po} onChange={e => setNewOrderFromRejectForm({ ...newOrderFromRejectForm, customer_po: e.target.value })} style={{ display: 'block', width: 110, marginTop: 4 }} /></label>
+                              <button onClick={saveCreateNewOrderFromReject} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Create Order & Assign</button>
+                              <button onClick={() => setReassignMode(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Back</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                              <label style={{ fontSize: 13 }}>{reassignMode === 'existing' ? 'Assign to which order?' : 'Move to which allocation?'}
+                                <select value={assignExistingForm.order_line_id} onChange={e => setAssignExistingForm({ ...assignExistingForm, order_line_id: e.target.value })} style={{ display: 'block', minWidth: 220, marginTop: 4 }}>
+                                  <option value="">— select —</option>
+                                  {assignExistingOptions.map(ol => <option key={ol.order_line_id} value={ol.order_line_id}>{ol.customer_orders?.acumatica_order_no} — {ol.customer_orders?.customers?.company}</option>)}
+                                </select>
+                              </label>
+                              <label style={{ fontSize: 13 }}>Cases<input type="number" value={assignExistingForm.cases} onChange={e => setAssignExistingForm({ ...assignExistingForm, cases: e.target.value })} style={{ display: 'block', width: 80, marginTop: 4 }} /></label>
+                              <button onClick={saveAssignExisting} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Confirm</button>
+                              <button onClick={() => setReassignMode(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Back</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {showDumpFor?.claimId === c.claim_id && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--fo-border-soft)' }}>
+                          <div style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', marginBottom: 8 }}><strong>{showDumpFor.available}</strong> cases available to dump</div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <label style={{ fontSize: 13 }}>Cases<input type="number" value={dumpForm.cases} onChange={e => setDumpForm({ ...dumpForm, cases: e.target.value })} style={{ display: 'block', width: 80, marginTop: 4 }} /></label>
+                            <label style={{ fontSize: 13 }}>Date<input type="date" value={dumpForm.dump_date} onChange={e => setDumpForm({ ...dumpForm, dump_date: e.target.value })} style={{ display: 'block', marginTop: 4 }} /></label>
+                            <label style={{ fontSize: 13 }}>Reason
+                              <select value={dumpForm.reason} onChange={e => setDumpForm({ ...dumpForm, reason: e.target.value })} style={{ display: 'block', marginTop: 4 }}>
+                                <option>Quality/Condition</option><option>Out of Grade</option><option>No Home Found</option><option>Temperature Issue</option><option>Other</option>
+                              </select>
+                            </label>
+                            <label style={{ fontSize: 13 }}>Dump Fee ($)<input type="number" value={dumpForm.dump_fee} onChange={e => setDumpForm({ ...dumpForm, dump_fee: e.target.value })} style={{ display: 'block', width: 90, marginTop: 4 }} /></label>
+                            <label style={{ fontSize: 13 }}>Notes<input value={dumpForm.notes} onChange={e => setDumpForm({ ...dumpForm, notes: e.target.value })} style={{ display: 'block', minWidth: 160, marginTop: 4 }} /></label>
+                            <button onClick={saveDumpCases} className="fo-btn fo-btn-danger fo-btn-sm">Confirm Dump</button>
+                            <button onClick={() => setShowDumpFor(null)} className="fo-btn fo-btn-secondary fo-btn-sm">Cancel</button>
+                          </div>
                         </div>
                       )}
                       {compensatingClaimId === c.claim_id && (
