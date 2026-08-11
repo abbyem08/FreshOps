@@ -5,6 +5,7 @@ import AppShell from '../../../components/AppShell';
 import Logo from '../../../components/Logo';
 import { supabase } from '../../../lib/supabaseClient';
 import { ProgressBar, BarChart } from '../../../components/charts';
+import ProductIcon from '../../../components/ProductIcon';
 
 const BLANK_PURCHASED = { supplier_id: '', product_id: '', shipper_po: '', purchased_cases: '', actual_cases_received: '', purchase_cost_per_case: '', fee_total_per_case: '', notes: '' };
 const TABS = ['Overview', 'Products', 'Orders', 'Logistics', 'Financials', 'Documents'];
@@ -1315,10 +1316,13 @@ export default function JacketWorkspace() {
                 return (
                   <div key={p.jacket_product_line_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ fontSize: 13.5 }}>
-                        <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
-                        <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginTop: 2 }}>
-                          Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
+                      <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <ProductIcon commodity={p.products?.commodity} size={26} />
+                        <div>
+                          <strong>{p.products?.commodity} — {p.products?.pack_size}</strong> · {p.suppliers?.company || 'no supplier set'} {p.shipper_po ? `· PO ${p.shipper_po}` : ''}
+                          <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginTop: 2 }}>
+                            Purchased {p.purchased_cases}{p.actual_cases_received != null ? ` · Received ${p.actual_cases_received}` : ''} · Allocated {allocated} · <strong style={{ color: available > 0 ? 'var(--fo-success)' : 'var(--fo-error)' }}>Available {available}</strong> · ${Number(p.purchase_cost_per_case || 0).toFixed(2)}/cs
+                          </div>
                         </div>
                       </div>
                       <div>
@@ -1472,9 +1476,12 @@ export default function JacketWorkspace() {
                       return (
                         <div key={ol.order_line_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 10, marginBottom: 8 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ fontSize: 13.5 }}>
-                              <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no || 'no Acumatica #'}
-                              <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
+                            <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                              <ProductIcon commodity={ol.products?.commodity} size={22} />
+                              <div>
+                                <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no || 'no Acumatica #'}
+                                <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
+                              </div>
                             </div>
                             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                               <button onClick={() => openDemandAllocate(ol.order_line_id, matchingPurchased)} className="fo-btn fo-btn-sm" style={{ background: 'var(--fo-accent)', color: '#fff' }}>Allocate</button>
@@ -1523,7 +1530,7 @@ export default function JacketWorkspace() {
                       <tr key={jl.jacket_line_id}>
                         <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
-                        <td>{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</td>
+                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={jl.order_lines?.products?.commodity} size={20} />{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</div></td>
                         <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
                         <td style={{ textAlign: 'right' }}>
                           {editingAllocationId === jl.jacket_line_id ? (
@@ -1753,7 +1760,7 @@ export default function JacketWorkspace() {
                   return (
                     <div key={g.productId + '-' + g.supplierId} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', overflow: 'hidden', marginBottom: 12 }}>
                       <div style={{ background: variance !== 0 && g.loaded > 0 ? 'var(--fo-warn-bg)' : 'var(--fo-section-bg)', padding: '8px 12px', fontSize: 13, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                        <div><strong>{g.commodity} — {g.packSize}</strong> · {g.supplierName || 'no supplier'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={g.commodity} size={20} /><strong>{g.commodity} — {g.packSize}</strong> · {g.supplierName || 'no supplier'}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span>Ordered {g.ordered}</span>
                           <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Loaded
@@ -2490,7 +2497,7 @@ function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, ava
               if (loaded > 0 && delivered < loaded) flowAttention.push('Loaded but not delivered');
               return (
                 <div key={p.jacket_product_line_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{p.products?.commodity} — {p.products?.pack_size}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={p.products?.commodity} size={22} />{p.products?.commodity} — {p.products?.pack_size}</div>
                   <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginBottom: 10 }}>{p.suppliers?.company || '—'}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <ProgressBar label="Purchased" current={base} max={base} height={6} />
