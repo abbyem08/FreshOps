@@ -477,6 +477,8 @@ html.theme-dark .fo-pulse-active {
   .print-full-width { padding: 0 !important; margin: 0 !important; }
   .app-content-area { max-width: none !important; margin: 0 !important; padding: 0 !important; }
   .tabs-timeline-grid { display: block !important; }
+  .fo-pricesheet-table thead { display: table-header-group; }
+  .fo-pricesheet-table tr { page-break-inside: avoid; break-inside: avoid; }
   @page { size: letter; margin: 0.4in; }
 }
 .print-only { display: none; }
