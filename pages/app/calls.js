@@ -30,7 +30,7 @@ export default function CallsPage() {
   async function loadAll() {
     const [cl, s, p] = await Promise.all([
       supabase.from('call_log').select('*, suppliers(company), products(commodity, pack_size)').eq('party_type', 'Supplier').order('created_at', { ascending: false }),
-      supabase.from('suppliers').select('supplier_id, company').order('company'),
+      supabase.from('suppliers').select('supplier_id, company, contact, phone').order('company'),
       supabase.from('products').select('product_id, commodity, pack_size').order('commodity'),
     ]);
     setCalls(cl.data || []);
@@ -189,7 +189,10 @@ export default function CallsPage() {
           <div className="fo-h2">Log Full Call</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             <label style={{ fontSize: 13 }}><span className="fo-field-label">Supplier</span>
-              <select value={header.supplier_id} onChange={e => setHeader({ ...header, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+              <select value={header.supplier_id} onChange={e => {
+                const sup = suppliers.find(s => String(s.supplier_id) === e.target.value);
+                setHeader({ ...header, supplier_id: e.target.value, contact_name: sup?.contact || header.contact_name, phone: sup?.phone || header.phone });
+              }} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                 <option value="">— select —</option>
                 {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
               </select>

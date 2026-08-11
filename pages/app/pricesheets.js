@@ -132,8 +132,14 @@ export default function PriceWorksheetPage() {
       customer_freight_per_case: 0,
       source_call_id: byProduct[pid].call_id,
     }));
-    const { error: linesErr } = await supabase.from('price_sheet_lines').insert(newLines);
+    const { data: insertedLines, error: linesErr } = await supabase.from('price_sheet_lines').insert(newLines).select();
     if (linesErr) { alert('Sheet created, but lines failed: ' + linesErr.message); }
+    const feeRows = (insertedLines || []).map(line => {
+      const sup = suppliers.find(s => s.supplier_id === line.supplier_id);
+      if (!sup?.per_case_fee) return null;
+      return { price_sheet_line_id: line.price_sheet_line_id, description: 'Supplier Fee', amount: sup.per_case_fee, basis: 'per_case' };
+    }).filter(Boolean);
+    if (feeRows.length) await supabase.from('price_sheet_line_fees').insert(feeRows);
 
     await loadSheets();
     setActiveSheetId(sheet.price_sheet_id);
@@ -187,8 +193,17 @@ export default function PriceWorksheetPage() {
       markup_type: newLineForm.markup_type,
       markup_dollar: Number(newLineForm.markup_dollar || 0),
     };
-    const { error } = await supabase.from('price_sheet_lines').insert(payload);
+    const { data: newLine, error } = await supabase.from('price_sheet_lines').insert(payload).select().single();
     if (error) { alert('Save failed: ' + error.message); return; }
+    // If the chosen supplier has a standard per-case fee on file, start the
+    // line off with that fee already applied rather than making Julio
+    // re-look-it-up and type it in by hand — still fully editable after.
+    if (payload.supplier_id) {
+      const sup = suppliers.find(s => s.supplier_id === payload.supplier_id);
+      if (sup?.per_case_fee) {
+        await supabase.from('price_sheet_line_fees').insert({ price_sheet_line_id: newLine.price_sheet_line_id, description: 'Supplier Fee', amount: sup.per_case_fee, basis: 'per_case' });
+      }
+    }
     setShowAddLine(false);
     loadDetail(activeSheetId);
   }
@@ -364,8 +379,16 @@ export default function PriceWorksheetPage() {
         source_call_id: q.call_id,
       };
     });
-    const { error } = await supabase.from('price_sheet_lines').insert(newLines);
+    const { data: insertedLines, error } = await supabase.from('price_sheet_lines').insert(newLines).select();
     if (error) { alert('Could not add lines: ' + error.message); return; }
+    // Same default-fee auto-fill as the manual Add Line flow — start each
+    // line with its supplier's standard fee already applied, still editable.
+    const feeRows = (insertedLines || []).map(line => {
+      const sup = suppliers.find(s => s.supplier_id === line.supplier_id);
+      if (!sup?.per_case_fee) return null;
+      return { price_sheet_line_id: line.price_sheet_line_id, description: 'Supplier Fee', amount: sup.per_case_fee, basis: 'per_case' };
+    }).filter(Boolean);
+    if (feeRows.length) await supabase.from('price_sheet_line_fees').insert(feeRows);
     setSelectedOfferKeys(new Set());
     setShowBuilder(false);
     await loadSheets();
@@ -417,7 +440,6 @@ export default function PriceWorksheetPage() {
               <thead><tr style={{ textAlign: 'left', color: '#3F6B4F', background: '#EEF3EC' }}>
                 <th style={{ padding: '8px 10px', borderRadius: '6px 0 0 6px' }}>Commodity</th>
                 <th style={{ padding: '8px 10px' }}>Pack / Size</th>
-                <th style={{ padding: '8px 10px' }}>Shipper</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>FOB $ / CS</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right', borderRadius: '0 6px 6px 0' }}>Delivered $ / CS</th>
               </tr></thead>
@@ -425,7 +447,6 @@ export default function PriceWorksheetPage() {
                 <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #EFEEE7' }}>
                   <td style={{ padding: '8px 10px' }}>{l.products?.commodity}</td>
                   <td style={{ padding: '8px 10px' }}>{l.products?.pack_size}</td>
-                  <td style={{ padding: '8px 10px', color: '#6A746D' }}>{l.suppliers?.company || '—'}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerFOB(l).toFixed(2)}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#165C3A' }}>${customerDelivered(l).toFixed(2)}</td>
                 </tr>
