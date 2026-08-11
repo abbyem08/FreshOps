@@ -488,14 +488,17 @@ export default function PriceWorksheetPage() {
           </div>
           {portalUrl && (
             <div style={{ padding: '0 32px 24px' }}>
-              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, textAlign: 'center', position: 'relative', zIndex: 1 }}>
-                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
-                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
-                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
-                  Contact Sales / Access Customer Portal
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
-                </a>
+              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
+                  <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
+                  <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
+                    Contact Sales / Access Customer Portal
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
+                  </a>
+                </div>
+                <img src={DECORATIVE_IMAGES.crate} alt="" style={{ height: 130, width: 'auto', objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
               </div>
             </div>
           )}
