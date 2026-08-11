@@ -489,6 +489,7 @@ html.theme-dark .fo-pulse-active {
 .fo-pricesheet-corner-orange {
   top: -70px; right: -70px;
   width: 400px; height: 400px;
+  transform: scaleX(-1);
 }
 @media (max-width: 767px) {
   .fo-pricesheet-corner-leaves { top: -30px; left: -30px; width: 190px; height: 190px; }
