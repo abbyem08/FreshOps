@@ -127,21 +127,23 @@ export default function AppShell({ title, subtitle, children }) {
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-        <div className="no-print fo-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 36px', borderBottom: '1px solid var(--fo-border-soft)', background: 'var(--fo-card-bg)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <div className="no-print fo-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 36px', borderBottom: '1px solid var(--fo-border-soft)', background: '#FFFFFF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
             <button className="fo-hamburger-btn" onClick={() => setDrawerOpen(true)} aria-label="Open menu">☰</button>
+            <Logo variant="horizontal" size={24} showTagline={false} />
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--fo-border-soft)', margin: '0 2px' }} />
             <div style={{ minWidth: 0 }}>
-              <h1 className="fo-h1" style={{ marginBottom: subtitle ? 2 : 0 }}>{title}</h1>
-              {subtitle && <div style={{ fontSize: 13, color: 'var(--fo-text-dim)' }}>{subtitle}</div>}
+              <h1 className="fo-h1" style={{ marginBottom: subtitle ? 2 : 0, color: '#111513' }}>{title}</h1>
+              {subtitle && <div style={{ fontSize: 13, color: '#5F6763' }}>{subtitle}</div>}
             </div>
           </div>
           <div className="fo-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <input className="fo-header-search" placeholder="Search jackets, orders, products… (coming soon)" disabled
-              style={{ width: 300, background: 'var(--fo-section-bg)', border: '1px solid var(--fo-border-soft)', color: 'var(--fo-text-faint)' }} />
-            <div className="fo-header-date" style={{ fontSize: 12.5, color: 'var(--fo-text-dim)', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+              style={{ width: 300, background: '#F3F5F4', border: '1px solid #E5E9E7', color: '#929995' }} />
+            <div className="fo-header-date" style={{ fontSize: 12.5, color: '#5F6763', textAlign: 'right', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
               {today.toLocaleDateString(undefined, { weekday: 'long' })}<br/>{today.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
-            <button onClick={toggleTheme} className="fo-btn fo-btn-secondary fo-btn-sm" title="Saved to your account">
+            <button onClick={toggleTheme} className="fo-btn fo-btn-sm" style={{ background: '#FFFFFF', color: '#28302C', border: '1px solid #D8DEDB' }} title="Saved to your account">
               {darkPreview ? '☀ Light' : '● Command Center'}
             </button>
           </div>
