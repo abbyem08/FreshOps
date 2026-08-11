@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import Logo from '../../components/Logo';
+import ProductIcon from '../../components/ProductIcon';
 import { supabase } from '../../lib/supabaseClient';
-import { getClusterImage, PRODUCE_CRATE_IMAGE } from '../../lib/productImages';
+import { getClusterImage, getSingleImage, DECORATIVE_IMAGES } from '../../lib/productImages';
 
 // Structured as a plain array so new regions can be added later without
 // touching the dropdown logic itself.
@@ -425,12 +426,15 @@ export default function PriceWorksheetPage() {
         {/* Customer-facing — always light and professional, independent of
             any internal Command Center Dark preference. ProFresh Sourcing
             is the primary brand here; FreshOps stays small and discreet. */}
-        <div className="print-full-width" style={{ background: '#FFFEFB', border: '1px solid #E5DFC8', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#fff', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45', position: 'relative' }}>
-            <svg width="72" height="72" viewBox="0 0 72 72" style={{ position: 'absolute', top: 10, left: 10, opacity: 0.5 }}>
-              <path d="M8 40 Q8 12 40 8 Q30 22 26 40 Q20 30 8 40Z" fill="#B7D9BE" />
-              <path d="M16 50 Q18 28 42 20 Q34 34 32 50 Q26 42 16 50Z" fill="#8FC29A" />
-            </svg>
+        <div className="print-full-width" style={{ background: '#FFFEFB', border: '1px solid #E5DFC8', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden', position: 'relative' }}>
+          {/* Decorative corner framing — behind all content, clipped by the
+              rounded outer edge, never covering logo/dates/pricing/CTA. */}
+          <img src={DECORATIVE_IMAGES.orange} alt="" style={{ position: 'absolute', top: -18, left: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
+          <img src={DECORATIVE_IMAGES.lemon} alt="" style={{ position: 'absolute', top: -18, right: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
+          <img src={DECORATIVE_IMAGES.strawberry} alt="" style={{ position: 'absolute', bottom: -18, left: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
+          <img src={DECORATIVE_IMAGES.crate} alt="" style={{ position: 'absolute', bottom: -18, right: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
+
+          <div style={{ background: 'transparent', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45', position: 'relative', zIndex: 1 }}>
             {websiteUrl ? (
               <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
                 <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto', position: 'relative' }} />
@@ -440,7 +444,7 @@ export default function PriceWorksheetPage() {
             )}
             <div style={{ color: '#5F6763', fontSize: 13, marginTop: 10, position: 'relative' }}>Fresh Produce. Simplified Sourcing.</div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, padding: '14px 32px', background: '#F3F5EC' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, padding: '14px 32px', background: '#F3F5EC', position: 'relative', zIndex: 1 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '6px 16px', fontSize: 12.5 }}>
               <span style={{ color: '#168A45' }}>📅</span> <strong style={{ color: '#168A45' }}>Date:</strong> {activeSheet.sheet_date}
             </div>
@@ -448,7 +452,7 @@ export default function PriceWorksheetPage() {
               <span style={{ color: '#168A45' }}>🕐</span> <strong style={{ color: '#168A45' }}>Valid Through:</strong> {activeSheet.valid_through}
             </div>
           </div>
-          <div style={{ padding: '18px 24px 24px' }}>
+          <div style={{ padding: '18px 24px 24px', position: 'relative', zIndex: 1 }}>
             <div style={{ overflowX: 'auto' }}>
             <table className="fo-pricesheet-table" style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 13.5 }}>
               <thead><tr style={{ textAlign: 'left', color: '#fff', background: '#14562F' }}>
@@ -485,17 +489,14 @@ export default function PriceWorksheetPage() {
           </div>
           {portalUrl && (
             <div style={{ padding: '0 32px 24px' }}>
-              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
-                  <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
-                  <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
-                    Contact Sales / Access Customer Portal
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
-                  </a>
-                </div>
-                <img src={PRODUCE_CRATE_IMAGE} alt="" style={{ height: 110, width: 'auto', objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
+              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, textAlign: 'center', position: 'relative', zIndex: 1 }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
+                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
+                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
+                  Contact Sales / Access Customer Portal
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
+                </a>
               </div>
             </div>
           )}
@@ -567,7 +568,10 @@ export default function PriceWorksheetPage() {
                 <div key={l.price_sheet_line_id} style={{ ...card, marginBottom: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <strong style={{ color: 'var(--fo-primary)' }}>{l.products?.commodity} — {l.products?.pack_size}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ProductIcon commodity={l.products?.commodity} size={22} />
+                        <strong style={{ color: 'var(--fo-primary)' }}>{l.products?.commodity} — {l.products?.pack_size}</strong>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>
                         RAW MARKET PRICE — {l.suppliers?.company || 'no supplier set'} · ${Number(l.cost_price || 0).toFixed(2)}/cs
                         {options.length > 1 && (

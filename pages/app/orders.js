@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 import { ProgressBar } from '../../components/charts';
+import ProductIcon from '../../components/ProductIcon';
 
 const BLANK_ORDER = { acumatica_order_no: '', customer_id: '', customer_location_id: '', customer_po: '', order_date: '', requested_delivery: '', salesperson: '', order_status: 'Open' };
 // A customer order line has reached a final CUSTOMER outcome — separate
@@ -398,7 +399,7 @@ export default function OrdersPage() {
                     const dispositionTone = l.line_status === 'Delivered' ? 'fo-badge-green' : l.line_status === 'Rejected' ? 'fo-badge-red' : l.line_status === 'Shorted' ? 'fo-badge-amber' : l.line_status === 'Cancelled' ? 'fo-badge-gray' : 'fo-badge-gray';
                     return (
                       <tr key={l.order_line_id} style={tr}>
-                        <td>{l.products?.commodity} — {l.products?.pack_size}</td>
+                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={l.products?.commodity} size={20} />{l.products?.commodity} — {l.products?.pack_size}</div></td>
                         <td style={{ textAlign: 'right' }}>
                           {l.cases_ordered}
                           {amended && <div style={{ fontSize: 10, color: 'var(--fo-text-faint)' }}>orig: {l.original_cases_ordered}</div>}
