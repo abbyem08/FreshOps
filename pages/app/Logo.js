@@ -25,7 +25,7 @@ function Wordmark({ size, showTagline }) {
   return (
     <div style={{ lineHeight: 1.1 }}>
       <div style={{ fontWeight: 700, fontSize: size * 0.85, letterSpacing: '0.01em' }}>
-        <span style={{ color: FRESH_COLOR }}>Fresh</span><span style={{ color: OPS_COLOR }}>Ops</span>
+        <span className="fo-logo-fresh" style={{ color: FRESH_COLOR }}>Fresh</span><span className="fo-logo-ops" style={{ color: OPS_COLOR }}>Ops</span>
       </div>
       {showTagline && (
         <div style={{ fontSize: Math.max(size * 0.42, 9), letterSpacing: '0.1em', color: '#78716c', marginTop: 2 }}>BUSINESS INTELLIGENCE</div>
