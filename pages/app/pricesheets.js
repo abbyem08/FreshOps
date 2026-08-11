@@ -425,30 +425,38 @@ export default function PriceWorksheetPage() {
             any internal Command Center Dark preference. ProFresh Sourcing
             is the primary brand here; FreshOps stays small and discreet. */}
         <div className="print-full-width" style={{ background: '#FFFEFB', border: '1px solid #E5DFC8', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#fff', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45' }}>
+          <div style={{ background: '#fff', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45', position: 'relative' }}>
+            <svg width="72" height="72" viewBox="0 0 72 72" style={{ position: 'absolute', top: 10, left: 10, opacity: 0.5 }}>
+              <path d="M8 40 Q8 12 40 8 Q30 22 26 40 Q20 30 8 40Z" fill="#B7D9BE" />
+              <path d="M16 50 Q18 28 42 20 Q34 34 32 50 Q26 42 16 50Z" fill="#8FC29A" />
+            </svg>
             {websiteUrl ? (
               <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
-                <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto' }} />
+                <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto', position: 'relative' }} />
               </a>
             ) : (
-              <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto' }} />
+              <img src="/brand/profresh-sourcing-logo.png" alt="ProFresh Sourcing" style={{ height: 56, width: 'auto', position: 'relative' }} />
             )}
-            <div style={{ color: '#5F6763', fontSize: 13, marginTop: 10 }}>Fresh Produce. Simplified Sourcing.</div>
+            <div style={{ color: '#5F6763', fontSize: 13, marginTop: 10, position: 'relative' }}>Fresh Produce. Simplified Sourcing.</div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 32px', background: '#F3F5EC', borderBottom: '1px solid #E5DFC8', fontSize: 13 }}>
-            <div><strong>Date:</strong> {activeSheet.sheet_date}</div>
-            <div><strong>Valid Through:</strong> {activeSheet.valid_through}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, padding: '14px 32px', background: '#F3F5EC' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '6px 16px', fontSize: 12.5 }}>
+              <span style={{ color: '#168A45' }}>📅</span> <strong style={{ color: '#168A45' }}>Date:</strong> {activeSheet.sheet_date}
+            </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '6px 16px', fontSize: 12.5 }}>
+              <span style={{ color: '#168A45' }}>🕐</span> <strong style={{ color: '#168A45' }}>Valid Through:</strong> {activeSheet.valid_through}
+            </div>
           </div>
           <div style={{ padding: '18px 24px 24px' }}>
             <div style={{ overflowX: 'auto' }}>
             <table className="fo-pricesheet-table" style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 13.5 }}>
-              <thead><tr style={{ textAlign: 'left', color: '#3F6B4F', background: '#EEF3E4' }}>
-                <th style={{ padding: '9px 8px', borderRadius: '8px 0 0 0', width: 52 }}></th>
-                <th style={{ padding: '9px 8px' }}>Commodity</th>
-                <th style={{ padding: '9px 8px' }}>Pack / Size</th>
-                <th style={{ padding: '9px 8px' }}>Region</th>
-                <th style={{ padding: '9px 8px', textAlign: 'right' }}>FOB $ / CS</th>
-                <th style={{ padding: '9px 10px', textAlign: 'right', borderRadius: '0 8px 0 0', background: '#DCF0E2' }}>Delivered $ / CS</th>
+              <thead><tr style={{ textAlign: 'left', color: '#fff', background: '#14562F' }}>
+                <th style={{ padding: '10px 8px', borderRadius: '8px 0 0 0', width: 52 }}></th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>COMMODITY</th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>PACK / SIZE</th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>REGION</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, letterSpacing: '.03em' }}>FOB $ / CS</th>
+                <th style={{ padding: '10px 10px', textAlign: 'right', borderRadius: '0 8px 0 0', background: '#168A45', fontSize: 12, letterSpacing: '.03em' }}>DELIVERED $ / CS</th>
               </tr></thead>
               <tbody>{lines.map((l, i) => (
                 <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #EFEEE1', background: i % 2 === 1 ? '#FBFAF3' : 'transparent' }}>
@@ -472,17 +480,25 @@ export default function PriceWorksheetPage() {
             <div style={{ fontSize: 11, color: '#9BA39C', marginTop: 10 }}>Pricing subject to market availability and freight conditions.</div>
           </div>
           {portalUrl && (
-            <div style={{ textAlign: 'center', padding: '0 32px 20px' }}>
-              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 16 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1B231D' }}>Ready to place an order?</div>
-                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 2, marginBottom: 12 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
-                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: '#168A45', color: '#fff', fontSize: 12.5, fontWeight: 700, letterSpacing: '.03em', padding: '9px 22px', borderRadius: 6, textDecoration: 'none' }}>CONTACT SALES / ACCESS CUSTOMER PORTAL</a>
-                <div style={{ fontSize: 11.5, color: '#8B928E', marginTop: 10 }}>Se habla español</div>
+            <div style={{ textAlign: 'center', padding: '0 32px 24px' }}>
+              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 8 }}>🛒</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
+                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
+                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
+                  Contact Sales / Access Customer Portal
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
+                </a>
               </div>
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0 18px', fontSize: 10.5, color: '#B8BBB2' }}>
-            Prepared with <Logo variant="icon" size={12} /> FreshOps Business Intelligence
+          <div style={{ background: '#14562F', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', fontSize: 11.5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,.85)' }}>
+              Prepared with <strong style={{ color: '#fff' }}>FreshOps</strong> Business Intelligence
+            </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: '#14562F', borderRadius: 999, padding: '5px 14px', fontWeight: 600 }}>
+              💬 Se habla español
+            </div>
           </div>
         </div>
       </AppShell>
@@ -732,13 +748,13 @@ const selectStyle = { display: 'block', width: '100%', marginTop: 4 };
 const miniLabel = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--fo-text-dim)', fontWeight: 600, marginBottom: 2 };
 
 function RegionPill({ region }) {
-  const styles = {
-    'West Coast': { bg: '#EDF6FF', text: '#2878C7' },
-    'East Coast': { bg: '#FFF6E7', text: '#B76A08' },
-    'Mexico': { bg: '#EAF7EE', text: '#168A45' },
+  const colors = {
+    'West Coast': '#168A45',
+    'East Coast': '#2878C7',
+    'Mexico': '#D9760C',
   };
-  const s = styles[region] || { bg: '#F2F4F3', text: '#59615D' };
+  const c = colors[region] || '#8B928E';
   return (
-    <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: s.bg, color: s.text, whiteSpace: 'nowrap' }}>{region}</span>
+    <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: '#fff', border: `1.5px solid ${c}`, color: c, whiteSpace: 'nowrap' }}>{region}</span>
   );
 }
