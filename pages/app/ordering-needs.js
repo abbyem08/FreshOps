@@ -11,7 +11,7 @@ export default function OrderingNeedsPage() {
   async function load() {
     const { data: lines } = await supabase
       .from('order_lines')
-      .select('cases_ordered, product_id, products(commodity, pack_size), customer_orders(order_status, acumatica_order_no, customers(company))')
+      .select('order_line_id, cases_ordered, product_id, products(commodity, pack_size), customer_orders(order_status, acumatica_order_no, customers(company))')
       .eq('customer_orders.order_status', 'Open');
 
     const { data: jacketLines } = await supabase.from('jacket_lines').select('order_line_id, cases_to_load, jackets(jacket_status)');
