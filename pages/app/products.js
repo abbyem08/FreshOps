@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import { supabase } from '../../lib/supabaseClient';
 
-const BLANK = { commodity: '', pack_size: '', gross_weight_per_case: '', cases_per_pallet: '', default_origin: '' };
+const BLANK = { commodity: '', pack_size: '', gross_weight_per_case: '', cases_per_pallet: '', default_origin: '', image_url: '' };
 
 export function ProductsContent() {
   const [rows, setRows] = useState([]);
@@ -29,7 +29,7 @@ export function ProductsContent() {
   async function save() {
     if (!form.commodity || !form.pack_size) { alert('Commodity and Pack Size are required.'); return; }
     const payload = {
-      commodity: form.commodity, pack_size: form.pack_size, default_origin: form.default_origin,
+      commodity: form.commodity, pack_size: form.pack_size, default_origin: form.default_origin, image_url: form.image_url || null,
       gross_weight_per_case: form.gross_weight_per_case ? Number(form.gross_weight_per_case) : null,
       cases_per_pallet: form.cases_per_pallet ? Number(form.cases_per_pallet) : null
     };
@@ -55,6 +55,7 @@ export function ProductsContent() {
             {field('Weight / Case (lb)', form.gross_weight_per_case, v => setForm({ ...form, gross_weight_per_case: v }))}
             {field('Cases / Pallet', form.cases_per_pallet, v => setForm({ ...form, cases_per_pallet: v }))}
             {field('Default Origin', form.default_origin, v => setForm({ ...form, default_origin: v }))}
+            {field('Image URL (optional)', form.image_url, v => setForm({ ...form, image_url: v }))}
           </div>
           <button onClick={save} style={{ ...btn, background: 'var(--fo-accent)', marginTop: 12 }}>{editingId ? 'Update Product' : 'Save Product'}</button>
           <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginTop: 12, marginLeft: 8 }}>Cancel</button>
@@ -67,7 +68,7 @@ export function ProductsContent() {
         <thead><tr style={trHead}><th>Commodity</th><th>Pack Size</th><th style={{ textAlign: 'right' }}>Weight/Case</th><th style={{ textAlign: 'right' }}>Cases/Pallet</th><th>Origin</th><th></th></tr></thead>
         <tbody>{rows.filter(r => showInactive || r.active !== false).map(r => (
           <tr key={r.product_id} style={{ ...tr, opacity: r.active === false ? 0.6 : 1 }}>
-            <td>{r.commodity}{r.active === false && <span className="fo-badge fo-badge-gray" style={{ marginLeft: 8 }}>Inactive</span>}</td><td>{r.pack_size}</td><td style={{ textAlign: 'right' }}>{r.gross_weight_per_case}</td><td style={{ textAlign: 'right' }}>{r.cases_per_pallet}</td><td>{r.default_origin}</td>
+            <td>{r.image_url && <img src={r.image_url} alt="" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4, verticalAlign: 'middle', marginRight: 6 }} onError={e => { e.target.style.display = 'none'; }} />}{r.commodity}{r.active === false && <span className="fo-badge fo-badge-gray" style={{ marginLeft: 8 }}>Inactive</span>}</td><td>{r.pack_size}</td><td style={{ textAlign: 'right' }}>{r.gross_weight_per_case}</td><td style={{ textAlign: 'right' }}>{r.cases_per_pallet}</td><td>{r.default_origin}</td>
             <td><button onClick={() => openEdit(r)} style={editBtn}>Edit</button> <button onClick={() => toggleActive(r)} style={{ ...editBtn, color: r.active === false ? 'var(--fo-success)' : 'var(--fo-error)' }}>{r.active === false ? 'Reactivate' : 'Deactivate'}</button></td>
           </tr>
         ))}</tbody>
