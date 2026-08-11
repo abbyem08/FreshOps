@@ -427,12 +427,11 @@ export default function PriceWorksheetPage() {
             any internal Command Center Dark preference. ProFresh Sourcing
             is the primary brand here; FreshOps stays small and discreet. */}
         <div className="print-full-width" style={{ background: '#FFFEFB', border: '1px solid #E5DFC8', borderRadius: 16, boxShadow: '0 1px 8px rgba(15,20,15,.06)', padding: 0, overflow: 'hidden', position: 'relative' }}>
-          {/* Decorative corner framing — behind all content, clipped by the
-              rounded outer edge, never covering logo/dates/pricing/CTA. */}
-          <img src={DECORATIVE_IMAGES.orange} alt="" style={{ position: 'absolute', top: -18, left: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
-          <img src={DECORATIVE_IMAGES.lemon} alt="" style={{ position: 'absolute', top: -18, right: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
-          <img src={DECORATIVE_IMAGES.strawberry} alt="" style={{ position: 'absolute', bottom: -18, left: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
-          <img src={DECORATIVE_IMAGES.crate} alt="" style={{ position: 'absolute', bottom: -18, right: -18, width: 130, height: 130, objectFit: 'contain', zIndex: 0, pointerEvents: 'none' }} onError={e => { e.target.style.display = 'none'; }} />
+          {/* Decorative corner framing — leaves left, oranges right, upper
+              corners only. Behind all content, clipped by the rounded
+              outer edge, never covering logo/dates/pricing/CTA. */}
+          <img src={DECORATIVE_IMAGES.leaves} alt="" className="fo-pricesheet-corner fo-pricesheet-corner-leaves" onError={e => { e.target.style.display = 'none'; }} />
+          <img src={DECORATIVE_IMAGES.orange} alt="" className="fo-pricesheet-corner fo-pricesheet-corner-orange" onError={e => { e.target.style.display = 'none'; }} />
 
           <div style={{ background: 'transparent', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45', position: 'relative', zIndex: 1 }}>
             {websiteUrl ? (
