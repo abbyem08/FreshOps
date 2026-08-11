@@ -1158,6 +1158,27 @@ export default function JacketWorkspace() {
   const freightTotalCost = freight ? Number(freight.booked_rate || 0) + Number(freight.extra_fees || 0) : 0;
   const perMile = freight?.miles ? (Number(freight.booked_rate || 0) / freight.miles).toFixed(2) : null;
 
+  // ---- Route Progress — derived from real load_status data, never the
+  // dormant stops.status field. A stop is Completed once every case tied
+  // to it has moved past "Planned" (pickup) or reached a final delivery
+  // outcome (delivery). The first non-completed stop, in real stop order,
+  // is Current; everything after it is Upcoming. ----
+  let foundCurrent = false;
+  const routeStops = stops.map(s => {
+    const linesOnStop = (s.stop_lines || []).map(sl => sl.jacket_lines).filter(Boolean);
+    const casesAtStop = (s.stop_lines || []).reduce((sum, sl) => sum + Number(sl.cases_at_stop || 0), 0);
+    const isCompleted = linesOnStop.length > 0 && (
+      s.stop_type === 'Pickup'
+        ? linesOnStop.every(jl => jl.load_status && jl.load_status !== 'Planned')
+        : linesOnStop.every(jl => ['Delivered', 'Short', 'Exception'].includes(jl.load_status))
+    );
+    let state;
+    if (isCompleted) state = 'Completed';
+    else if (!foundCurrent) { state = 'Current'; foundCurrent = true; }
+    else state = 'Upcoming';
+    return { ...s, routeState: state, casesAtStop };
+  });
+
   const timelinePanelContent = (
     <>
       <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fo-text-dim)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 10 }}>Timeline / Activity</div>
@@ -1281,7 +1302,8 @@ export default function JacketWorkspace() {
 
           {activeTab === 'Overview' && (
             <OverviewTab jacket={jacket} purchasedLines={purchasedLines} allJacketLinesGlobal={allJacketLinesGlobal} jacketLines={jacketLines} claims={claims} freight={freight} availableOnPurchased={availableOnPurchased} totalWeight={totalWeight} totalPallets={totalPallets} weightCapacity={weightCapacity} palletCapacity={palletCapacity}
-              estRevenue={estRevenue} freightOnlyRevenue={freightOnlyRevenue} adjustmentsRevenue={adjustmentsRevenue} baseCostTotal={baseCostTotal} supplierFeesTotal={supplierFeesTotal} freightCost={freightCost} adjustmentsCost={adjustmentsCost} totalRevenue={totalRevenue} totalCost={totalCost} totalProfit={totalProfit} totalMarginPct={totalMarginPct} />
+              estRevenue={estRevenue} freightOnlyRevenue={freightOnlyRevenue} adjustmentsRevenue={adjustmentsRevenue} baseCostTotal={baseCostTotal} supplierFeesTotal={supplierFeesTotal} freightCost={freightCost} adjustmentsCost={adjustmentsCost} totalRevenue={totalRevenue} totalCost={totalCost} totalProfit={totalProfit} totalMarginPct={totalMarginPct}
+              routeStops={routeStops} commodityLoads={commodityLoads} />
           )}
 
           {activeTab === 'Products' && (
@@ -2366,7 +2388,8 @@ function textField(label, value, onChange, type = 'text') {
 }
 
 function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, availableOnPurchased, totalWeight, totalPallets, weightCapacity, palletCapacity,
-  estRevenue, freightOnlyRevenue, adjustmentsRevenue, baseCostTotal, supplierFeesTotal, freightCost, adjustmentsCost, totalRevenue, totalCost, totalProfit, totalMarginPct }) {
+  estRevenue, freightOnlyRevenue, adjustmentsRevenue, baseCostTotal, supplierFeesTotal, freightCost, adjustmentsCost, totalRevenue, totalCost, totalProfit, totalMarginPct,
+  routeStops, commodityLoads }) {
   const hasProduct = purchasedLines.length > 0;
   const totals = purchasedLines.reduce((s, p) => {
     const a = availableOnPurchased(p);
@@ -2408,6 +2431,84 @@ function OverviewTab({ jacket, purchasedLines, jacketLines, claims, freight, ava
           <HealthMetric label="Financials" value={financialsState} state={financialsState} />
           <HealthMetric label="Claims" value={claims.length > 0 ? `${claims.length} Open` : 'None'} state={claimsState} />
         </div>
+      </div>
+
+      {/* ---- Route Progress ---- */}
+      <div className="fo-card">
+        <div className="fo-h2">Route Progress</div>
+        {routeStops.length === 0 ? (
+          <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No stops yet.</div>
+        ) : (
+          <div>
+            {routeStops.map((s, i) => {
+              const isLast = i === routeStops.length - 1;
+              const dotColor = s.routeState === 'Completed' ? 'var(--fo-success)' : s.routeState === 'Current' ? 'var(--fo-primary)' : 'var(--fo-border)';
+              const badgeTone = s.routeState === 'Completed' ? 'fo-badge-green' : s.routeState === 'Current' ? 'fo-badge-blue' : 'fo-badge-gray';
+              return (
+                <div key={s.stop_id} style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: '50%', boxSizing: 'border-box',
+                      background: s.routeState === 'Upcoming' ? 'transparent' : dotColor,
+                      border: `2px solid ${dotColor}`,
+                      boxShadow: s.routeState === 'Current' ? '0 0 0 4px var(--fo-accent-soft)' : 'none',
+                    }} />
+                    {!isLast && <div style={{ width: 2, flex: 1, minHeight: 26, background: s.routeState === 'Completed' ? 'var(--fo-success)' : 'var(--fo-border-soft)' }} />}
+                  </div>
+                  <div style={{ paddingBottom: isLast ? 4 : 16, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>#{s.stop_number} — {s.stop_type} — {s.stop_type === 'Pickup' ? (s.suppliers?.company || '—') : (s.customers?.company || '—')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{s.casesAtStop} cases</div>
+                    <span className={`fo-badge ${badgeTone}`} style={{ marginTop: 4 }}>{s.routeState}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ---- Product Flow — every stage reuses the exact same values
+          already used on the Products and Logistics tabs, nothing
+          recalculated independently ---- */}
+      <div className="fo-card">
+        <div className="fo-h2">Product Flow</div>
+        {purchasedLines.length === 0 ? (
+          <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>Nothing purchased on this Jacket yet.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+            {purchasedLines.map(p => {
+              const { base, allocated, available } = availableOnPurchased(p);
+              const loadRow = commodityLoads.find(c => c.product_id === p.product_id && c.supplier_id === p.supplier_id);
+              const loaded = loadRow ? Number(loadRow.actual_cases_loaded || 0) : 0;
+              const delivered = jacketLines.filter(jl => jl.jacket_product_line_id === p.jacket_product_line_id).reduce((s, jl) => s + Number(jl.actual_cases_delivered || 0), 0);
+              const flowAttention = [];
+              if (allocated < base) flowAttention.push('Not fully allocated');
+              if (allocated > 0 && loaded < allocated) flowAttention.push('Allocated but not loaded');
+              if (loaded > 0 && delivered < loaded) flowAttention.push('Loaded but not delivered');
+              return (
+                <div key={p.jacket_product_line_id} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{p.products?.commodity} — {p.products?.pack_size}</div>
+                  <div style={{ fontSize: 12, color: 'var(--fo-text-dim)', marginBottom: 10 }}>{p.suppliers?.company || '—'}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <ProgressBar label="Purchased" current={base} max={base} height={6} />
+                    <ProgressBar label="Allocated" current={allocated} max={base} height={6} />
+                    <ProgressBar label="Loaded" current={loaded} max={base} height={6} />
+                    <ProgressBar label="Delivered" current={delivered} max={base} height={6} />
+                  </div>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--fo-border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>Available</span>
+                    <span className={`fo-badge ${available > 0 ? 'fo-badge-blue' : 'fo-badge-gray'}`}>{available} cs</span>
+                  </div>
+                  {flowAttention.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {flowAttention.map((a, i) => <span key={i} className="fo-badge fo-badge-amber" style={{ fontSize: 10.5 }}>{a}</span>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ---- Profit Pulse — reuses the exact same numbers as the
