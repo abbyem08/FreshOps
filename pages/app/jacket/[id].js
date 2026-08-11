@@ -106,7 +106,7 @@ export default function JacketWorkspace() {
     const { data: j } = await supabase.from('jackets').select('*').eq('jacket_id', jacketId).single();
     setJacket(j);
 
-    const { data: s } = await supabase.from('suppliers').select('supplier_id, company').eq('active', true).order('company');
+    const { data: s } = await supabase.from('suppliers').select('supplier_id, company, per_case_fee').eq('active', true).order('company');
     setSuppliers(s || []);
     const { data: p } = await supabase.from('products').select('product_id, commodity, pack_size, cases_per_pallet, gross_weight_per_case').eq('active', true).order('commodity');
     setProducts(p || []);
@@ -1347,7 +1347,10 @@ export default function JacketWorkspace() {
               {showAddPurchased && (
                 <div style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                   <label style={{ fontSize: 13 }}>Supplier
-                    <select value={purchasedForm.supplier_id} onChange={e => setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value })} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                    <select value={purchasedForm.supplier_id} onChange={e => {
+                      const sup = suppliers.find(s => String(s.supplier_id) === e.target.value);
+                      setPurchasedForm({ ...purchasedForm, supplier_id: e.target.value, fee_total_per_case: purchasedForm.fee_total_per_case || sup?.per_case_fee || '' });
+                    }} style={{ display: 'block', width: '100%', marginTop: 4 }}>
                       <option value="">— none —</option>
                       {suppliers.map(s => <option key={s.supplier_id} value={s.supplier_id}>{s.company}</option>)}
                     </select>
