@@ -641,3 +641,108 @@ img[src*="/products/singles/"] {
     min-height: 48px;
   }
 }
+/* =========================================================
+   FINAL CUSTOMER PRICE SHEET DECORATIVE IMAGE CORRECTION
+   ========================================================= */
+
+/* Keep all decorative photography INSIDE the actual price sheet.
+   Nothing should spill into the FreshOps app header/background. */
+.print-full-width {
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+/* Decorative images stay behind all real price sheet content */
+.print-full-width > img[src*="/products/decorative/"] {
+  z-index: 0 !important;
+  pointer-events: none !important;
+  object-fit: contain !important;
+}
+
+/* TOP LEFT — orange branch */
+.print-full-width > img[src*="corner-orange-cluster"] {
+  display: block !important;
+  width: 275px !important;
+  height: 275px !important;
+  top: -42px !important;
+  left: -48px !important;
+}
+
+/* TOP RIGHT — lemon/citrus branch */
+.print-full-width > img[src*="corner-lemon-cluster"] {
+  display: block !important;
+  width: 275px !important;
+  height: 275px !important;
+  top: -42px !important;
+  right: -48px !important;
+}
+
+/* REMOVE bottom strawberry entirely */
+.print-full-width > img[src*="corner-strawberry-cluster"] {
+  display: none !important;
+}
+
+/* REMOVE crate entirely */
+.print-full-width > img[src*="corner-produce-crate"],
+.print-full-width > img[src*="corner-product-crate"] {
+  display: none !important;
+}
+
+/* Keep actual price sheet sections above the photography */
+.print-full-width > div {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* Header remains clean and centered */
+.print-full-width > div:first-of-type {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+/* Footer remains clean — no produce overlapping it */
+.print-full-width > div:last-child {
+  position: relative !important;
+  z-index: 3 !important;
+  min-height: 50px !important;
+  overflow: hidden !important;
+}
+
+/* MOBILE — much quieter */
+@media (max-width: 767px) {
+  .print-full-width > img[src*="corner-orange-cluster"] {
+    width: 170px !important;
+    height: 170px !important;
+    top: -30px !important;
+    left: -38px !important;
+  }
+
+  .print-full-width > img[src*="corner-lemon-cluster"] {
+    width: 170px !important;
+    height: 170px !important;
+    top: -30px !important;
+    right: -38px !important;
+  }
+}
+
+/* PRINT — elegant citrus corners, not oversized */
+@media print {
+  .print-full-width {
+    overflow: hidden !important;
+  }
+
+  .print-full-width > img[src*="corner-orange-cluster"],
+  .print-full-width > img[src*="corner-lemon-cluster"] {
+    width: 230px !important;
+    height: 230px !important;
+    top: -38px !important;
+  }
+
+  .print-full-width > img[src*="corner-orange-cluster"] {
+    left: -42px !important;
+  }
+
+  .print-full-width > img[src*="corner-lemon-cluster"] {
+    right: -42px !important;
+  }
+}
