@@ -138,6 +138,9 @@ html.theme-dark {
 .fo-sidebar img[alt="FreshOps"] {
   filter: brightness(0) invert(1);
 }
+.fo-sidebar .fo-logo-fresh, .fo-sidebar .fo-logo-ops {
+  color: var(--fo-sidebar-text) !important;
+}
 
 * { box-sizing: border-box; }
 
@@ -216,11 +219,11 @@ input:focus, select:focus, textarea:focus {
     justify-content: center;
     width: 40px; height: 40px;
     flex-shrink: 0;
-    background: #F3F5F4;
-    border: 1px solid #E5E9E7;
+    background: var(--fo-section-bg);
+    border: 1px solid var(--fo-border-soft);
     border-radius: var(--fo-radius-sm);
     font-size: 18px;
-    color: #111513;
+    color: var(--fo-text);
     cursor: pointer;
   }
   .fo-drawer-close {
