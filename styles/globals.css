@@ -483,16 +483,16 @@ html.theme-dark .fo-pulse-active {
   pointer-events: none;
 }
 .fo-pricesheet-corner-leaves {
-  top: -55px; left: -55px;
-  width: 290px; height: 290px;
+  top: -70px; left: -70px;
+  width: 380px; height: 380px;
 }
 .fo-pricesheet-corner-orange {
-  top: -55px; right: -55px;
-  width: 310px; height: 310px;
+  top: -70px; right: -70px;
+  width: 400px; height: 400px;
 }
 @media (max-width: 767px) {
-  .fo-pricesheet-corner-leaves { top: -25px; left: -25px; width: 165px; height: 165px; }
-  .fo-pricesheet-corner-orange { top: -25px; right: -25px; width: 175px; height: 175px; }
+  .fo-pricesheet-corner-leaves { top: -30px; left: -30px; width: 190px; height: 190px; }
+  .fo-pricesheet-corner-orange { top: -30px; right: -30px; width: 200px; height: 200px; }
 }
 
 @media print {
@@ -502,8 +502,8 @@ html.theme-dark .fo-pulse-active {
   .tabs-timeline-grid { display: block !important; }
   .fo-pricesheet-table thead { display: table-header-group; }
   .fo-pricesheet-table tr { page-break-inside: avoid; break-inside: avoid; }
-  .fo-pricesheet-corner-leaves { top: -35px; left: -35px; width: 210px; height: 210px; }
-  .fo-pricesheet-corner-orange { top: -35px; right: -35px; width: 225px; height: 225px; }
+  .fo-pricesheet-corner-leaves { top: -45px; left: -45px; width: 270px; height: 270px; }
+  .fo-pricesheet-corner-orange { top: -45px; right: -45px; width: 285px; height: 285px; }
   @page { size: letter; margin: 0.4in; }
 }
 .print-only { display: none; }
