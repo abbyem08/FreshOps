@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../../components/AppShell';
 import Logo from '../../components/Logo';
 import { supabase } from '../../lib/supabaseClient';
+import { getClusterImage, PRODUCE_CRATE_IMAGE } from '../../lib/productImages';
 
 // Structured as a plain array so new regions can be added later without
 // touching the dropdown logic itself.
@@ -95,7 +96,7 @@ export default function PriceWorksheetPage() {
     setAllQuotes(data || []);
   }
   async function loadDetail(sheetId) {
-    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size, cases_per_pallet, image_url), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId).order('price_sheet_line_id');
+    const { data: l } = await supabase.from('price_sheet_lines').select('*, products(commodity, pack_size, cases_per_pallet), suppliers(company, per_case_fee)').eq('price_sheet_id', sheetId).order('price_sheet_line_id');
     setLines(l || []);
     const lineIds = (l || []).map(x => x.price_sheet_line_id);
     if (lineIds.length) {
@@ -458,13 +459,15 @@ export default function PriceWorksheetPage() {
                 <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, letterSpacing: '.03em' }}>FOB $ / CS</th>
                 <th style={{ padding: '10px 10px', textAlign: 'right', borderRadius: '0 8px 0 0', background: '#168A45', fontSize: 12, letterSpacing: '.03em' }}>DELIVERED $ / CS</th>
               </tr></thead>
-              <tbody>{lines.map((l, i) => (
+              <tbody>{lines.map((l, i) => {
+                const img = getClusterImage(l.products?.commodity);
+                return (
                 <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #EFEEE1', background: i % 2 === 1 ? '#FBFAF3' : 'transparent' }}>
                   <td style={{ padding: '7px 8px' }}>
-                    {l.products?.image_url ? (
-                      <img src={l.products.image_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, display: 'block' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                    {img ? (
+                      <img src={img} alt="" style={{ width: 48, height: 48, objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                     ) : null}
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: '#EAF3E4', display: l.products?.image_url ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 8, background: '#EAF3E4', display: img ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#B7D9BE' }} />
                     </div>
                   </td>
@@ -474,21 +477,25 @@ export default function PriceWorksheetPage() {
                   <td style={{ padding: '7px 8px', textAlign: 'right', color: '#3F453F' }}>${customerFOB(l).toFixed(2)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 800, fontSize: 14.5, color: '#0F6834', background: '#EFF9F1' }}>${customerDelivered(l).toFixed(2)}</td>
                 </tr>
-              ))}</tbody>
+                );
+              })}</tbody>
             </table>
             </div>
             <div style={{ fontSize: 11, color: '#9BA39C', marginTop: 10 }}>Pricing subject to market availability and freight conditions.</div>
           </div>
           {portalUrl && (
-            <div style={{ textAlign: 'center', padding: '0 32px 24px' }}>
-              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 8 }}>🛒</div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
-                <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
-                <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
-                  Contact Sales / Access Customer Portal
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
-                </a>
+            <div style={{ padding: '0 32px 24px' }}>
+              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
+                  <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
+                  <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
+                    Contact Sales / Access Customer Portal
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
+                  </a>
+                </div>
+                <img src={PRODUCE_CRATE_IMAGE} alt="" style={{ height: 110, width: 'auto', objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
               </div>
             </div>
           )}
