@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+
+# environment variables (local secrets — never commit real keys)
+.env
+.env.local
+.env.*.local
+
+# vercel
+.vercel/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS junk files
+.DS_Store
+Thumbs.db
