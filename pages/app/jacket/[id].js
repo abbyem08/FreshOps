@@ -1639,7 +1639,7 @@ export default function JacketWorkspace() {
                           ? (s.supplier_locations ? `${s.supplier_locations.label} — ${s.supplier_locations.address}, ${s.supplier_locations.city} ${s.supplier_locations.state}` : `${s.suppliers?.pickup_address || ''}, ${s.suppliers?.city || ''} ${s.suppliers?.state || ''}`)
                           : (s.customer_locations ? `${s.customer_locations.label} — ${s.customer_locations.address}, ${s.customer_locations.city} ${s.customer_locations.state}` : `${s.customers?.delivery_address || ''}, ${s.customers?.city || ''} ${s.customers?.state || ''}`)}
                       </span>
-                      <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 44 }} /></span>
+                      <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>Stop # <input type="number" defaultValue={s.stop_number} onBlur={e => updateStopNumber(s.stop_id, e.target.value)} style={{ width: 62, boxSizing: 'border-box' }} /></span>
                       <span className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Appt <input type="datetime-local" defaultValue={toLocalInputValue(s.appointment)} onBlur={e => updateAppointment(s.stop_id, e.target.value)} style={{ fontSize: 12 }} /></span>
                     </div>
                     <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
