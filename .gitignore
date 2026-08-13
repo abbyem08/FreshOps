@@ -21,3 +21,6 @@ yarn-error.log*
 # OS junk files
 .DS_Store
 Thumbs.db
+# database backups — must never be committed (contains auth/customer data)
+# see .github/workflows/backup.yml for where these are actually stored
+backups/
