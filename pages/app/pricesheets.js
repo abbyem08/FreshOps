@@ -430,7 +430,7 @@ export default function PriceWorksheetPage() {
           {/* Decorative corner framing — leaves left, oranges right, upper
               corners only. Behind all content, clipped by the rounded
               outer edge, never covering logo/dates/pricing/CTA. */}
-          <img src={DECORATIVE_IMAGES.leaves} alt="" className="fo-pricesheet-corner fo-pricesheet-corner-leaves" onError={e => { e.target.style.display = 'none'; }} />
+          <img src={DECORATIVE_IMAGES.lemon} alt="" className="fo-pricesheet-corner fo-pricesheet-corner-lemon" onError={e => { e.target.style.display = 'none'; }} />
           <img src={DECORATIVE_IMAGES.orange} alt="" className="fo-pricesheet-corner fo-pricesheet-corner-orange" onError={e => { e.target.style.display = 'none'; }} />
 
           <div style={{ background: 'transparent', padding: '28px 32px 20px', textAlign: 'center', borderBottom: '3px solid #168A45', position: 'relative', zIndex: 1 }}>
@@ -443,30 +443,34 @@ export default function PriceWorksheetPage() {
             )}
             <div style={{ color: '#5F6763', fontSize: 13, marginTop: 10, position: 'relative' }}>Fresh Produce. Simplified Sourcing.</div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, padding: '14px 32px', background: '#F3F5EC', position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '6px 16px', fontSize: 12.5 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 12, margin: '16px 32px', padding: '10px 20px', background: '#F3F5EC', border: '1px solid #D9E5D3', borderRadius: 14, boxShadow: '0 1px 6px rgba(15,20,15,.05)', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '5px 14px', fontSize: 12 }}>
               <span style={{ color: '#168A45' }}>📅</span> <strong style={{ color: '#168A45' }}>Date:</strong> {activeSheet.sheet_date}
             </div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '6px 16px', fontSize: 12.5 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #D9E5D3', borderRadius: 999, padding: '5px 14px', fontSize: 12 }}>
               <span style={{ color: '#168A45' }}>🕐</span> <strong style={{ color: '#168A45' }}>Valid Through:</strong> {activeSheet.valid_through}
+            </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#FFFDF7', border: '1.5px solid #168A45', borderRadius: 999, padding: '7px 18px', fontSize: 14, fontWeight: 700, color: '#14562F', boxShadow: '0 0 0 3px rgba(217,118,12,.07)' }}>
+              <span style={{ fontSize: 16 }}>💬</span> Se habla español
             </div>
           </div>
           <div style={{ padding: '18px 24px 24px', position: 'relative', zIndex: 1 }}>
+            <div style={{ border: '1px solid #D9E5D3', borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(15,20,15,.05)' }}>
             <div style={{ overflowX: 'auto' }}>
             <table className="fo-pricesheet-table" style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 13.5 }}>
               <thead><tr style={{ textAlign: 'left', color: '#fff', background: '#14562F' }}>
-                <th style={{ padding: '10px 8px', borderRadius: '8px 0 0 0', width: 52 }}></th>
-                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>COMMODITY</th>
-                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>PACK / SIZE</th>
-                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em' }}>REGION</th>
-                <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, letterSpacing: '.03em' }}>FOB $ / CS</th>
-                <th style={{ padding: '10px 10px', textAlign: 'right', borderRadius: '0 8px 0 0', background: '#168A45', fontSize: 12, letterSpacing: '.03em' }}>DELIVERED $ / CS</th>
+                <th style={{ padding: '10px 8px', width: 52, borderRight: '1px solid rgba(255,255,255,.12)' }}></th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em', borderRight: '1px solid rgba(255,255,255,.12)' }}>COMMODITY</th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em', borderRight: '1px solid rgba(255,255,255,.12)' }}>PACK / SIZE</th>
+                <th style={{ padding: '10px 8px', fontSize: 12, letterSpacing: '.03em', borderRight: '1px solid rgba(255,255,255,.12)' }}>REGION</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, letterSpacing: '.03em', borderRight: '1px solid rgba(255,255,255,.12)' }}>FOB $ / CS</th>
+                <th style={{ padding: '10px 10px', textAlign: 'right', background: '#168A45', fontSize: 12, letterSpacing: '.03em' }}>DELIVERED $ / CS</th>
               </tr></thead>
               <tbody>{lines.map((l, i) => {
                 const img = getClusterImage(l.products?.commodity);
                 return (
                 <tr key={l.price_sheet_line_id} style={{ borderBottom: '1px solid #EFEEE1', background: i % 2 === 1 ? '#FBFAF3' : 'transparent' }}>
-                  <td style={{ padding: '7px 8px' }}>
+                  <td style={{ padding: '7px 8px', borderRight: '1px solid #EFEEE1' }}>
                     {img ? (
                       <img src={img} alt="" style={{ width: 48, height: 48, objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                     ) : null}
@@ -474,31 +478,34 @@ export default function PriceWorksheetPage() {
                       <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#B7D9BE' }} />
                     </div>
                   </td>
-                  <td style={{ padding: '7px 8px', fontWeight: 600 }}>{l.products?.commodity}</td>
-                  <td style={{ padding: '7px 8px', color: '#6A746D' }}>{l.products?.pack_size}</td>
-                  <td style={{ padding: '7px 8px' }}>{l.region && <RegionPill region={l.region} />}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#3F453F' }}>${customerFOB(l).toFixed(2)}</td>
+                  <td style={{ padding: '7px 8px', fontWeight: 600, borderRight: '1px solid #EFEEE1' }}>{l.products?.commodity}</td>
+                  <td style={{ padding: '7px 8px', color: '#6A746D', borderRight: '1px solid #EFEEE1' }}>{l.products?.pack_size}</td>
+                  <td style={{ padding: '7px 8px', borderRight: '1px solid #EFEEE1' }}>{l.region && <RegionPill region={l.region} />}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#3F453F', borderRight: '1px solid #EFEEE1' }}>${customerFOB(l).toFixed(2)}</td>
                   <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 800, fontSize: 14.5, color: '#0F6834', background: '#EFF9F1' }}>${customerDelivered(l).toFixed(2)}</td>
                 </tr>
                 );
               })}</tbody>
             </table>
             </div>
+            </div>
             <div style={{ fontSize: 11, color: '#9BA39C', marginTop: 10 }}>Pricing subject to market availability and freight conditions.</div>
           </div>
           {portalUrl && (
             <div style={{ padding: '0 32px 24px' }}>
-              <div style={{ borderTop: '1px solid #E5DFC8', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
+              <div style={{ background: '#F3F5EC', border: '1px solid #D9E5D3', borderRadius: 14, boxShadow: '0 1px 6px rgba(15,20,15,.05)', padding: '18px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid #B7D9BE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 8px' }}>🛒</div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#14562F', fontStyle: 'italic' }}>Ready to place an order?</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#14562F' }}>
+                    <span style={{ color: '#D9760C' }}>—</span> Ready to place an order? <span style={{ color: '#D9760C' }}>—</span>
+                  </div>
                   <div style={{ fontSize: 12, color: '#6A746D', marginTop: 4, marginBottom: 14 }}>Access the ProFresh Sourcing Customer Portal to view your account and submit your order.</div>
                   <a href={portalUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#D9760C', color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 24px', borderRadius: 999, textDecoration: 'none' }}>
                     Contact Sales / Access Customer Portal
                     <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>→</span>
                   </a>
                 </div>
-                <img src={DECORATIVE_IMAGES.crate} alt="" style={{ height: 130, width: 'auto', objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
+                <img src={DECORATIVE_IMAGES.crateFull} alt="" className="fo-pricesheet-crate" style={{ height: 190, width: 'auto' }} onError={e => { e.target.style.display = 'none'; }} />
               </div>
             </div>
           )}
@@ -506,7 +513,7 @@ export default function PriceWorksheetPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,.85)' }}>
               Prepared with <strong style={{ color: '#fff' }}>FreshOps</strong> Business Intelligence
             </div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: '#14562F', borderRadius: 999, padding: '5px 14px', fontWeight: 600 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,.6)', fontSize: 10.5, fontWeight: 400 }}>
               💬 Se habla español
             </div>
           </div>

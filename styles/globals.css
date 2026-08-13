@@ -472,19 +472,23 @@ html.theme-dark .fo-pulse-active {
   font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--fo-sidebar-section-label); font-weight: 700;
 }
 
-/* ---- Price sheet decorative corner framing — leaves left, oranges
+/* ---- Price sheet decorative corner framing — lemons left, oranges
    right, upper corners only. Positioned relative to .print-full-width
    itself (not the page), clipped by its overflow:hidden + border-radius,
-   sitting behind all real content via z-index. ---- */
+   sitting behind all real content via z-index. Both source photos have
+   their fruit mass drawn toward the same side of their own frame, so
+   both need the same scaleX(-1) mirror to land it in their target
+   corner — lemon mirrors left, orange mirrors right. ---- */
 .fo-pricesheet-corner {
   position: absolute;
   object-fit: contain;
   z-index: 0;
   pointer-events: none;
 }
-.fo-pricesheet-corner-leaves {
+.fo-pricesheet-corner-lemon {
   top: -70px; left: -70px;
   width: 380px; height: 380px;
+  transform: scaleX(-1);
 }
 .fo-pricesheet-corner-orange {
   top: -70px; right: -70px;
@@ -492,8 +496,19 @@ html.theme-dark .fo-pulse-active {
   transform: scaleX(-1);
 }
 @media (max-width: 767px) {
-  .fo-pricesheet-corner-leaves { top: -30px; left: -30px; width: 190px; height: 190px; }
+  .fo-pricesheet-corner-lemon { top: -30px; left: -30px; width: 190px; height: 190px; }
   .fo-pricesheet-corner-orange { top: -30px; right: -30px; width: 200px; height: 200px; }
+}
+
+/* ---- CTA crate — full standalone crate shot, normal document flow
+   (not corner-clipped like the framing images above), scaled down
+   substantially on mobile so it can't force horizontal scrolling. ---- */
+.fo-pricesheet-crate {
+  object-fit: contain;
+  display: block;
+}
+@media (max-width: 767px) {
+  .fo-pricesheet-crate { height: 90px !important; }
 }
 
 @media print {
@@ -503,9 +518,14 @@ html.theme-dark .fo-pulse-active {
   .tabs-timeline-grid { display: block !important; }
   .fo-pricesheet-table thead { display: table-header-group; }
   .fo-pricesheet-table tr { page-break-inside: avoid; break-inside: avoid; }
-  .fo-pricesheet-corner-leaves { top: -45px; left: -45px; width: 270px; height: 270px; }
+  .fo-pricesheet-corner-lemon { top: -45px; left: -45px; width: 270px; height: 270px; }
   .fo-pricesheet-corner-orange { top: -45px; right: -45px; width: 285px; height: 285px; }
-  @page { size: letter; margin: 0.4in; }
+  .fo-pricesheet-crate { height: 110px !important; }
+  @page { size: letter landscape; margin: 0.4in; }
+  body, .print-full-width {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 .print-only { display: none; }
 .print-only-block { display: none; }
