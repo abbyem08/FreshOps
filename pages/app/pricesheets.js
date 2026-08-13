@@ -405,6 +405,21 @@ export default function PriceWorksheetPage() {
   if (printMode && activeSheet) {
     return (
       <AppShell title="Customer Price Sheet">
+        <style jsx global>{`
+          @media print {
+            .print-full-width { padding: 0 !important; margin: 0 !important; }
+            .fo-pricesheet-table thead { display: table-header-group; }
+            .fo-pricesheet-table tr { page-break-inside: avoid; break-inside: avoid; }
+            .fo-pricesheet-corner-lemon { top: -45px; left: -45px; width: 270px; height: 270px; }
+            .fo-pricesheet-corner-orange { top: -45px; right: -45px; width: 285px; height: 285px; }
+            .fo-pricesheet-crate { height: 110px !important; }
+            @page { size: letter landscape; margin: 0.4in; }
+            body, .print-full-width {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        `}</style>
         <div className="no-print" style={{ marginBottom: 16 }}>
           <button onClick={() => setPrintMode(false)} style={{ ...btn, background: 'var(--fo-card-bg)', color: 'var(--fo-text)', border: '1px solid var(--fo-border)', marginRight: 8 }}>← Back to Price Sheets</button>
           <button onClick={() => window.print()} style={{ ...btn, marginRight: 8 }}>🖨 Print</button>

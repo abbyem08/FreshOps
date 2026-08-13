@@ -511,21 +511,18 @@ html.theme-dark .fo-pulse-active {
   .fo-pricesheet-crate { height: 90px !important; }
 }
 
+/* Customer Price Sheet's print rules (landscape @page, print-color-adjust,
+   corner/crate print sizing, table print rules, .print-full-width reset)
+   live in pages/app/pricesheets.js via a <style jsx global> block that's
+   only mounted while the price sheet's print view is on screen — @page and
+   the body selector are document-global and can't be scoped by a CSS class,
+   so keeping them out of this shared stylesheet is what stops the price
+   sheet's landscape orientation from leaking into unrelated print flows
+   (freight tickets, dispatch). Don't move them back here. */
 @media print {
   .no-print { display: none !important; }
-  .print-full-width { padding: 0 !important; margin: 0 !important; }
   .app-content-area { max-width: none !important; margin: 0 !important; padding: 0 !important; }
   .tabs-timeline-grid { display: block !important; }
-  .fo-pricesheet-table thead { display: table-header-group; }
-  .fo-pricesheet-table tr { page-break-inside: avoid; break-inside: avoid; }
-  .fo-pricesheet-corner-lemon { top: -45px; left: -45px; width: 270px; height: 270px; }
-  .fo-pricesheet-corner-orange { top: -45px; right: -45px; width: 285px; height: 285px; }
-  .fo-pricesheet-crate { height: 110px !important; }
-  @page { size: letter landscape; margin: 0.4in; }
-  body, .print-full-width {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
 }
 .print-only { display: none; }
 .print-only-block { display: none; }
