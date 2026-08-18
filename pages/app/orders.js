@@ -88,8 +88,9 @@ export default function OrdersPage() {
     setEditingOrderId(o.customer_order_id);
     setShowNewOrder(true);
   }
+  function isValidDraftLine(l) { return !!(l.product_id && l.cases_ordered); }
   function addDraftLine() {
-    if (!draftLineForm.product_id || !draftLineForm.cases_ordered) { alert('Product and Cases Ordered are required.'); return; }
+    if (!isValidDraftLine(draftLineForm)) { alert('Product and Cases Ordered are required.'); return; }
     setDraftLines([...draftLines, draftLineForm]);
     setDraftLineForm(BLANK_LINE);
   }
@@ -97,6 +98,11 @@ export default function OrdersPage() {
 
   async function saveOrder() {
     if (!orderForm.customer_id) { alert('Customer is required.'); return; }
+    // The line the user is currently typing into (draftLineForm) hasn't been
+    // pushed into draftLines unless they clicked "+ Add Product Line" for it.
+    // Saving the order should still commit it if it's valid, so the user
+    // isn't required to click Add a second time just before Save.
+    const allDraftLines = isValidDraftLine(draftLineForm) ? [...draftLines, draftLineForm] : draftLines;
     const payload = {
       acumatica_order_no: orderForm.acumatica_order_no || null,
       customer_id: Number(orderForm.customer_id),
@@ -113,8 +119,8 @@ export default function OrdersPage() {
     } else {
       const { data: newOrder, error } = await supabase.from('customer_orders').insert({ ...payload, source: 'Internal' }).select().single();
       if (error) { alert('Save failed: ' + error.message); return; }
-      if (draftLines.length) {
-        const lineRows = draftLines.map(l => {
+      if (allDraftLines.length) {
+        const lineRows = allDraftLines.map(l => {
           const cases = Number(l.cases_ordered);
           const sell = l.sell_price_per_case ? Number(l.sell_price_per_case) : null;
           return {
