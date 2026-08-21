@@ -116,7 +116,7 @@ export default function JacketWorkspace() {
 
     const { data: lines } = await supabase
       .from('jacket_lines')
-      .select('*, order_lines(*, customer_orders(acumatica_order_no, customer_id, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)), jacket_product_lines(suppliers(company))')
+      .select('*, order_lines(*, customer_orders(acumatica_order_no, customer_id, customer_po, order_status, customers(company)), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)), jacket_product_lines(suppliers(company))')
       .eq('jacket_id', jacketId)
       .order('jacket_line_id');
     setJacketLines(lines || []);
@@ -340,6 +340,16 @@ export default function JacketWorkspace() {
   }
   const [editingAllocationId, setEditingAllocationId] = useState(null);
   const [editAllocationValue, setEditAllocationValue] = useState('');
+  // Order Allocations groups by order, collapsed by default so a jacket with
+  // many orders can be scanned without every product line showing at once.
+  const [expandedOrderIds, setExpandedOrderIds] = useState(new Set());
+  function toggleOrderExpanded(customerOrderId) {
+    setExpandedOrderIds(prev => {
+      const next = new Set(prev);
+      if (next.has(customerOrderId)) next.delete(customerOrderId); else next.add(customerOrderId);
+      return next;
+    });
+  }
   function openEditAllocation(jl) { setEditingAllocationId(jl.jacket_line_id); setEditAllocationValue(jl.cases_to_load ?? ''); }
   async function saveEditAllocation(jl) {
     const newCases = Number(editAllocationValue);
@@ -1520,41 +1530,74 @@ export default function JacketWorkspace() {
 
               <div className="fo-card">
                 <div className="fo-h2">Order Allocations</div>
-                {jacketLines.filter(jl => jl.jacket_product_line_id).length === 0 ? (
-                  <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No allocations from purchased product yet.</div>
-                ) : (
-                  <div className="fo-table-wrap">
-                  <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-                    <thead><tr><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th></th></tr></thead>
-                    <tbody>{jacketLines.filter(jl => jl.jacket_product_line_id).map(jl => (
-                      <tr key={jl.jacket_line_id}>
-                        <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
-                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={jl.order_lines?.products?.commodity} size={20} />{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</div></td>
-                        <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          {editingAllocationId === jl.jacket_line_id ? (
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                              <input type="number" value={editAllocationValue} onChange={e => setEditAllocationValue(e.target.value)} style={{ width: 70 }} />
-                              <button onClick={() => saveEditAllocation(jl)} className="fo-btn fo-btn-sm">Save</button>
-                              <button onClick={() => setEditingAllocationId(null)} className="fo-btn fo-btn-sm">X</button>
-                            </div>
-                          ) : jl.cases_to_load}
-                        </td>
-                        <td>{jl.load_status}</td>
-                        <td>
-                          {editingAllocationId !== jl.jacket_line_id && (
-                            <>
-                              <button onClick={() => openEditAllocation(jl)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
-                              <button onClick={() => removeAllocation(jl)} className="fo-btn fo-btn-danger fo-btn-sm">Remove</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                  </div>
-                )}
+                {(() => {
+                  const allocatedLines = jacketLines.filter(jl => jl.jacket_product_line_id);
+                  if (allocatedLines.length === 0) return <div style={{ color: 'var(--fo-text-faint)', fontSize: 13 }}>No allocations from purchased product yet.</div>;
+                  const groupsById = {};
+                  const groupOrder = [];
+                  allocatedLines.forEach(jl => {
+                    const key = jl.order_lines?.customer_order_id ?? `line-${jl.jacket_line_id}`;
+                    if (!groupsById[key]) { groupsById[key] = { key, order: jl.order_lines?.customer_orders, lines: [] }; groupOrder.push(key); }
+                    groupsById[key].lines.push(jl);
+                  });
+                  return groupOrder.map(key => {
+                    const g = groupsById[key];
+                    const isExpanded = expandedOrderIds.has(key);
+                    const totalCases = g.lines.reduce((s, jl) => s + Number(jl.cases_to_load || 0), 0);
+                    return (
+                      <div key={key} style={{ border: '1px solid var(--fo-border-soft)', borderRadius: 'var(--fo-radius-md)', overflow: 'hidden', marginBottom: 10 }}>
+                        <div
+                          onClick={() => toggleOrderExpanded(key)}
+                          style={{ cursor: 'pointer', background: 'var(--fo-section-bg)', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}>
+                            <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▸</span>
+                            <strong>#{g.order?.acumatica_order_no || '—'}</strong>
+                            <span>· {g.order?.customers?.company || '—'}</span>
+                            {g.order?.customer_po && <span>· PO {g.order.customer_po}</span>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--fo-text-dim)' }}>
+                            {g.order?.order_status && <span className="fo-badge">{g.order.order_status}</span>}
+                            <span>{g.lines.length} product{g.lines.length === 1 ? '' : 's'} · {totalCases} cases</span>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="fo-table-wrap" style={{ borderRadius: 0, boxShadow: 'none', border: 'none' }}>
+                          <table className="fo-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+                            <thead><tr><th>Customer</th><th>Order #</th><th>Commodity</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Cases</th><th>Status</th><th></th></tr></thead>
+                            <tbody>{g.lines.map(jl => (
+                              <tr key={jl.jacket_line_id}>
+                                <td>{jl.order_lines?.customer_orders?.customers?.company}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{jl.order_lines?.customer_orders?.acumatica_order_no || '—'}</td>
+                                <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ProductIcon commodity={jl.order_lines?.products?.commodity} size={20} />{jl.order_lines?.products?.commodity} — {jl.order_lines?.products?.pack_size}</div></td>
+                                <td>{jl.jacket_product_lines?.suppliers?.company || '—'}</td>
+                                <td style={{ textAlign: 'right' }}>
+                                  {editingAllocationId === jl.jacket_line_id ? (
+                                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                      <input type="number" value={editAllocationValue} onChange={e => setEditAllocationValue(e.target.value)} style={{ width: 70 }} />
+                                      <button onClick={() => saveEditAllocation(jl)} className="fo-btn fo-btn-sm">Save</button>
+                                      <button onClick={() => setEditingAllocationId(null)} className="fo-btn fo-btn-sm">X</button>
+                                    </div>
+                                  ) : jl.cases_to_load}
+                                </td>
+                                <td>{jl.load_status}</td>
+                                <td>
+                                  {editingAllocationId !== jl.jacket_line_id && (
+                                    <>
+                                      <button onClick={() => openEditAllocation(jl)} className="fo-btn fo-btn-secondary fo-btn-sm">Edit</button>{' '}
+                                      <button onClick={() => removeAllocation(jl)} className="fo-btn fo-btn-danger fo-btn-sm">Remove</button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
