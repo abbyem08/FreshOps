@@ -129,7 +129,7 @@ export default function JacketWorkspace() {
     const { data: allPurchased } = await supabase.from('jacket_product_lines').select('*, jackets(jacket_number, jacket_status), suppliers(company), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)').order('jacket_product_line_id');
     setAllPurchasedLines((allPurchased || []).filter(x => x.jackets?.jacket_status !== 'Cancelled'));
 
-    const { data: allOL } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, order_status, customers(company)), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
+    const { data: allOL } = await supabase.from('order_lines').select('*, customer_orders(acumatica_order_no, customer_id, customer_location_id, customer_po, order_status, customers(company)), products(commodity, pack_size, cases_per_pallet, gross_weight_per_case)');
     const needList = (allOL || [])
       .filter(ol => ol.customer_orders?.order_status === 'Open')
       .map(ol => {
@@ -1490,6 +1490,7 @@ export default function JacketWorkspace() {
                               <ProductIcon commodity={ol.products?.commodity} size={22} />
                               <div>
                                 <strong>{ol.customer_orders?.customers?.company}</strong> — {ol.customer_orders?.acumatica_order_no || 'no Acumatica #'}
+                                {ol.customer_orders?.customer_po && <> · PO {ol.customer_orders.customer_po}</>}
                                 <div style={{ fontSize: 12, color: 'var(--fo-text-dim)' }}>{ol.products?.commodity} — {ol.products?.pack_size} · needs {ol.needsSupply}</div>
                               </div>
                             </div>
